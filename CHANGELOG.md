@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.1.20260602+24
 
 - License: GPLv3. README build section trimmed (dropped sibling-project and signing-path notes).
 - Release tagging/upload scripts (`20-MakeTag`, `21-PushTag`, `22-RelUpload`) ported from the
