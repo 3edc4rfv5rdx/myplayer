@@ -16,10 +16,13 @@ class GainAudioProcessor : BaseAudioProcessor() {
     override fun onConfigure(
         inputAudioFormat: AudioProcessor.AudioFormat
     ): AudioProcessor.AudioFormat {
-        if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT) {
-            throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
+        // Only handle 16-bit PCM; for anything else stay inactive (passthrough) instead of
+        // failing the whole audio pipeline — that track just won't get ReplayGain applied.
+        return if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) {
+            inputAudioFormat
+        } else {
+            AudioProcessor.AudioFormat.NOT_SET
         }
-        return inputAudioFormat
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
