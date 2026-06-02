@@ -20,12 +20,10 @@ No equalizer, no internet, no media library — just folders and shuffle.
 
 ## Build
 
-Release-only workflow (shared with `../memlists`). Requires Android SDK and JDK 17/21.
+Release-only workflow. Requires Android SDK and JDK 17/21.
 
 - `10-MakeRelease.sh` — bump build number and build signed APK splits.
 - `11-EmulRELEASE.sh` / `12-SamsRELEASE.sh` — install on emulator / device.
-
-Release signing reads `/home/e/.my-safe/key.properties`; without it the build is unsigned.
 
 ## How it works
 

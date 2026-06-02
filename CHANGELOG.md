@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- License: GPLv3. README build section trimmed (dropped sibling-project and signing-path notes).
 - Release tagging/upload scripts (`20-MakeTag`, `21-PushTag`, `22-RelUpload`) ported from the
   sibling project; changelog heading switched to `## Unreleased` to match the shared scripts.
 - App launcher icon.
