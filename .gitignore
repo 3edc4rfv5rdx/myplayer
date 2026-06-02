@@ -1,0 +1,17 @@
+.codex
+.claude
+.gradle
+.idea
+.kotlin
+*.iml
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+key.properties
+*.jks
+*.keystore
+/tmp
