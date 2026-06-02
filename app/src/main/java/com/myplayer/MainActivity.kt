@@ -386,12 +386,12 @@ private fun FolderBrowser(
 
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = onUp, enabled = canGoUp) {
-                Text(stringResource(R.string.up))
-            }
-            Spacer(Modifier.width(8.dp))
             Button(onClick = { onPlayFolder(current) }, modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.play_this_folder))
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onUp, enabled = canGoUp) {
+                Text(stringResource(R.string.up))
             }
         }
         Spacer(Modifier.height(8.dp))

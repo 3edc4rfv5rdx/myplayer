@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## [Unreleased]
 
+- App launcher icon.
+- Browser header: "Play this folder" on the left, "Up" on the right.
 - ReplayGain (toggle): rough loudness leveling via player volume (attenuate) + LoudnessEnhancer
   (boost), without touching the render pipeline.
 - Play with no selection plays the current folder (random); a different folder starts fresh,
