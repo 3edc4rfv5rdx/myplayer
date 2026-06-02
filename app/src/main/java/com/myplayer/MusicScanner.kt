@@ -65,7 +65,8 @@ object MusicScanner {
     }
 
     private fun collect(context: Context, treeUri: Uri, folder: Node, out: MutableList<MediaItem>) {
-        val (subFolders, files) = children(context, treeUri, folder)
+        // Go through the cache so a recursive walk (e.g. "Play this folder") also fills it.
+        val (subFolders, files) = FolderCache.children(context, treeUri, folder)
         for (file in files) out.add(mediaItem(treeUri, file))
         for (sub in subFolders) collect(context, treeUri, sub, out)
     }
@@ -79,8 +80,21 @@ object MusicScanner {
         return MediaItem.Builder()
             .setUri(uri)
             .setMediaId(uri.toString())
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+            .setMediaMetadata(
+                MediaMetadata.Builder().setTitle(title).setSubtitle(relativeDir(treeUri, file)).build()
+            )
             .build()
+    }
+
+    /** Folder path of [file] relative to the root, without the filename (empty if directly in root). */
+    private fun relativeDir(treeUri: Uri, file: Node): String {
+        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+        val rel = if (file.documentId.startsWith(rootId)) {
+            file.documentId.substring(rootId.length).trimStart('/')
+        } else {
+            file.documentId.substringAfter(':', file.documentId)
+        }
+        return if (rel.contains('/')) rel.substringBeforeLast('/') else ""
     }
 
     private fun isAudio(name: String): Boolean =

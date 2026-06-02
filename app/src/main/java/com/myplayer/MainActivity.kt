@@ -35,6 +35,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -84,6 +85,7 @@ class MainActivity : ComponentActivity() {
     private val screenState = mutableStateOf(Screen.Browser)
     private val rescanTickState = mutableStateOf(0)
     private val clearTitleTickState = mutableStateOf(0)
+    private val themeState = mutableStateOf(ThemeMode.System)
 
     /** Picks (or changes) the root folder. This is the only place a SAF permission is requested. */
     private val folderPicker =
@@ -105,10 +107,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
+        themeState.value = Settings.getThemeMode(this)
         Settings.getFolderUri(this)?.let { openRoot(Uri.parse(it)) }
 
         setContent {
-            val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
+            val theme by themeState
+            val dark = when (theme) {
+                ThemeMode.System -> isSystemInDarkTheme()
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+            val colorScheme = if (dark) darkColorScheme() else lightColorScheme()
             MaterialTheme(colorScheme = colorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -132,6 +141,16 @@ class MainActivity : ComponentActivity() {
                         Screen.Settings -> SettingsScreen(
                             version = appVersionName(),
                             build = appVersionCode(),
+                            themeMode = theme,
+                            replayGainEnabled = replayGain,
+                            onThemeChange = {
+                                themeState.value = it
+                                Settings.setThemeMode(this, it)
+                            },
+                            onReplayGainChange = {
+                                replayGain = it
+                                Settings.setReplayGainEnabled(this, it)
+                            },
                             onChangeRoot = {
                                 folderPicker.launch(Settings.getFolderUri(this)?.let(Uri::parse))
                             },
@@ -151,7 +170,6 @@ class MainActivity : ComponentActivity() {
                             selectedIndex = selectedIndex,
                             rescanTick = rescanTick,
                             clearTitleTick = clearTitleTick,
-                            replayGainEnabled = replayGain,
                             onPickRoot = {
                                 folderPicker.launch(Settings.getFolderUri(this)?.let(Uri::parse))
                             },
@@ -163,11 +181,7 @@ class MainActivity : ComponentActivity() {
                             onUp = { goUp() },
                             onPlayFolder = { playFolder(it) },
                             onSelectFile = { selectedIndexState.value = it },
-                            onPlayPause = { togglePlay() },
-                            onReplayGainChange = {
-                                replayGain = it
-                                Settings.setReplayGainEnabled(this, it)
-                            }
+                            onPlayPause = { togglePlay() }
                         )
                     }
                 }
@@ -242,7 +256,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Plays the immediate files of [folder] in order, starting from the selected [index]. */
+    /** Plays the selected file first, then the rest of the folder shuffled (no repeats per cycle). */
     private fun playFile(folder: Node, index: Int) {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
@@ -250,10 +264,14 @@ class MainActivity : ComponentActivity() {
             val files =
                 withContext(Dispatchers.IO) { FolderCache.children(this@MainActivity, tree, folder).second }
             if (index in files.indices) {
-                val items = MusicScanner.mediaItems(tree, files)
+                val ordered = files.toMutableList()
+                val first = ordered.removeAt(index)
+                ordered.shuffle()
+                ordered.add(0, first)
+                val items = MusicScanner.mediaItems(tree, ordered)
                 controller.shuffleModeEnabled = false
                 controller.repeatMode = Player.REPEAT_MODE_ALL
-                controller.setMediaItems(items, index, 0L)
+                controller.setMediaItems(items, 0, 0L)
                 controller.prepare()
                 controller.play()
             }
@@ -284,15 +302,13 @@ private fun PlayerScreen(
     selectedIndex: Int?,
     rescanTick: Int,
     clearTitleTick: Int,
-    replayGainEnabled: Boolean,
     onPickRoot: () -> Unit,
     onOpenSettings: () -> Unit,
     onDescend: (Node) -> Unit,
     onUp: () -> Unit,
     onPlayFolder: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
-    onPlayPause: () -> Unit,
-    onReplayGainChange: (Boolean) -> Unit
+    onPlayPause: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -322,13 +338,7 @@ private fun PlayerScreen(
 
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         NowPlaying(controller, error, clearTitleTick, onPlayPause)
-
-        Spacer(Modifier.height(16.dp))
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.replaygain))
-            Spacer(Modifier.weight(1f))
-            Switch(checked = replayGainEnabled, onCheckedChange = onReplayGainChange)
-        }
+        Spacer(Modifier.height(32.dp))
     }
 }
 
@@ -426,6 +436,7 @@ private fun NowPlaying(
     onPlayPause: () -> Unit
 ) {
     var title by remember { mutableStateOf("") }
+    var path by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
     var playerError by remember { mutableStateOf<String?>(null) }
 
@@ -434,6 +445,7 @@ private fun NowPlaying(
         val listener = object : Player.Listener {
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 title = mediaMetadata.title?.toString().orEmpty()
+                path = mediaMetadata.subtitle?.toString().orEmpty()
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -450,24 +462,38 @@ private fun NowPlaying(
         }
         c.addListener(listener)
         title = c.mediaMetadata.title?.toString().orEmpty()
+        path = c.mediaMetadata.subtitle?.toString().orEmpty()
         isPlaying = c.isPlaying
         onDispose { c.removeListener(listener) }
     }
 
-    // Clear the now-playing label when navigating Up.
+    // Clear the now-playing labels when navigating Up.
     LaunchedEffect(clearTitleTick) {
-        if (clearTitleTick > 0) title = ""
+        if (clearTitleTick > 0) {
+            title = ""
+            path = ""
+        }
     }
 
     val display =
         connectError ?: playerError ?: title.ifEmpty { stringResource(R.string.nothing_playing) }
     Text(
         text = display,
-        maxLines = 3,
+        maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth()
     )
+    if (connectError == null && playerError == null && path.isNotEmpty()) {
+        Text(
+            text = path,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            fontSize = 12.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
     Spacer(Modifier.height(16.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
         Button(
@@ -495,6 +521,10 @@ private fun NowPlaying(
 private fun SettingsScreen(
     version: String,
     build: Long,
+    themeMode: ThemeMode,
+    replayGainEnabled: Boolean,
+    onThemeChange: (ThemeMode) -> Unit,
+    onReplayGainChange: (Boolean) -> Unit,
     onChangeRoot: () -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
@@ -521,11 +551,44 @@ private fun SettingsScreen(
             Text(stringResource(R.string.rescan))
         }
 
+        Spacer(Modifier.height(20.dp))
+        Text(stringResource(R.string.theme))
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            ThemeOption(stringResource(R.string.theme_system), themeMode == ThemeMode.System) {
+                onThemeChange(ThemeMode.System)
+            }
+            Spacer(Modifier.width(8.dp))
+            ThemeOption(stringResource(R.string.theme_light), themeMode == ThemeMode.Light) {
+                onThemeChange(ThemeMode.Light)
+            }
+            Spacer(Modifier.width(8.dp))
+            ThemeOption(stringResource(R.string.theme_dark), themeMode == ThemeMode.Dark) {
+                onThemeChange(ThemeMode.Dark)
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.replaygain))
+            Spacer(Modifier.weight(1f))
+            Switch(checked = replayGainEnabled, onCheckedChange = onReplayGainChange)
+        }
+
         Spacer(Modifier.weight(1f))
         Text(stringResource(R.string.about), fontSize = 18.sp)
         Spacer(Modifier.height(4.dp))
         Text(stringResource(R.string.app_name))
         Text("${stringResource(R.string.version)} $version")
         Text("${stringResource(R.string.build)} $build")
+    }
+}
+
+@Composable
+private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    if (selected) {
+        Button(onClick = onClick) { Text(label) }
+    } else {
+        OutlinedButton(onClick = onClick) { Text(label) }
     }
 }

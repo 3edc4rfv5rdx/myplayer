@@ -3,43 +3,16 @@ package com.myplayer
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
 
-private class CacheDb(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "cache.db", null, 1) {
-
-    override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL(
-            "CREATE TABLE children(parent_id TEXT, doc_id TEXT, name TEXT, is_dir INTEGER)"
-        )
-        db.execSQL("CREATE INDEX idx_parent ON children(parent_id)")
-        db.execSQL("CREATE TABLE scanned(parent_id TEXT PRIMARY KEY)")
-    }
-
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS children")
-        db.execSQL("DROP TABLE IF EXISTS scanned")
-        onCreate(db)
-    }
-}
-
-/** Persistent folder-listing cache backed by SQLite: one row per child, indexed by parent.
+/** Persistent folder-listing cache in [AppDb]: one row per child, indexed by parent.
  *  Insertion order is preserved (MusicScanner returns sorted lists), read back via rowid. */
 object FolderCache {
-
-    private var helper: CacheDb? = null
-
-    @Synchronized
-    private fun db(context: Context): SQLiteDatabase {
-        val h = helper ?: CacheDb(context).also { helper = it }
-        return h.writableDatabase
-    }
 
     /** Cached children of [parent], scanning and persisting on a miss. */
     @Synchronized
     fun children(context: Context, treeUri: Uri, parent: Node): Pair<List<Node>, List<Node>> {
-        val db = db(context)
+        val db = AppDb.db(context)
         if (isScanned(db, parent.documentId)) {
             return read(db, parent.documentId)
         }
@@ -48,10 +21,10 @@ object FolderCache {
         return result
     }
 
-    /** Drops the whole cache (used by Rescan and when the root folder changes). */
+    /** Drops the cached listings (used by Rescan and when the root folder changes). */
     @Synchronized
     fun clear(context: Context) {
-        val db = db(context)
+        val db = AppDb.db(context)
         db.delete("children", null, null)
         db.delete("scanned", null, null)
     }
