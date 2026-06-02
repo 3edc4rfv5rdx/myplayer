@@ -87,6 +87,9 @@ class MainActivity : ComponentActivity() {
     private val clearTitleTickState = mutableStateOf(0)
     private val themeState = mutableStateOf(ThemeMode.System)
 
+    // documentId of the folder the current playback was started from.
+    private var playingFolderId: String? = null
+
     /** Picks (or changes) the root folder. This is the only place a SAF permission is requested. */
     private val folderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -222,7 +225,8 @@ class MainActivity : ComponentActivity() {
         clearTitleTickState.value++
     }
 
-    /** Play/pause: if a file is selected, start it; otherwise toggle the current playback. */
+    /** Play/pause. Selected file -> play it. Otherwise: a different folder than what's playing
+     *  starts that folder (random); the same paused folder resumes. */
     private fun togglePlay() {
         val controller = controllerState.value ?: return
         if (controller.isPlaying) {
@@ -231,11 +235,14 @@ class MainActivity : ComponentActivity() {
         }
         val index = selectedIndexState.value
         val dir = pathState.value.lastOrNull()
-        if (index != null && dir != null) {
-            playFile(dir, index)
-            selectedIndexState.value = null
-        } else {
-            controller.play()
+        when {
+            index != null && dir != null -> {
+                playFile(dir, index)
+                selectedIndexState.value = null
+            }
+            dir != null && dir.documentId != playingFolderId -> playFolder(dir)
+            controller.mediaItemCount > 0 -> controller.play()
+            dir != null -> playFolder(dir)
         }
     }
 
@@ -243,6 +250,7 @@ class MainActivity : ComponentActivity() {
     private fun playFolder(folder: Node) {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
+        playingFolderId = folder.documentId
         lifecycleScope.launch {
             val items =
                 withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, folder).shuffled() }
@@ -260,6 +268,7 @@ class MainActivity : ComponentActivity() {
     private fun playFile(folder: Node, index: Int) {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
+        playingFolderId = folder.documentId
         lifecycleScope.launch {
             val files =
                 withContext(Dispatchers.IO) { FolderCache.children(this@MainActivity, tree, folder).second }
@@ -477,13 +486,6 @@ private fun NowPlaying(
 
     val display =
         connectError ?: playerError ?: title.ifEmpty { stringResource(R.string.nothing_playing) }
-    Text(
-        text = display,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
-    )
     if (connectError == null && playerError == null && path.isNotEmpty()) {
         Text(
             text = path,
@@ -494,6 +496,13 @@ private fun NowPlaying(
             modifier = Modifier.fillMaxWidth()
         )
     }
+    Text(
+        text = display,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
     Spacer(Modifier.height(16.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
         Button(

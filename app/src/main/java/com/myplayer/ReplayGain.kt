@@ -5,8 +5,7 @@ import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
 import kotlin.math.pow
 
-/** Reads REPLAYGAIN_TRACK_GAIN tags (FLAC Vorbis comments / MP3 ID3 TXXX) and converts dB to a
- *  linear multiplier for [GainAudioProcessor]. */
+/** Reads REPLAYGAIN_TRACK_GAIN tags (FLAC Vorbis comments / MP3 ID3 TXXX); returns the gain in dB. */
 object ReplayGain {
 
     private const val TAG_KEY = "REPLAYGAIN_TRACK_GAIN"
