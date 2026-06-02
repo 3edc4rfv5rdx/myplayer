@@ -66,5 +66,6 @@ unchanged. Computing loudness ourselves (analysis) is intentionally out of scope
 
 - All code identifiers/comments in English. UI strings live in `res/values/strings.xml`, read with
   `stringResource` — no hardcoded UI text. UI is English-only.
-- Every commit must update `CHANGELOG.md` in the same commit.
+- Every commit must update `CHANGELOG.md` in the same commit. Newest entries go on top
+  (prepend to `## [Unreleased]`), not appended at the bottom.
 - Keep shared values/functions centralized (e.g. `Prefs`); no duplication across files.
