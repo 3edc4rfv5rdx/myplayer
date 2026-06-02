@@ -2,8 +2,10 @@
 
 Newest entries on top.
 
-## [Unreleased]
+## Unreleased
 
+- Release tagging/upload scripts (`20-MakeTag`, `21-PushTag`, `22-RelUpload`) ported from the
+  sibling project; changelog heading switched to `## Unreleased` to match the shared scripts.
 - App launcher icon.
 - Browser header: "Play this folder" on the left, "Up" on the right.
 - ReplayGain (toggle): rough loudness leveling via player volume (attenuate) + LoudnessEnhancer
