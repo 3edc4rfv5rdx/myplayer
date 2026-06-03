@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -347,8 +346,7 @@ private fun PlayerScreen(
             .padding(start = 16.dp, top = 40.dp, end = 16.dp, bottom = 16.dp)
     ) {
         val current = path.lastOrNull()
-        // Lift the list's bottom edge by ~1cm (160dp = 1in) above the now-playing controls.
-        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(bottom = 63.dp)) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (current == null || treeUri == null) {
                 Button(onClick = onPickRoot) { Text(stringResource(R.string.choose_folder)) }
             } else {
@@ -368,7 +366,7 @@ private fun PlayerScreen(
             }
         }
 
-        HorizontalDivider(Modifier.padding(vertical = 12.dp))
+        Spacer(Modifier.height(12.dp))
         NowPlaying(controller, error, clearTitleTick, shuffleEnabled, onShuffleToggle, onPlayPause)
         Spacer(Modifier.height(32.dp))
     }
@@ -509,25 +507,34 @@ private fun NowPlaying(
         }
     }
 
-    val display =
-        connectError ?: playerError ?: title.ifEmpty { stringResource(R.string.nothing_playing) }
-    if (connectError == null && playerError == null && path.isNotEmpty()) {
+    // Separate fixed-height slots: path (1 line) and title (room for 2). Fixed so a wrapping
+    // title or a missing path never reflows the list above. Empty when nothing is playing.
+    val display = connectError ?: playerError ?: title
+    val showPath = connectError == null && playerError == null && path.isNotEmpty()
+    Spacer(Modifier.height(10.dp))
+    Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
+        if (showPath) {
+            Text(
+                text = path,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(50.dp), contentAlignment = Alignment.TopCenter) {
         Text(
-            text = path,
+            text = display,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            fontSize = 12.sp,
+            fontSize = 18.sp,
+            lineHeight = 22.sp,
             modifier = Modifier.fillMaxWidth()
         )
     }
-    Text(
-        text = display,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
-    )
     Spacer(Modifier.height(16.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
         Row(

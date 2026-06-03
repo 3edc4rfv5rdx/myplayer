@@ -10,7 +10,9 @@ Newest entries on top.
 - Settings: "Repeat all" toggle (persisted, on by default); off stops at the end of the
   folder/list instead of looping. Applies live to current playback.
 - Settings: "Change root" button renamed to "Change music root".
-- Lifted the browser list's bottom edge ~1cm above the now-playing controls.
+- Now-playing: removed the "Nothing playing" placeholder (blank when idle) and the divider above
+  the controls; path and title sit in their own fixed-height slots (title wraps to 2 lines) so a
+  long name no longer shoves the list.
 
 ## v0.1.20260602+24
 
