@@ -13,6 +13,8 @@ Newest entries on top.
 - Now-playing: removed the "Nothing playing" placeholder (blank when idle) and the divider above
   the controls; path and title sit in their own fixed-height slots (title wraps to 2 lines) so a
   long name no longer shoves the list.
+- Browser: Settings button replaced with a gear icon. Settings: "Rescan" renamed to "Rescan
+  music"; tighter spacing between the Repeat and ReplayGain toggles.
 
 ## v0.1.20260602+24
 

@@ -402,7 +402,12 @@ private fun FolderBrowser(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Button(onClick = onOpenSettings) { Text(stringResource(R.string.settings)) }
+            IconButton(onClick = onOpenSettings) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings),
+                    contentDescription = stringResource(R.string.settings)
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -631,7 +636,7 @@ private fun SettingsScreen(
             Switch(checked = loopEnabled, onCheckedChange = onLoopChange)
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.replaygain))
             Spacer(Modifier.weight(1f))

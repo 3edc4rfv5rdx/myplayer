@@ -4,7 +4,7 @@
     <string name="choose_folder">Choose root folder</string>
     <string name="change_folder">Change music root</string>
     <string name="settings">Settings</string>
-    <string name="rescan">Rescan</string>
+    <string name="rescan">Rescan music</string>
     <string name="about">About</string>
     <string name="back">Back</string>
     <string name="version">Version</string>
