@@ -3,6 +3,15 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Shuffle switch (+ shuffle icon) on the main screen (left of Play, on by default, not persisted).
+  Uses ExoPlayer's built-in shuffle, so toggling reorders the playing queue live; off plays in scan
+  order.
+- Settings: "Repeat all" toggle (persisted, on by default); off stops at the end of the
+  folder/list instead of looping. Applies live to current playback.
+- Settings: "Change root" button renamed to "Change music root".
+- Lifted the browser list's bottom edge ~1cm above the now-playing controls.
+
 ## v0.1.20260602+24
 
 - License: GPLv3. README build section trimmed (dropped sibling-project and signing-path notes).

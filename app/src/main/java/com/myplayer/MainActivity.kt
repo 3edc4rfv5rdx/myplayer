@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,6 +87,9 @@ class MainActivity : ComponentActivity() {
     private val rescanTickState = mutableStateOf(0)
     private val clearTitleTickState = mutableStateOf(0)
     private val themeState = mutableStateOf(ThemeMode.System)
+
+    // Random playback order, on by default; intentionally not persisted (resets each launch).
+    private val shuffleState = mutableStateOf(true)
 
     // documentId of the folder the current playback was started from.
     private var playingFolderId: String? = null
@@ -134,7 +138,9 @@ class MainActivity : ComponentActivity() {
                     val screen by screenState
                     val rescanTick by rescanTickState
                     val clearTitleTick by clearTitleTickState
+                    val shuffle by shuffleState
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
+                    var loop by remember { mutableStateOf(Settings.isLoopEnabled(this)) }
 
                     BackHandler(enabled = screen == Screen.Settings || path.size > 1) {
                         if (screen == Screen.Settings) screenState.value = Screen.Browser else goUp()
@@ -146,6 +152,7 @@ class MainActivity : ComponentActivity() {
                             build = appVersionCode(),
                             themeMode = theme,
                             replayGainEnabled = replayGain,
+                            loopEnabled = loop,
                             onThemeChange = {
                                 themeState.value = it
                                 Settings.setThemeMode(this, it)
@@ -153,6 +160,12 @@ class MainActivity : ComponentActivity() {
                             onReplayGainChange = {
                                 replayGain = it
                                 Settings.setReplayGainEnabled(this, it)
+                            },
+                            onLoopChange = {
+                                loop = it
+                                Settings.setLoopEnabled(this, it)
+                                controllerState.value?.repeatMode =
+                                    if (it) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                             },
                             onChangeRoot = {
                                 folderPicker.launch(Settings.getFolderUri(this)?.let(Uri::parse))
@@ -173,6 +186,11 @@ class MainActivity : ComponentActivity() {
                             selectedIndex = selectedIndex,
                             rescanTick = rescanTick,
                             clearTitleTick = clearTitleTick,
+                            shuffleEnabled = shuffle,
+                            onShuffleToggle = {
+                                shuffleState.value = it
+                                controllerState.value?.shuffleModeEnabled = it
+                            },
                             onPickRoot = {
                                 folderPicker.launch(Settings.getFolderUri(this)?.let(Uri::parse))
                             },
@@ -246,41 +264,43 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Plays everything under [folder] recursively in a randomized order (no repeats per cycle). */
+    /** Plays everything under [folder] recursively. ExoPlayer's shuffle (toggled live) handles the
+     *  order; with shuffle on we start on a random track, off starts from the top. */
     private fun playFolder(folder: Node) {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
+        val shuffle = shuffleState.value
         playingFolderId = folder.documentId
         lifecycleScope.launch {
-            val items =
-                withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, folder).shuffled() }
+            val items = withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, folder) }
             if (items.isNotEmpty()) {
-                controller.shuffleModeEnabled = false
-                controller.repeatMode = Player.REPEAT_MODE_ALL
-                controller.setMediaItems(items)
+                controller.shuffleModeEnabled = shuffle
+                controller.repeatMode = loopRepeatMode()
+                controller.setMediaItems(items, if (shuffle) items.indices.random() else 0, 0L)
                 controller.prepare()
                 controller.play()
             }
         }
     }
 
-    /** Plays the selected file first, then the rest of the folder shuffled (no repeats per cycle). */
+    private fun loopRepeatMode(): Int =
+        if (Settings.isLoopEnabled(this)) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+
+    /** Plays the selected file first, then the rest of the folder. ExoPlayer's shuffle (toggled
+     *  live) decides whether the remainder is shuffled or continues in scan order. */
     private fun playFile(folder: Node, index: Int) {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
+        val shuffle = shuffleState.value
         playingFolderId = folder.documentId
         lifecycleScope.launch {
             val files =
                 withContext(Dispatchers.IO) { FolderCache.children(this@MainActivity, tree, folder).second }
             if (index in files.indices) {
-                val ordered = files.toMutableList()
-                val first = ordered.removeAt(index)
-                ordered.shuffle()
-                ordered.add(0, first)
-                val items = MusicScanner.mediaItems(tree, ordered)
-                controller.shuffleModeEnabled = false
-                controller.repeatMode = Player.REPEAT_MODE_ALL
-                controller.setMediaItems(items, 0, 0L)
+                val items = MusicScanner.mediaItems(tree, files)
+                controller.shuffleModeEnabled = shuffle
+                controller.repeatMode = loopRepeatMode()
+                controller.setMediaItems(items, index, 0L)
                 controller.prepare()
                 controller.play()
             }
@@ -311,6 +331,8 @@ private fun PlayerScreen(
     selectedIndex: Int?,
     rescanTick: Int,
     clearTitleTick: Int,
+    shuffleEnabled: Boolean,
+    onShuffleToggle: (Boolean) -> Unit,
     onPickRoot: () -> Unit,
     onOpenSettings: () -> Unit,
     onDescend: (Node) -> Unit,
@@ -325,7 +347,8 @@ private fun PlayerScreen(
             .padding(start = 16.dp, top = 40.dp, end = 16.dp, bottom = 16.dp)
     ) {
         val current = path.lastOrNull()
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        // Lift the list's bottom edge by ~1cm (160dp = 1in) above the now-playing controls.
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(bottom = 63.dp)) {
             if (current == null || treeUri == null) {
                 Button(onClick = onPickRoot) { Text(stringResource(R.string.choose_folder)) }
             } else {
@@ -346,7 +369,7 @@ private fun PlayerScreen(
         }
 
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        NowPlaying(controller, error, clearTitleTick, onPlayPause)
+        NowPlaying(controller, error, clearTitleTick, shuffleEnabled, onShuffleToggle, onPlayPause)
         Spacer(Modifier.height(32.dp))
     }
 }
@@ -442,6 +465,8 @@ private fun NowPlaying(
     controller: MediaController?,
     connectError: String?,
     clearTitleTick: Int,
+    shuffleEnabled: Boolean,
+    onShuffleToggle: (Boolean) -> Unit,
     onPlayPause: () -> Unit
 ) {
     var title by remember { mutableStateOf("") }
@@ -505,6 +530,19 @@ private fun NowPlaying(
     )
     Spacer(Modifier.height(16.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            Switch(checked = shuffleEnabled, onCheckedChange = onShuffleToggle)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                painter = painterResource(R.drawable.ic_shuffle),
+                contentDescription = stringResource(R.string.shuffle),
+                tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Button(
             onClick = onPlayPause,
             enabled = controller != null,
@@ -532,8 +570,10 @@ private fun SettingsScreen(
     build: Long,
     themeMode: ThemeMode,
     replayGainEnabled: Boolean,
+    loopEnabled: Boolean,
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
+    onLoopChange: (Boolean) -> Unit,
     onChangeRoot: () -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
@@ -575,6 +615,13 @@ private fun SettingsScreen(
             ThemeOption(stringResource(R.string.theme_dark), themeMode == ThemeMode.Dark) {
                 onThemeChange(ThemeMode.Dark)
             }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.repeat))
+            Spacer(Modifier.weight(1f))
+            Switch(checked = loopEnabled, onCheckedChange = onLoopChange)
         }
 
         Spacer(Modifier.height(20.dp))

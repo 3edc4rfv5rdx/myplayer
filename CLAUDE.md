@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Minimal Android folder player (Kotlin + Jetpack Compose + Media3/ExoPlayer). The user remembers a
 root music folder once; each session they pick a folder (the remembered root is the picker's start
-location) and the app plays everything under it (recursively) in random order without repeats. No
-equalizer, no internet, no media library — deliberately primitive.
+location) and the app plays everything under it (recursively). Playback is shuffled by default
+(toggle on the main screen) and loops on end (Repeat toggle in Settings). No equalizer, no
+internet, no media library — deliberately primitive.
 
 ## Build / install (release-only workflow)
 
@@ -31,15 +32,16 @@ Conventions:
 Single `:app` module, package `com.myplayer`. UI and playback are split across a Media3 session:
 
 - `PlayerService` (`MediaSessionService`) owns the `ExoPlayer` + `MediaSession` — this is what gives
-  background playback and shade controls. Playback semantics live here: `shuffleModeEnabled = true`
-  + `REPEAT_MODE_ALL` *is* the "random, no repeats, reshuffle on loop" requirement. Do not
-  reimplement shuffling manually.
+  background playback and shade controls. Randomization uses ExoPlayer's built-in shuffle and
+  looping its repeat mode, so the main-screen toggle reorders the live queue without rebuilding it;
+  `MainActivity` only sets the media items and the start track (random or selected-first). Shuffle
+  is a non-persisted toggle (on by default); looping is the persisted Repeat setting.
 - `MainActivity` is UI only; it drives the service through a `MediaController` (built in `onStart`,
   released in `onStop`).
 
 Supporting files:
-- `Prefs` — single source for persisted state (remembered root folder URI, ReplayGain toggle). Don't
-  touch `SharedPreferences` elsewhere.
+- `Settings` — single source for persisted state (root folder, toggles, theme), stored in the
+  `settings` table of `AppDb` (SQLite). Don't read/write persisted state anywhere else.
 - `MusicScanner` — recursive SAF (`DocumentFile`) walk producing `MediaItem`s; mp3/flac only.
 - `ReplayGain` + `GainAudioProcessor` — optional volume normalization (see below).
 
@@ -68,4 +70,4 @@ unchanged. Computing loudness ourselves (analysis) is intentionally out of scope
   `stringResource` — no hardcoded UI text. UI is English-only.
 - Every commit must update `CHANGELOG.md` in the same commit. Newest entries go on top
   (prepend to `## Unreleased`), not appended at the bottom.
-- Keep shared values/functions centralized (e.g. `Prefs`); no duplication across files.
+- Keep shared values/functions centralized (e.g. `Settings`); no duplication across files.

@@ -35,7 +35,8 @@ class PlayerService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        player.repeatMode = Player.REPEAT_MODE_ALL
+        player.repeatMode =
+            if (Settings.isLoopEnabled(this)) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {

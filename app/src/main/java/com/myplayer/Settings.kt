@@ -17,6 +17,7 @@ object Settings {
     private const val KEY_FOLDER = "folder_uri"
     private const val KEY_REPLAYGAIN = "replaygain"
     private const val KEY_THEME = "theme"
+    private const val KEY_LOOP = "loop"
 
     private fun get(context: Context, key: String): String? {
         AppDb.db(context)
@@ -40,4 +41,9 @@ object Settings {
 
     fun getThemeMode(context: Context): ThemeMode = ThemeMode.from(get(context, KEY_THEME))
     fun setThemeMode(context: Context, mode: ThemeMode) = set(context, KEY_THEME, mode.name)
+
+    /** Loop the playlist when it ends (default on); off means stop after the last track. */
+    fun isLoopEnabled(context: Context): Boolean = get(context, KEY_LOOP) != "false"
+    fun setLoopEnabled(context: Context, enabled: Boolean) =
+        set(context, KEY_LOOP, enabled.toString())
 }
