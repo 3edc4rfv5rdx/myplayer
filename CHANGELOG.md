@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.3.20260604+42
 
 - Multi-root: the app now keeps a list of music folders instead of a single root. The home
   screen lists them on a distinct background; tap a folder to browse it, and "Play this folder"
