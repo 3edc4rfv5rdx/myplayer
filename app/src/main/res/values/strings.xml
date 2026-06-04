@@ -20,6 +20,7 @@
     <string name="shuffle">Shuffle</string>
     <string name="repeat">Repeat all</string>
     <string name="replaygain">ReplayGain</string>
+    <string name="follow_playing">Follow playing track</string>
     <string name="theme">Theme</string>
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>

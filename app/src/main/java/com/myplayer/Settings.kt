@@ -19,6 +19,7 @@ object Settings {
     private const val KEY_REPLAYGAIN = "replaygain"
     private const val KEY_THEME = "theme"
     private const val KEY_LOOP = "loop"
+    private const val KEY_FOLLOW = "follow"
 
     private fun get(context: Context, key: String): String? {
         AppDb.db(context)
@@ -72,4 +73,9 @@ object Settings {
     fun isLoopEnabled(context: Context): Boolean = get(context, KEY_LOOP) != "false"
     fun setLoopEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_LOOP, enabled.toString())
+
+    /** Follow playback: jump the browser to the playing track's folder and center it (default on). */
+    fun isFollowEnabled(context: Context): Boolean = get(context, KEY_FOLLOW) != "false"
+    fun setFollowEnabled(context: Context, enabled: Boolean) =
+        set(context, KEY_FOLLOW, enabled.toString())
 }

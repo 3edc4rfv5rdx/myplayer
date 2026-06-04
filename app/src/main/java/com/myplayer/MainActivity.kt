@@ -7,12 +7,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -85,6 +88,8 @@ class MainActivity : ComponentActivity() {
     private val treeUriState = mutableStateOf<Uri?>(null)
     private val pathState = mutableStateOf<List<Node>>(emptyList())
     private val selectedIndexState = mutableStateOf<Int?>(null)
+    // documentId of the currently playing track; highlighted and followed in the browser.
+    private val playingDocIdState = mutableStateOf<String?>(null)
     private val screenState = mutableStateOf(Screen.Browser)
     private val rescanTickState = mutableStateOf(0)
     private val clearTitleTickState = mutableStateOf(0)
@@ -135,12 +140,14 @@ class MainActivity : ComponentActivity() {
                     val path by pathState
                     val error by errorState
                     val selectedIndex by selectedIndexState
+                    val playingDocId by playingDocIdState
                     val screen by screenState
                     val rescanTick by rescanTickState
                     val clearTitleTick by clearTitleTickState
                     val shuffle by shuffleState
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var loop by remember { mutableStateOf(Settings.isLoopEnabled(this)) }
+                    var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
 
                     BackHandler(enabled = screen == Screen.Settings || path.isNotEmpty()) {
                         if (screen == Screen.Settings) screenState.value = Screen.Browser else goUp()
@@ -153,6 +160,7 @@ class MainActivity : ComponentActivity() {
                             themeMode = theme,
                             replayGainEnabled = replayGain,
                             loopEnabled = loop,
+                            followEnabled = follow,
                             onThemeChange = {
                                 themeState.value = it
                                 Settings.setThemeMode(this, it)
@@ -166,6 +174,11 @@ class MainActivity : ComponentActivity() {
                                 Settings.setLoopEnabled(this, it)
                                 controllerState.value?.repeatMode =
                                     if (it) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+                            },
+                            onFollowChange = {
+                                follow = it
+                                Settings.setFollowEnabled(this, it)
+                                followPlayingTrack(controllerState.value?.currentMediaItem)
                             },
                             onRescan = {
                                 FolderCache.clear(this)
@@ -182,6 +195,7 @@ class MainActivity : ComponentActivity() {
                             path = path,
                             error = error,
                             selectedIndex = selectedIndex,
+                            playingDocId = playingDocId,
                             rescanTick = rescanTick,
                             clearTitleTick = clearTitleTick,
                             shuffleEnabled = shuffle,
@@ -214,7 +228,14 @@ class MainActivity : ComponentActivity() {
         val future = MediaController.Builder(this, token).buildAsync()
         future.addListener({
             try {
-                controllerState.value = future.get()
+                val c = future.get()
+                controllerState.value = c
+                c.addListener(object : Player.Listener {
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        followPlayingTrack(mediaItem)
+                    }
+                })
+                followPlayingTrack(c.currentMediaItem)
             } catch (e: Exception) {
                 errorState.value = "Connect: ${e.message}"
             }
@@ -226,6 +247,39 @@ class MainActivity : ComponentActivity() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerState.value = null
         super.onStop()
+    }
+
+    /** Highlights the playing track and, while browsing, navigates to its folder so the list can
+     *  center it. Stays put on the roots home screen. The folder path is rebuilt from the file's
+     *  hierarchical documentId (same assumption used elsewhere for relative paths). */
+    private fun followPlayingTrack(item: MediaItem?) {
+        if (!Settings.isFollowEnabled(this)) {
+            playingDocIdState.value = null
+            return
+        }
+        val fileDocId = item?.mediaId
+            ?.let { runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull() }
+        playingDocIdState.value = fileDocId
+        if (treeUriState.value == null || fileDocId == null) return
+        val owner = rootsState.value.firstOrNull { root ->
+            val treeId = DocumentsContract.getTreeDocumentId(root)
+            fileDocId == treeId || fileDocId.startsWith("$treeId/")
+        } ?: return
+        lifecycleScope.launch {
+            val rootNode = withContext(Dispatchers.IO) { MusicScanner.rootNode(this@MainActivity, owner) }
+            val treeId = DocumentsContract.getTreeDocumentId(owner)
+            val folderSegs = fileDocId.removePrefix(treeId).trimStart('/').split('/').dropLast(1)
+            val nodes = ArrayList<Node>()
+            nodes.add(rootNode)
+            var acc = treeId
+            for (seg in folderSegs) {
+                acc = "$acc/$seg"
+                nodes.add(Node(acc, seg, true))
+            }
+            treeUriState.value = owner
+            pathState.value = nodes
+            selectedIndexState.value = null
+        }
     }
 
     /** Enters [treeUri] from the roots list, showing its top folder. */
@@ -353,6 +407,7 @@ private fun PlayerScreen(
     path: List<Node>,
     error: String?,
     selectedIndex: Int?,
+    playingDocId: String?,
     rescanTick: Int,
     clearTitleTick: Int,
     shuffleEnabled: Boolean,
@@ -389,6 +444,7 @@ private fun PlayerScreen(
                     current = current,
                     canGoUp = true,
                     selectedIndex = selectedIndex,
+                    playingDocId = playingDocId,
                     rescanTick = rescanTick,
                     onUp = onUp,
                     onDescend = onDescend,
@@ -513,6 +569,7 @@ private fun FolderBrowser(
     current: Node,
     canGoUp: Boolean,
     selectedIndex: Int?,
+    playingDocId: String?,
     rescanTick: Int,
     onUp: () -> Unit,
     onDescend: (Node) -> Unit,
@@ -522,11 +579,29 @@ private fun FolderBrowser(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val listState = rememberLazyListState()
     var contents by remember(current.documentId) {
         mutableStateOf<Pair<List<Node>, List<Node>>?>(null)
     }
     LaunchedEffect(current.documentId, rescanTick) {
         contents = withContext(Dispatchers.IO) { FolderCache.children(context, treeUri, current) }
+    }
+
+    // Scroll the playing track into the middle of the list (not flush against an edge).
+    LaunchedEffect(contents, playingDocId) {
+        val c = contents ?: return@LaunchedEffect
+        val fileIdx = c.second.indexOfFirst { it.documentId == playingDocId }
+        if (fileIdx < 0) return@LaunchedEffect
+        val target = c.first.size + fileIdx
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+            listState.scrollToItem(target)
+        }
+        val info = listState.layoutInfo
+        val viewport = info.viewportEndOffset - info.viewportStartOffset
+        val item = info.visibleItemsInfo.firstOrNull { it.index == target }
+        if (item != null && viewport > 0) {
+            listState.animateScrollBy((item.offset - (viewport - item.size) / 2).toFloat())
+        }
     }
 
     Column(modifier = modifier) {
@@ -564,7 +639,7 @@ private fun FolderBrowser(
         if (c != null && c.first.isEmpty() && c.second.isEmpty()) {
             Text(stringResource(R.string.empty_folder))
         } else if (c != null) {
-            LazyColumn(Modifier.fillMaxWidth()) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {
                 items(c.first, key = { it.documentId }) { folder ->
                     Text(
                         text = "📁  ${folder.name}",
@@ -578,20 +653,20 @@ private fun FolderBrowser(
                     )
                 }
                 itemsIndexed(c.second, key = { _, file -> file.documentId }) { index, file ->
-                    val selected = index == selectedIndex
+                    val highlighted = index == selectedIndex || file.documentId == playingDocId
+                    val background =
+                        if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent
+                    val foreground =
+                        if (highlighted) MaterialTheme.colorScheme.onPrimary else Color.Unspecified
                     Text(
                         text = "🎵  ${file.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 22.sp,
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary
-                        else Color.Unspecified,
+                        color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                if (selected) MaterialTheme.colorScheme.primary
-                                else Color.Transparent
-                            )
+                            .background(background)
                             .clickable { onSelectFile(index) }
                             .padding(vertical = 10.dp)
                     )
@@ -727,9 +802,11 @@ private fun SettingsScreen(
     themeMode: ThemeMode,
     replayGainEnabled: Boolean,
     loopEnabled: Boolean,
+    followEnabled: Boolean,
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
     onLoopChange: (Boolean) -> Unit,
+    onFollowChange: (Boolean) -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -780,6 +857,13 @@ private fun SettingsScreen(
             Text(stringResource(R.string.replaygain))
             Spacer(Modifier.weight(1f))
             Switch(checked = replayGainEnabled, onCheckedChange = onReplayGainChange)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.follow_playing))
+            Spacer(Modifier.weight(1f))
+            Switch(checked = followEnabled, onCheckedChange = onFollowChange)
         }
 
         Spacer(Modifier.weight(1f))

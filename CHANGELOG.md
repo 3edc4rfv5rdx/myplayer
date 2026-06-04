@@ -3,6 +3,11 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Follow playing track (toggle in Settings, on by default): on each track change the browser
+  jumps to the playing file's folder and scrolls it to the middle of the list, highlighting it.
+  Does not pull you away from the roots home screen.
+
 ## v0.3.20260604+42
 
 - Multi-root: the app now keeps a list of music folders instead of a single root. The home
