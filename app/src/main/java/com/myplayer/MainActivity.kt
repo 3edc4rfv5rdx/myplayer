@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -476,15 +478,19 @@ private fun RootsList(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var pendingRemoval by remember { mutableStateOf<Uri?>(null) }
     var labeled by remember(roots) {
-        mutableStateOf(roots.map { it to (it.lastPathSegment ?: it.toString()) })
+        mutableStateOf(
+            roots.map { it to (it.lastPathSegment ?: it.toString()) }
+                .sortedBy { it.second.lowercase() }
+        )
     }
     LaunchedEffect(roots) {
         labeled = withContext(Dispatchers.IO) {
             roots.map { uri ->
                 val name = runCatching { MusicScanner.rootNode(context, uri).name }.getOrNull()
                 uri to (name?.takeIf { it.isNotEmpty() } ?: uri.lastPathSegment ?: uri.toString())
-            }
+            }.sortedBy { it.second.lowercase() }
         }
     }
 
@@ -547,7 +553,7 @@ private fun RootsList(
                                 fontSize = 22.sp,
                                 modifier = Modifier.weight(1f)
                             )
-                            IconButton(onClick = { onRemoveRoot(uri) }) {
+                            IconButton(onClick = { pendingRemoval = uri }) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_close),
                                     contentDescription = stringResource(R.string.remove_folder),
@@ -560,6 +566,25 @@ private fun RootsList(
             }
         }
 
+        pendingRemoval?.let { uri ->
+            val name = labeled.firstOrNull { it.first == uri }?.second ?: uri.toString()
+            AlertDialog(
+                onDismissRequest = { pendingRemoval = null },
+                title = { Text(stringResource(R.string.remove_folder)) },
+                text = { Text(stringResource(R.string.remove_folder_message, name) + "?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onRemoveRoot(uri)
+                        pendingRemoval = null
+                    }) { Text(stringResource(R.string.remove)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRemoval = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
+        }
     }
 }
 

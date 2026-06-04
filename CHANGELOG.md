@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Removing a root folder now asks for confirmation first.
+- The roots list is sorted alphabetically by folder name.
 - Follow playing track (toggle in Settings, on by default): on each track change the browser
   jumps to the playing file's folder and scrolls it to the middle of the list, highlighting it.
   Does not pull you away from the roots home screen.
