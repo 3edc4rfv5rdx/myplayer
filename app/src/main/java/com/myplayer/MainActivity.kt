@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -79,6 +80,8 @@ class MainActivity : ComponentActivity() {
     private val controllerState = mutableStateOf<MediaController?>(null)
     private val errorState = mutableStateOf<String?>(null)
 
+    // Ordered list of root folders. The home screen lists these; null treeUri/empty path == home.
+    private val rootsState = mutableStateOf<List<Uri>>(emptyList())
     private val treeUriState = mutableStateOf<Uri?>(null)
     private val pathState = mutableStateOf<List<Node>>(emptyList())
     private val selectedIndexState = mutableStateOf<Int?>(null)
@@ -93,17 +96,14 @@ class MainActivity : ComponentActivity() {
     // documentId of the folder the current playback was started from.
     private var playingFolderId: String? = null
 
-    /** Picks (or changes) the root folder. This is the only place a SAF permission is requested. */
+    /** Adds a root folder. This is the only place a SAF permission is requested. */
     private val folderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
                 contentResolver.takePersistableUriPermission(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                Settings.setFolderUri(this, uri.toString())
-                FolderCache.clear(this)
-                openRoot(uri)
-                screenState.value = Screen.Browser
+                rootsState.value = Settings.addRoot(this, uri.toString()).map(Uri::parse)
             }
         }
 
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
         themeState.value = Settings.getThemeMode(this)
-        Settings.getFolderUri(this)?.let { openRoot(Uri.parse(it)) }
+        rootsState.value = Settings.getRoots(this).map(Uri::parse)
 
         setContent {
             val theme by themeState
@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val controller by controllerState
+                    val roots by rootsState
                     val treeUri by treeUriState
                     val path by pathState
                     val error by errorState
@@ -141,7 +142,7 @@ class MainActivity : ComponentActivity() {
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var loop by remember { mutableStateOf(Settings.isLoopEnabled(this)) }
 
-                    BackHandler(enabled = screen == Screen.Settings || path.size > 1) {
+                    BackHandler(enabled = screen == Screen.Settings || path.isNotEmpty()) {
                         if (screen == Screen.Settings) screenState.value = Screen.Browser else goUp()
                     }
 
@@ -166,9 +167,6 @@ class MainActivity : ComponentActivity() {
                                 controllerState.value?.repeatMode =
                                     if (it) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                             },
-                            onChangeRoot = {
-                                folderPicker.launch(Settings.getFolderUri(this)?.let(Uri::parse))
-                            },
                             onRescan = {
                                 FolderCache.clear(this)
                                 rescanTickState.value++
@@ -179,6 +177,7 @@ class MainActivity : ComponentActivity() {
 
                         Screen.Browser -> PlayerScreen(
                             controller = controller,
+                            roots = roots,
                             treeUri = treeUri,
                             path = path,
                             error = error,
@@ -190,9 +189,9 @@ class MainActivity : ComponentActivity() {
                                 shuffleState.value = it
                                 controllerState.value?.shuffleModeEnabled = it
                             },
-                            onPickRoot = {
-                                folderPicker.launch(Settings.getFolderUri(this)?.let(Uri::parse))
-                            },
+                            onEnterRoot = { enterRoot(it) },
+                            onAddRoot = { folderPicker.launch(null) },
+                            onRemoveRoot = { removeRoot(it) },
                             onOpenSettings = { screenState.value = Screen.Settings },
                             onDescend = {
                                 pathState.value = path + it
@@ -229,17 +228,42 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    private fun openRoot(treeUri: Uri) {
+    /** Enters [treeUri] from the roots list, showing its top folder. */
+    private fun enterRoot(treeUri: Uri) {
         treeUriState.value = treeUri
         pathState.value = listOf(MusicScanner.rootNode(this, treeUri))
         selectedIndexState.value = null
     }
 
-    private fun goUp() {
-        val path = pathState.value
-        if (path.size > 1) pathState.value = path.dropLast(1)
+    /** Returns to the roots list (the home screen). */
+    private fun goHome() {
+        treeUriState.value = null
+        pathState.value = emptyList()
         selectedIndexState.value = null
         clearTitleTickState.value++
+    }
+
+    /** Up one level; from a root's top folder this returns to the roots list. */
+    private fun goUp() {
+        val path = pathState.value
+        if (path.size > 1) {
+            pathState.value = path.dropLast(1)
+            selectedIndexState.value = null
+            clearTitleTickState.value++
+        } else {
+            goHome()
+        }
+    }
+
+    /** Drops [treeUri] from the roots list, releasing its permission and clearing the cache. */
+    private fun removeRoot(treeUri: Uri) {
+        runCatching {
+            contentResolver.releasePersistableUriPermission(
+                treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        rootsState.value = Settings.removeRoot(this, treeUri.toString()).map(Uri::parse)
+        FolderCache.clear(this)
     }
 
     /** Play/pause. Selected file -> play it. Otherwise: a different folder than what's playing
@@ -324,6 +348,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PlayerScreen(
     controller: MediaController?,
+    roots: List<Uri>,
     treeUri: Uri?,
     path: List<Node>,
     error: String?,
@@ -332,7 +357,9 @@ private fun PlayerScreen(
     clearTitleTick: Int,
     shuffleEnabled: Boolean,
     onShuffleToggle: (Boolean) -> Unit,
-    onPickRoot: () -> Unit,
+    onEnterRoot: (Uri) -> Unit,
+    onAddRoot: () -> Unit,
+    onRemoveRoot: (Uri) -> Unit,
     onOpenSettings: () -> Unit,
     onDescend: (Node) -> Unit,
     onUp: () -> Unit,
@@ -348,12 +375,19 @@ private fun PlayerScreen(
         val current = path.lastOrNull()
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (current == null || treeUri == null) {
-                Button(onClick = onPickRoot) { Text(stringResource(R.string.choose_folder)) }
+                RootsList(
+                    roots = roots,
+                    onEnterRoot = onEnterRoot,
+                    onAddRoot = onAddRoot,
+                    onRemoveRoot = onRemoveRoot,
+                    onOpenSettings = onOpenSettings,
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
                 FolderBrowser(
                     treeUri = treeUri,
                     current = current,
-                    canGoUp = path.size > 1,
+                    canGoUp = true,
                     selectedIndex = selectedIndex,
                     rescanTick = rescanTick,
                     onUp = onUp,
@@ -367,8 +401,109 @@ private fun PlayerScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        NowPlaying(controller, error, clearTitleTick, shuffleEnabled, onShuffleToggle, onPlayPause)
+        NowPlaying(
+            controller, error, clearTitleTick, treeUri == null,
+            shuffleEnabled, onShuffleToggle, onPlayPause
+        )
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** Home screen: the list of root folders on a distinct background, with add/remove. */
+@Composable
+private fun RootsList(
+    roots: List<Uri>,
+    onEnterRoot: (Uri) -> Unit,
+    onAddRoot: () -> Unit,
+    onRemoveRoot: (Uri) -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var labeled by remember(roots) {
+        mutableStateOf(roots.map { it to (it.lastPathSegment ?: it.toString()) })
+    }
+    LaunchedEffect(roots) {
+        labeled = withContext(Dispatchers.IO) {
+            roots.map { uri ->
+                val name = runCatching { MusicScanner.rootNode(context, uri).name }.getOrNull()
+                uri to (name?.takeIf { it.isNotEmpty() } ?: uri.lastPathSegment ?: uri.toString())
+            }
+        }
+    }
+
+    Column(modifier = modifier) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.music_folders),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            IconButton(
+                onClick = onAddRoot,
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_add_circle),
+                    contentDescription = stringResource(R.string.add_folder),
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings),
+                    contentDescription = stringResource(R.string.settings)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+        ) {
+            if (labeled.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.no_folders),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.Center).padding(16.dp)
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxSize().padding(8.dp)) {
+                    items(labeled, key = { it.first.toString() }) { (uri, name) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onEnterRoot(uri) }
+                                .padding(start = 8.dp, top = 6.dp, bottom = 6.dp)
+                        ) {
+                            Text(
+                                text = "📁  $name",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = 22.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { onRemoveRoot(uri) }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_close),
+                                    contentDescription = stringResource(R.string.remove_folder),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }
 
@@ -471,6 +606,7 @@ private fun NowPlaying(
     controller: MediaController?,
     connectError: String?,
     clearTitleTick: Int,
+    atHome: Boolean,
     shuffleEnabled: Boolean,
     onShuffleToggle: (Boolean) -> Unit,
     onPlayPause: () -> Unit
@@ -517,8 +653,9 @@ private fun NowPlaying(
 
     // Separate fixed-height slots: path (1 line) and title (room for 2). Fixed so a wrapping
     // title or a missing path never reflows the list above. Empty when nothing is playing.
-    val display = connectError ?: playerError ?: title
-    val showPath = connectError == null && playerError == null && path.isNotEmpty()
+    // On the roots (home) screen the track name/path are hidden, even while playback continues.
+    val display = if (atHome) "" else connectError ?: playerError ?: title
+    val showPath = !atHome && connectError == null && playerError == null && path.isNotEmpty()
     Spacer(Modifier.height(10.dp))
     Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
         if (showPath) {
@@ -567,7 +704,7 @@ private fun NowPlaying(
             Icon(
                 painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
                 contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(if (isPlaying) 48.dp else 68.dp)
             )
         }
         Button(
@@ -593,7 +730,6 @@ private fun SettingsScreen(
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
     onLoopChange: (Boolean) -> Unit,
-    onChangeRoot: () -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -611,10 +747,6 @@ private fun SettingsScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onChangeRoot, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.change_folder))
-        }
-        Spacer(Modifier.height(12.dp))
         Button(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.rescan))
         }

@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- Multi-root: the app now keeps a list of music folders instead of a single root. The home
+  screen lists them on a distinct background; tap a folder to browse it, and "Play this folder"
+  plays a whole root recursively. Add folders with the "Add folder" button and remove them with
+  the ✕ on each row (releasing its permission). The roots list itself is not playable — only the
+  folders inside it. A previously remembered single root is migrated into the list automatically.
 - Replaced text labels with icons on the transport/navigation buttons: Play/Pause (the Play
   triangle carries a cut-out note, matching the launcher icon), Next, and the folder Up button.
 
