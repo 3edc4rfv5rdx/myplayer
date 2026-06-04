@@ -3,6 +3,10 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Replaced text labels with icons on the transport/navigation buttons: Play/Pause (the Play
+  triangle carries a cut-out note, matching the launcher icon), Next, and the folder Up button.
+
 ## v0.2.20260603+36
 
 - New launcher icon: teal circle on white with a black play-triangle carrying a teal eighth-note

@@ -417,7 +417,10 @@ private fun FolderBrowser(
             }
             Spacer(Modifier.width(8.dp))
             Button(onClick = onUp, enabled = canGoUp) {
-                Text(stringResource(R.string.up))
+                Icon(
+                    painter = painterResource(R.drawable.ic_arrow_up),
+                    contentDescription = stringResource(R.string.up)
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -561,9 +564,10 @@ private fun NowPlaying(
             shape = CircleShape,
             modifier = Modifier.align(Alignment.Center).size(120.dp)
         ) {
-            Text(
-                text = stringResource(if (isPlaying) R.string.pause else R.string.play),
-                fontSize = 20.sp
+            Icon(
+                painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+                modifier = Modifier.size(48.dp)
             )
         }
         Button(
@@ -571,7 +575,10 @@ private fun NowPlaying(
             enabled = controller != null,
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            Text(stringResource(R.string.next))
+            Icon(
+                painter = painterResource(R.drawable.ic_skip_next),
+                contentDescription = stringResource(R.string.next)
+            )
         }
     }
 }
