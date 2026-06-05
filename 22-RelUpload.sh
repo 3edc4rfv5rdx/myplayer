@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="/home/e/PRJ/myplayer"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 PROJECT="myplayer"
 APK_DIR="$SCRIPT_DIR/app/build/outputs/apk/release"
 CHANGELOG_FILE="$(mktemp /tmp/myplayer-release-notes.XXXXXX.md)"
+trap 'rm -f "$CHANGELOG_FILE" "${CHANGELOG_FILE}.tmp"' EXIT
 DRY_RUN=false
 
 # ------------------------------------------------------------
@@ -105,12 +106,14 @@ echo "--------------------------------------------------"
 APK_ARM64="$APK_DIR/${APK_PREFIX}-arm64-v8a.apk"
 APK_UNIVERSAL="$APK_DIR/${APK_PREFIX}-universal.apk"
 
+# Fall back only within the same ABI: never rename a universal/x86_64 APK as the arm64 asset
+# (or vice versa). A missing asset must fail fast below, not get substituted by another ABI.
 if [[ ! -f "$APK_ARM64" ]]; then
-    APK_ARM64=$(ls -t "$APK_DIR"/*.apk 2>/dev/null | head -1)
+    APK_ARM64=$(ls -t "$APK_DIR"/*-arm64-v8a.apk 2>/dev/null | head -1)
 fi
 
 if [[ ! -f "$APK_UNIVERSAL" ]]; then
-    APK_UNIVERSAL="$APK_ARM64"
+    APK_UNIVERSAL=$(ls -t "$APK_DIR"/*-universal.apk 2>/dev/null | head -1)
 fi
 
 echo "=== Checking APK files ==="
@@ -206,9 +209,5 @@ done
 
 echo "=== Release upload completed successfully ==="
 
-# ------------------------------------------------------------
-# Cleanup
-# ------------------------------------------------------------
-rm -f "$CHANGELOG_FILE"
-
+# Temp changelog is removed by the EXIT trap.
 sleep 2

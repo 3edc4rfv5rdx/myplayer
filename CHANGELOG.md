@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Release tooling: `22-RelUpload.sh` now resolves its own directory instead of a hardcoded path,
+  falls back to the matching ABI only (`*-arm64-v8a.apk` / `*-universal.apk`) so a missing asset
+  fails fast with the list of available APKs instead of uploading another ABI under the wrong name,
+  and cleans up its temp changelog via an EXIT trap even on failure.
 - Build: added `data_extraction_rules.xml` (referenced from the manifest) that excludes everything
   from both cloud backup and device-to-device transfer, consistent with `allowBackup=false`, since
   the app's SAF roots/settings/cache are useless without the matching persisted URI permissions.
