@@ -4,6 +4,21 @@ Newest entries on top.
 
 ## Unreleased
 
+- Audit (tofix3) fixes:
+  - Playback loads are now lifecycle-safe and race-free: a newer Play cancels the previous scan (the
+    last tap wins, not the last scan to finish), and the controller is re-checked after scanning so
+    a load can't touch a controller released in onStop.
+  - Persisted-setting writes moved off the main thread: `Settings` keeps an in-memory cache and a
+    single-thread background writer, so toggles and the legacy migration no longer block the UI, and
+    read-modify-write on the roots list stays race-free.
+  - `FolderCache` locks per (tree, parent) instead of globally, so a large "Play this folder" scan no
+    longer blocks UI loads of other cached folders; Rescan/root-removal stay exclusive.
+  - Play now reports "Nothing to play here" on an empty/unreadable folder instead of doing nothing,
+    and a file selection is cleared only once playback actually starts.
+  - The recursive collect is now iterative (no stack overflow on deep trees) and computes each
+    folder's path id/name arrays once per folder instead of once per file.
+  - The roots list no longer briefly flashes the raw `primary:`-style tree id before names resolve.
+
 - Audit (tofix2) fixes:
   - ReplayGain: removed dead `toLinear`/`MAX_LINEAR`/`PREAMP_DB`; the dB→volume/millibel math and
     the +12 dB cap now live solely in `ReplayGain` and are reused by the player (no duplication).

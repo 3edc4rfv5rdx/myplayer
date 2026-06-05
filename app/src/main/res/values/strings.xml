@@ -17,6 +17,7 @@
     <string name="up">Up</string>
     <string name="play_this_folder">Play this folder</string>
     <string name="empty_folder">Empty folder</string>
+    <string name="nothing_to_play">Nothing to play here</string>
     <string name="folder_unreadable">Can\'t read this folder. The storage may be unavailable or its permission was revoked</string>
     <string name="retry">Retry</string>
     <string name="play">Play</string>

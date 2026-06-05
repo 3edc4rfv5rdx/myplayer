@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -76,6 +77,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -119,6 +121,10 @@ class MainActivity : ComponentActivity() {
 
     // Cached so onMediaItemTransition needn't read the DB on every track change.
     private var followEnabled = true
+
+    // The in-flight folder/file scan; cancelled when a newer Play request supersedes it so the last
+    // request wins (not the last scan to finish).
+    private var playbackLoadJob: Job? = null
 
     /** Adds a root folder. This is the only place a SAF permission is requested. */
     private val folderPicker =
@@ -408,10 +414,7 @@ class MainActivity : ComponentActivity() {
         val index = selectedIndexState.value
         val dir = pathState.value.lastOrNull()
         when {
-            index != null && dir != null -> {
-                playFile(dir, index)
-                selectedIndexState.value = null
-            }
+            index != null && dir != null -> playFile(dir, index)
             dir != null && dir.documentId != playingFolderId -> playFolder(dir)
             controller.mediaItemCount > 0 -> controller.play()
             dir != null -> playFolder(dir)
@@ -421,21 +424,38 @@ class MainActivity : ComponentActivity() {
     /** Plays everything under [folder] recursively. ExoPlayer's shuffle (toggled live) handles the
      *  order; with shuffle on we start on a random track, off starts from the top. */
     private fun playFolder(folder: Node) {
-        val controller = controllerState.value ?: return
+        if (controllerState.value == null) return
         val tree = treeUriState.value ?: return
-        val shuffle = shuffleState.value
         val path = pathState.value
         playingFolderId = folder.documentId
-        lifecycleScope.launch {
+        playbackLoadJob?.cancel()
+        playbackLoadJob = lifecycleScope.launch {
             val items = withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, path) }
-            if (items.isNotEmpty()) {
-                controller.shuffleModeEnabled = shuffle
-                controller.repeatMode = loopRepeatMode()
-                controller.setMediaItems(items, if (shuffle) items.indices.random() else 0, 0L)
-                controller.prepare()
-                controller.play()
+            val controller = liveController() ?: return@launch
+            if (items.isEmpty()) {
+                errorState.value = getString(R.string.nothing_to_play)
+                return@launch
             }
+            val start = if (shuffleState.value) items.indices.random() else 0
+            startQueue(controller, items, start)
         }
+    }
+
+    /** The controller, but only while the activity is still started and the scan wasn't superseded;
+     *  guards against touching a controller released in onStop. */
+    private fun liveController(): MediaController? {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return null
+        return controllerState.value
+    }
+
+    /** Installs and starts [items] at [startIndex] with the live shuffle/repeat settings. */
+    private fun startQueue(controller: MediaController, items: List<MediaItem>, startIndex: Int) {
+        errorState.value = null
+        controller.shuffleModeEnabled = shuffleState.value
+        controller.repeatMode = loopRepeatMode()
+        controller.setMediaItems(items, startIndex, 0L)
+        controller.prepare()
+        controller.play()
     }
 
     /** Tells the service to re-apply ReplayGain to the current track immediately (no track wait). */
@@ -451,24 +471,27 @@ class MainActivity : ComponentActivity() {
         if (Settings.isLoopEnabled(this)) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
     /** Plays the selected file first, then the rest of the folder. ExoPlayer's shuffle (toggled
-     *  live) decides whether the remainder is shuffled or continues in scan order. */
+     *  live) decides whether the remainder is shuffled or continues in scan order. The selection is
+     *  cleared only once playback actually starts, so a failed load leaves it intact. */
     private fun playFile(folder: Node, index: Int) {
-        val controller = controllerState.value ?: return
+        if (controllerState.value == null) return
         val tree = treeUriState.value ?: return
-        val shuffle = shuffleState.value
         val path = pathState.value
         playingFolderId = folder.documentId
-        lifecycleScope.launch {
-            val files =
-                withContext(Dispatchers.IO) { FolderCache.children(this@MainActivity, tree, folder).second }
-            if (index in files.indices) {
-                val items = MusicScanner.mediaItems(tree, path, files)
-                controller.shuffleModeEnabled = shuffle
-                controller.repeatMode = loopRepeatMode()
-                controller.setMediaItems(items, index, 0L)
-                controller.prepare()
-                controller.play()
+        playbackLoadJob?.cancel()
+        playbackLoadJob = lifecycleScope.launch {
+            val files = withContext(Dispatchers.IO) {
+                runCatching { FolderCache.children(this@MainActivity, tree, folder).second }
+                    .getOrDefault(emptyList())
             }
+            val controller = liveController() ?: return@launch
+            if (index !in files.indices) {
+                errorState.value = getString(R.string.nothing_to_play)
+                return@launch
+            }
+            val items = MusicScanner.mediaItems(tree, path, files)
+            startQueue(controller, items, index)
+            selectedIndexState.value = null
         }
     }
 
@@ -555,6 +578,13 @@ private fun PlayerScreen(
     }
 }
 
+/** A readable placeholder label for a SAF tree URI until its real display name resolves: the last
+ *  path component of the tree documentId, without the `primary:`-style provider/volume prefix. */
+private fun fallbackRootLabel(uri: Uri): String {
+    val seg = uri.lastPathSegment ?: return uri.toString()
+    return seg.substringAfterLast(':').substringAfterLast('/').ifEmpty { seg }
+}
+
 /** Home screen: the list of root folders on a distinct background, with add/remove. */
 @Composable
 private fun RootsList(
@@ -570,7 +600,7 @@ private fun RootsList(
     var pendingRemoval by remember { mutableStateOf<Uri?>(null) }
     var labeled by remember(roots) {
         mutableStateOf(
-            roots.map { it to (it.lastPathSegment ?: it.toString()) }
+            roots.map { it to fallbackRootLabel(it) }
                 .sortedBy { it.second.lowercase() }
         )
     }
@@ -578,7 +608,7 @@ private fun RootsList(
         labeled = withContext(Dispatchers.IO) {
             roots.map { uri ->
                 val name = runCatching { MusicScanner.rootNode(context, uri).name }.getOrNull()
-                uri to (name?.takeIf { it.isNotEmpty() } ?: uri.lastPathSegment ?: uri.toString())
+                uri to (name?.takeIf { it.isNotEmpty() } ?: fallbackRootLabel(uri))
             }.sortedBy { it.second.lowercase() }
         }
     }

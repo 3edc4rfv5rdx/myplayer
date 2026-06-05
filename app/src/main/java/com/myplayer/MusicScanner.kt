@@ -80,42 +80,66 @@ object MusicScanner {
     }
 
     /** All audio under the folder at the end of [path] (root..folder), recursively, as MediaItems.
-     *  [path] is recorded on each item as its ancestor chain; its last node is the play-start folder. */
+     *  [path] is recorded on each item as its ancestor chain; its last node is the play-start folder.
+     *  Iterative (explicit stack) so a deeply nested tree can't overflow the call stack. */
     fun collectAudio(context: Context, treeUri: Uri, path: List<Node>): List<MediaItem> {
         val out = ArrayList<MediaItem>()
-        collect(context, treeUri, path, path.last().documentId, out)
-        return out
-    }
-
-    private fun collect(
-        context: Context, treeUri: Uri, path: List<Node>, playFolderId: String,
-        out: MutableList<MediaItem>
-    ) {
-        // Go through the cache so a recursive walk (e.g. "Play this folder") also fills it.
-        // An unreadable subfolder is skipped rather than aborting the whole collection.
-        val (subFolders, files) = try {
-            FolderCache.children(context, treeUri, path.last())
-        } catch (e: ScanException) {
-            return
+        val playFolderId = path.last().documentId
+        val stack = ArrayDeque<List<Node>>()
+        stack.addLast(path)
+        while (stack.isNotEmpty()) {
+            val cur = stack.removeLast()
+            // Go through the cache so a recursive walk (e.g. "Play this folder") also fills it.
+            // An unreadable subfolder is skipped rather than aborting the whole collection.
+            val (subFolders, files) = try {
+                FolderCache.children(context, treeUri, cur.last())
+            } catch (e: ScanException) {
+                continue
+            }
+            if (files.isNotEmpty()) {
+                val ctx = PathContext.of(treeUri, cur, playFolderId)
+                for (file in files) out.add(mediaItem(treeUri, file, ctx))
+            }
+            // Push subfolders reversed so they pop back in sorted order (pre-order DFS).
+            for (i in subFolders.indices.reversed()) stack.addLast(cur + subFolders[i])
         }
-        for (file in files) out.add(mediaItem(treeUri, path, file, playFolderId))
-        for (sub in subFolders) collect(context, treeUri, path + sub, playFolderId, out)
+        return out
     }
 
     /** MediaItems for [files] sitting directly inside the folder at the end of [path] (root..folder). */
     fun mediaItems(treeUri: Uri, path: List<Node>, files: List<Node>): List<MediaItem> {
-        val playFolderId = path.last().documentId
-        return files.map { mediaItem(treeUri, path, it, playFolderId) }
+        val ctx = PathContext.of(treeUri, path, path.last().documentId)
+        return files.map { mediaItem(treeUri, it, ctx) }
     }
 
-    private fun mediaItem(treeUri: Uri, path: List<Node>, file: Node, playFolderId: String): MediaItem {
+    /** Per-folder navigation data shared by every file in that folder, so the path id/name arrays
+     *  and subtitle are computed once per folder instead of once per file. */
+    private class PathContext(
+        val treeUri: String,
+        val playFolderId: String,
+        val pathIds: Array<String>,
+        val pathNames: Array<String>,
+        val subtitle: String
+    ) {
+        companion object {
+            fun of(treeUri: Uri, path: List<Node>, playFolderId: String): PathContext = PathContext(
+                treeUri.toString(),
+                playFolderId,
+                path.map { it.documentId }.toTypedArray(),
+                path.map { it.name }.toTypedArray(),
+                displayDir(path)
+            )
+        }
+    }
+
+    private fun mediaItem(treeUri: Uri, file: Node, ctx: PathContext): MediaItem {
         val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, file.documentId)
         val title = file.name.substringBeforeLast('.')
         val extras = Bundle().apply {
-            putString(EXTRA_TREE_URI, treeUri.toString())
-            putString(EXTRA_PLAY_FOLDER_ID, playFolderId)
-            putStringArray(EXTRA_PATH_IDS, path.map { it.documentId }.toTypedArray())
-            putStringArray(EXTRA_PATH_NAMES, path.map { it.name }.toTypedArray())
+            putString(EXTRA_TREE_URI, ctx.treeUri)
+            putString(EXTRA_PLAY_FOLDER_ID, ctx.playFolderId)
+            putStringArray(EXTRA_PATH_IDS, ctx.pathIds)
+            putStringArray(EXTRA_PATH_NAMES, ctx.pathNames)
         }
         return MediaItem.Builder()
             .setUri(uri)
@@ -123,7 +147,7 @@ object MusicScanner {
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
-                    .setSubtitle(displayDir(path))
+                    .setSubtitle(ctx.subtitle)
                     .setExtras(extras)
                     .build()
             )

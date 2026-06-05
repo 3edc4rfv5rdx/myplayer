@@ -3,6 +3,7 @@ package com.myplayer
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import java.util.concurrent.Executors
 
 enum class ThemeMode {
     System, Light, Dark;
@@ -21,13 +22,42 @@ object Settings {
     private const val KEY_LOOP = "loop"
     private const val KEY_FOLLOW = "follow"
 
+    // In-memory cache so reads (after warm-up) and read-modify-write on roots stay off disk and
+    // race-free; the single-thread writer persists changes in order, in the background.
+    private val lock = Any()
+    private val cache = HashMap<String, String?>()
+    private val loaded = HashSet<String>()
+    private val writer = Executors.newSingleThreadExecutor()
+
     private fun get(context: Context, key: String): String? {
+        synchronized(lock) { if (key in loaded) return cache[key] }
+        val value = readDb(context, key)
+        synchronized(lock) {
+            // First read wins; a concurrent set() may already have cached a newer value.
+            if (key !in loaded) {
+                cache[key] = value
+                loaded.add(key)
+            }
+            return cache[key]
+        }
+    }
+
+    private fun set(context: Context, key: String, value: String) {
+        synchronized(lock) {
+            cache[key] = value
+            loaded.add(key)
+        }
+        val app = context.applicationContext
+        writer.execute { writeDb(app, key, value) }
+    }
+
+    private fun readDb(context: Context, key: String): String? {
         AppDb.db(context)
             .rawQuery("SELECT value FROM settings WHERE key=?", arrayOf(key))
             .use { c -> return if (c.moveToFirst()) c.getString(0) else null }
     }
 
-    private fun set(context: Context, key: String, value: String) {
+    private fun writeDb(context: Context, key: String, value: String) {
         val cv = ContentValues()
         cv.put("key", key)
         cv.put("value", value)
