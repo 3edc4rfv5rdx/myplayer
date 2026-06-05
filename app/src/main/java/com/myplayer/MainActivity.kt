@@ -70,6 +70,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
@@ -180,6 +181,7 @@ class MainActivity : ComponentActivity() {
                             onReplayGainChange = {
                                 replayGain = it
                                 Settings.setReplayGainEnabled(this, it)
+                                sendReplayGainChanged()
                             },
                             onLoopChange = {
                                 loop = it
@@ -416,6 +418,15 @@ class MainActivity : ComponentActivity() {
                 controller.prepare()
                 controller.play()
             }
+        }
+    }
+
+    /** Tells the service to re-apply ReplayGain to the current track immediately (no track wait). */
+    private fun sendReplayGainChanged() {
+        val controller = controllerState.value ?: return
+        val command = SessionCommand(PlayerService.CMD_REPLAYGAIN, Bundle.EMPTY)
+        if (controller.isSessionCommandAvailable(command)) {
+            controller.sendCustomCommand(command, Bundle.EMPTY)
         }
     }
 

@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- The ReplayGain toggle now takes effect on the current track immediately instead of only from the
+  next track/metadata event. The Settings switch sends a custom session command to the player
+  service, which re-applies the gain at once (resetting volume and the loudness effect when off).
 - Removing a root folder while it is playing now stops playback and clears the queue first, so the
   app doesn't keep playing content URIs whose permission was just released. Removing a different
   root leaves the current playback alone. Removal now clears only that root's cached listings

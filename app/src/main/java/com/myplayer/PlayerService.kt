@@ -1,6 +1,7 @@
 package com.myplayer
 
 import android.media.audiofx.LoudnessEnhancer
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -9,12 +10,21 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import kotlin.math.pow
 
 /** Holds the ExoPlayer + MediaSession (background playback + shade controls).
  *  ReplayGain is applied without touching the render pipeline: attenuation via player volume,
  *  boost via a LoudnessEnhancer audio effect. Toggled live from [Settings]. */
 class PlayerService : MediaSessionService() {
+
+    companion object {
+        /** Custom session command: re-apply the ReplayGain setting to the current track live. */
+        const val CMD_REPLAYGAIN = "com.myplayer.REPLAYGAIN_CHANGED"
+    }
 
     private var session: MediaSession? = null
     private var player: ExoPlayer? = null
@@ -63,7 +73,35 @@ class PlayerService : MediaSessionService() {
         })
 
         this.player = player
-        session = MediaSession.Builder(this, player).build()
+        session = MediaSession.Builder(this, player).setCallback(SessionCallback()).build()
+    }
+
+    /** Grants the ReplayGain command to controllers and applies the toggle live on request. */
+    private inner class SessionCallback : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(SessionCommand(CMD_REPLAYGAIN, Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == CMD_REPLAYGAIN) {
+                applyGain()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return super.onCustomCommand(session, controller, customCommand, args)
+        }
     }
 
     /** Applies the current track's ReplayGain (capped at +12 dB) when enabled in [Settings]. */
