@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The Play button's triangle now has rounded corners.
+
 - Docs: README updated to match the app — multiple music folders with add/remove instead of a single
   changeable root, Media3 shuffle mode with a random start index (not a pre-shuffled playlist), and
   the Repeat all / Follow playing track / Shuffle controls.
