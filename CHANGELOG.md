@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The app is now locked to portrait orientation; the screen no longer rotates.
+
 - Audit (tofix3) fixes:
   - Playback loads are now lifecycle-safe and race-free: a newer Play cancels the previous scan (the
     last tap wins, not the last scan to finish), and the controller is re-checked after scanning so
