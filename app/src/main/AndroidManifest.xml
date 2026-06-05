@@ -23,9 +23,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Local playback session only; not exported so other apps can't start or bind to it.
+             The in-app MediaController connects via SessionToken(ComponentName) in-process. -->
         <service
             android:name=".PlayerService"
-            android:exported="true"
+            android:exported="false"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />

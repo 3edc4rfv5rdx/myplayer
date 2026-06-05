@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Security: the playback service is no longer exported. It only hosts this app's local media
+  session, and the in-app MediaController connects in-process via SessionToken(ComponentName),
+  so other apps no longer need to be able to start or bind to it.
 - Build: opt into Media3's `@UnstableApi` explicitly on the few methods that use it
   (`onAudioSessionIdChanged`, `onMetadata`, `parseTrackGainDb`), clearing the
   `UnsafeOptInUsageError` lint errors without a global suppression or a lint baseline.
