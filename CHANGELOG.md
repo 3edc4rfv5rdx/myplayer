@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.3.20260605+57
 
 - The app is now locked to portrait orientation; the screen no longer rotates.
 
