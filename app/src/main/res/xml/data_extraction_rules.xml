@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backups are disabled (allowBackup=false). The app's data is just SAF roots/settings/cache in
+     app.db; moving it without the matching persisted URI permissions would be useless or harmful,
+     so both cloud backup and device-to-device transfer exclude everything. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>

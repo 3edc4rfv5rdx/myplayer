@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Build: added `data_extraction_rules.xml` (referenced from the manifest) that excludes everything
+  from both cloud backup and device-to-device transfer, consistent with `allowBackup=false`, since
+  the app's SAF roots/settings/cache are useless without the matching persisted URI permissions.
+  Clears the Android 12+ DataExtractionRules lint warning.
 - Security: the playback service is no longer exported. It only hosts this app's local media
   session, and the in-app MediaController connects in-process via SessionToken(ComponentName),
   so other apps no longer need to be able to start or bind to it.
