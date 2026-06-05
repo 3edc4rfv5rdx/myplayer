@@ -252,8 +252,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Highlights the playing track and, while browsing, navigates to its folder so the list can
-     *  center it. Stays put on the roots home screen. The folder path is rebuilt from the file's
-     *  hierarchical documentId (same assumption used elsewhere for relative paths). */
+     *  center it. Stays put on the roots home screen. The folder path comes from the item's extras
+     *  captured at scan time (no documentId string-splitting); if they are missing or the root is no
+     *  longer held, the track is only highlighted where found and navigation is skipped. */
     private fun followPlayingTrack(item: MediaItem?) {
         if (!Settings.isFollowEnabled(this)) {
             playingDocIdState.value = null
@@ -262,26 +263,16 @@ class MainActivity : ComponentActivity() {
         val fileDocId = item?.mediaId
             ?.let { runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull() }
         playingDocIdState.value = fileDocId
-        if (treeUriState.value == null || fileDocId == null) return
-        val owner = rootsState.value.firstOrNull { root ->
-            val treeId = DocumentsContract.getTreeDocumentId(root)
-            fileDocId == treeId || fileDocId.startsWith("$treeId/")
-        } ?: return
-        lifecycleScope.launch {
-            val rootNode = withContext(Dispatchers.IO) { MusicScanner.rootNode(this@MainActivity, owner) }
-            val treeId = DocumentsContract.getTreeDocumentId(owner)
-            val folderSegs = fileDocId.removePrefix(treeId).trimStart('/').split('/').dropLast(1)
-            val nodes = ArrayList<Node>()
-            nodes.add(rootNode)
-            var acc = treeId
-            for (seg in folderSegs) {
-                acc = "$acc/$seg"
-                nodes.add(Node(acc, seg, true))
-            }
-            treeUriState.value = owner
-            pathState.value = nodes
-            selectedIndexState.value = null
-        }
+        if (treeUriState.value == null || item == null) return
+        val extras = item.mediaMetadata.extras ?: return
+        val owner = extras.getString(MusicScanner.EXTRA_TREE_URI)?.let(Uri::parse) ?: return
+        val ids = extras.getStringArray(MusicScanner.EXTRA_PATH_IDS) ?: return
+        val names = extras.getStringArray(MusicScanner.EXTRA_PATH_NAMES) ?: return
+        if (ids.isEmpty() || ids.size != names.size) return
+        if (rootsState.value.none { it == owner }) return
+        treeUriState.value = owner
+        pathState.value = ids.indices.map { Node(ids[it], names[it], true) }
+        selectedIndexState.value = null
     }
 
     /** Enters [treeUri] from the roots list, showing its top folder. */
@@ -349,9 +340,10 @@ class MainActivity : ComponentActivity() {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
         val shuffle = shuffleState.value
+        val path = pathState.value
         playingFolderId = folder.documentId
         lifecycleScope.launch {
-            val items = withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, folder) }
+            val items = withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, path) }
             if (items.isNotEmpty()) {
                 controller.shuffleModeEnabled = shuffle
                 controller.repeatMode = loopRepeatMode()
@@ -371,12 +363,13 @@ class MainActivity : ComponentActivity() {
         val controller = controllerState.value ?: return
         val tree = treeUriState.value ?: return
         val shuffle = shuffleState.value
+        val path = pathState.value
         playingFolderId = folder.documentId
         lifecycleScope.launch {
             val files =
                 withContext(Dispatchers.IO) { FolderCache.children(this@MainActivity, tree, folder).second }
             if (index in files.indices) {
-                val items = MusicScanner.mediaItems(tree, files)
+                val items = MusicScanner.mediaItems(tree, path, files)
                 controller.shuffleModeEnabled = shuffle
                 controller.repeatMode = loopRepeatMode()
                 controller.setMediaItems(items, index, 0L)

@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- Navigation no longer treats a SAF document id as a slash-separated path. Each playable track now
+  carries its root tree URI and ancestor folder chain (ids + names) in its MediaItem extras,
+  captured during scanning. "Follow playing track" and the subtitle path use that data instead of
+  splitting the document id, so providers with non-hierarchical ids work and never get a fake path;
+  if the data is missing the track is only highlighted where found, without wrong navigation.
 - Folder cache is now keyed by (root tree URI, parent document id) instead of document id alone,
   so multiple roots or document providers with colliding document ids can no longer return each
   other's contents. The cache database is bumped to version 2; on upgrade only the cache tables

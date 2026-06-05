@@ -2,6 +2,7 @@ package com.myplayer
 
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import android.provider.DocumentsContract
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -13,6 +14,15 @@ data class Node(val documentId: String, val name: String, val isDir: Boolean)
 object MusicScanner {
 
     private val AUDIO_EXTENSIONS = setOf("mp3", "flac")
+
+    // MediaItem extras carry provider-agnostic navigation data captured at scan time, so the app
+    // never has to reparse a SAF documentId as a slash-separated filesystem path (not all providers
+    // honor that). Single source for the producer here and the consumers in MainActivity (follow,
+    // playingFolder restore, root-removal checks). PATH_IDS/PATH_NAMES run root..containing folder.
+    const val EXTRA_TREE_URI = "com.myplayer.TREE_URI"
+    const val EXTRA_PLAY_FOLDER_ID = "com.myplayer.PLAY_FOLDER_ID"
+    const val EXTRA_PATH_IDS = "com.myplayer.PATH_IDS"
+    const val EXTRA_PATH_NAMES = "com.myplayer.PATH_NAMES"
 
     /** Root node of the granted [treeUri]. */
     fun rootNode(context: Context, treeUri: Uri): Node {
@@ -57,45 +67,55 @@ object MusicScanner {
         return folders to files
     }
 
-    /** All audio under [folder] (recursively) as playable MediaItems. */
-    fun collectAudio(context: Context, treeUri: Uri, folder: Node): List<MediaItem> {
+    /** All audio under the folder at the end of [path] (root..folder), recursively, as MediaItems.
+     *  [path] is recorded on each item as its ancestor chain; its last node is the play-start folder. */
+    fun collectAudio(context: Context, treeUri: Uri, path: List<Node>): List<MediaItem> {
         val out = ArrayList<MediaItem>()
-        collect(context, treeUri, folder, out)
+        collect(context, treeUri, path, path.last().documentId, out)
         return out
     }
 
-    private fun collect(context: Context, treeUri: Uri, folder: Node, out: MutableList<MediaItem>) {
+    private fun collect(
+        context: Context, treeUri: Uri, path: List<Node>, playFolderId: String,
+        out: MutableList<MediaItem>
+    ) {
         // Go through the cache so a recursive walk (e.g. "Play this folder") also fills it.
-        val (subFolders, files) = FolderCache.children(context, treeUri, folder)
-        for (file in files) out.add(mediaItem(treeUri, file))
-        for (sub in subFolders) collect(context, treeUri, sub, out)
+        val (subFolders, files) = FolderCache.children(context, treeUri, path.last())
+        for (file in files) out.add(mediaItem(treeUri, path, file, playFolderId))
+        for (sub in subFolders) collect(context, treeUri, path + sub, playFolderId, out)
     }
 
-    fun mediaItems(treeUri: Uri, files: List<Node>): List<MediaItem> =
-        files.map { mediaItem(treeUri, it) }
+    /** MediaItems for [files] sitting directly inside the folder at the end of [path] (root..folder). */
+    fun mediaItems(treeUri: Uri, path: List<Node>, files: List<Node>): List<MediaItem> {
+        val playFolderId = path.last().documentId
+        return files.map { mediaItem(treeUri, path, it, playFolderId) }
+    }
 
-    private fun mediaItem(treeUri: Uri, file: Node): MediaItem {
+    private fun mediaItem(treeUri: Uri, path: List<Node>, file: Node, playFolderId: String): MediaItem {
         val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, file.documentId)
         val title = file.name.substringBeforeLast('.')
+        val extras = Bundle().apply {
+            putString(EXTRA_TREE_URI, treeUri.toString())
+            putString(EXTRA_PLAY_FOLDER_ID, playFolderId)
+            putStringArray(EXTRA_PATH_IDS, path.map { it.documentId }.toTypedArray())
+            putStringArray(EXTRA_PATH_NAMES, path.map { it.name }.toTypedArray())
+        }
         return MediaItem.Builder()
             .setUri(uri)
             .setMediaId(uri.toString())
             .setMediaMetadata(
-                MediaMetadata.Builder().setTitle(title).setSubtitle(relativeDir(treeUri, file)).build()
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setSubtitle(displayDir(path))
+                    .setExtras(extras)
+                    .build()
             )
             .build()
     }
 
-    /** Folder path of [file] relative to the root, without the filename (empty if directly in root). */
-    private fun relativeDir(treeUri: Uri, file: Node): String {
-        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
-        val rel = if (file.documentId.startsWith(rootId)) {
-            file.documentId.substring(rootId.length).trimStart('/')
-        } else {
-            file.documentId.substringAfter(':', file.documentId)
-        }
-        return if (rel.contains('/')) rel.substringBeforeLast('/') else ""
-    }
+    /** Folder path for the subtitle: ancestor names below the root (empty if directly in the root). */
+    private fun displayDir(path: List<Node>): String =
+        path.drop(1).joinToString("/") { it.name }
 
     private fun isAudio(name: String): Boolean =
         name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS
