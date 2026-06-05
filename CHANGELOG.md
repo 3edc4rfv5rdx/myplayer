@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Build: opt into Media3's `@UnstableApi` explicitly on the few methods that use it
+  (`onAudioSessionIdChanged`, `onMetadata`, `parseTrackGainDb`), clearing the
+  `UnsafeOptInUsageError` lint errors without a global suppression or a lint baseline.
 - SAF read failures (revoked permission, unavailable USB/cloud provider, null cursor) are no longer
   treated as an empty folder. The scanner now raises a distinct error instead of returning empty, so
   a transient failure is never cached as a scanned-but-empty folder. The browser shows a clear

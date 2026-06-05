@@ -7,6 +7,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Metadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -49,6 +50,7 @@ class PlayerService : MediaSessionService() {
             if (Settings.isLoopEnabled(this)) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
         player.addListener(object : Player.Listener {
+            @UnstableApi
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 enhancer?.release()
                 enhancer = try {
@@ -64,6 +66,7 @@ class PlayerService : MediaSessionService() {
                 applyGain()
             }
 
+            @UnstableApi
             override fun onMetadata(metadata: Metadata) {
                 ReplayGain.parseTrackGainDb(metadata)?.let {
                     currentTrackGainDb = it
@@ -78,6 +81,7 @@ class PlayerService : MediaSessionService() {
 
     /** Grants the ReplayGain command to controllers and applies the toggle live on request. */
     private inner class SessionCallback : MediaSession.Callback {
+        @UnstableApi
         override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo
