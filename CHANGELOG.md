@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.3.20260605+54
 
 - The roots home list now highlights the selected folder: tapping a folder both opens it and marks
   its row selected, and the highlight stays after navigating back to the list. It follows the
