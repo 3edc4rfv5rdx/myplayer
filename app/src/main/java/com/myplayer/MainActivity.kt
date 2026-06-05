@@ -321,6 +321,10 @@ class MainActivity : ComponentActivity() {
     private fun playFolderIdOf(item: MediaItem?): String? =
         item?.mediaMetadata?.extras?.getString(MusicScanner.EXTRA_PLAY_FOLDER_ID)
 
+    /** The root tree URI [item] belongs to, recorded in its extras (or null). */
+    private fun playFolderTreeUriOf(item: MediaItem?): String? =
+        item?.mediaMetadata?.extras?.getString(MusicScanner.EXTRA_TREE_URI)
+
     /** Enters [treeUri] from the roots list, showing its top folder. */
     private fun enterRoot(treeUri: Uri) {
         treeUriState.value = treeUri
@@ -348,15 +352,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Drops [treeUri] from the roots list, releasing its permission and clearing the cache. */
+    /** Drops [treeUri] from the roots list, releasing its permission and its cached listings. If the
+     *  current playlist was started from this root, stop it first so we don't keep playing content
+     *  URIs whose permission we just released; playback from other roots is left untouched. */
     private fun removeRoot(treeUri: Uri) {
+        val controller = controllerState.value
+        val playingThisRoot =
+            controller != null &&
+                playFolderTreeUriOf(controller.currentMediaItem) == treeUri.toString()
+        if (playingThisRoot) {
+            // pause() first so onIsPlayingChanged(false) reaches the UI and the button leaves its
+            // "pause" icon; then drop the queue and reset playback state.
+            controller!!.pause()
+            controller.clearMediaItems()
+            controller.stop()
+            playingFolderId = null
+            playingDocIdState.value = null
+        }
         runCatching {
             contentResolver.releasePersistableUriPermission(
                 treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         }
         rootsState.value = Settings.removeRoot(this, treeUri.toString()).map(Uri::parse)
-        FolderCache.clear(this)
+        FolderCache.clearRoot(this, treeUri)
     }
 
     /** Play/pause. Selected file -> play it. Otherwise: a different folder than what's playing

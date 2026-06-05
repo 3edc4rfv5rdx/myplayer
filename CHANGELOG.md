@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Removing a root folder while it is playing now stops playback and clears the queue first, so the
+  app doesn't keep playing content URIs whose permission was just released. Removing a different
+  root leaves the current playback alone. Removal now clears only that root's cached listings
+  instead of the whole cache.
 - Activity recreation (rotation, returning from background) no longer drops you back to the roots
   home screen: the browser location (current root, folder path, selection, screen, shuffle) is now
   saved and restored. The starting folder id is also recovered from the live playing item's extras

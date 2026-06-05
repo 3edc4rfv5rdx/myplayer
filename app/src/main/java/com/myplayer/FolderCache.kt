@@ -22,12 +22,21 @@ object FolderCache {
         return result
     }
 
-    /** Drops the cached listings (used by Rescan and when the root folder changes). */
+    /** Drops all cached listings (used by Rescan). */
     @Synchronized
     fun clear(context: Context) {
         val db = AppDb.db(context)
         db.delete("children", null, null)
         db.delete("scanned", null, null)
+    }
+
+    /** Drops only [treeUri]'s cached listings (used when a single root is removed). */
+    @Synchronized
+    fun clearRoot(context: Context, treeUri: Uri) {
+        val db = AppDb.db(context)
+        val root = arrayOf(treeUri.toString())
+        db.delete("children", "tree_uri=?", root)
+        db.delete("scanned", "tree_uri=?", root)
     }
 
     private fun isScanned(db: SQLiteDatabase, root: String, parentId: String): Boolean {
