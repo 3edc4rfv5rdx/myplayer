@@ -234,9 +234,13 @@ class MainActivity : ComponentActivity() {
                 controllerState.value = c
                 c.addListener(object : Player.Listener {
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        playingFolderId = playFolderIdOf(mediaItem) ?: playingFolderId
                         followPlayingTrack(mediaItem)
                     }
                 })
+                // The service keeps playing across activity recreation; recover which folder the
+                // live playlist was started from so Play in the same folder resumes, not restarts.
+                playingFolderId = playFolderIdOf(c.currentMediaItem)
                 followPlayingTrack(c.currentMediaItem)
             } catch (e: Exception) {
                 errorState.value = "Connect: ${e.message}"
@@ -274,6 +278,10 @@ class MainActivity : ComponentActivity() {
         pathState.value = ids.indices.map { Node(ids[it], names[it], true) }
         selectedIndexState.value = null
     }
+
+    /** The folder id the playlist of [item] was started from, recorded in its extras (or null). */
+    private fun playFolderIdOf(item: MediaItem?): String? =
+        item?.mediaMetadata?.extras?.getString(MusicScanner.EXTRA_PLAY_FOLDER_ID)
 
     /** Enters [treeUri] from the roots list, showing its top folder. */
     private fun enterRoot(treeUri: Uri) {

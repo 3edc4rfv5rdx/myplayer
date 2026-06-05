@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Pressing Play in the same folder after the activity was recreated (rotation, returning from
+  background) now resumes the running playlist instead of rebuilding it from a new random track.
+  The starting folder id is recovered from the live playing item's extras on reconnect, rather
+  than living only in the activity where it was lost on recreation.
 - Navigation no longer treats a SAF document id as a slash-separated path. Each playable track now
   carries its root tree URI and ancestor folder chain (ids + names) in its MediaItem extras,
   captured during scanning. "Follow playing track" and the subtitle path use that data instead of
