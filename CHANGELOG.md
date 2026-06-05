@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Release tooling: `12-SamsRELEASE.sh` now runs under `set -e`, fails with a clear message when no
+  physical device is connected (instead of a broken `adb -s` call), warns and uses the first when
+  several are connected, accepts an explicit serial argument, and quotes the device serial.
 - Release tooling: `22-RelUpload.sh` now resolves its own directory instead of a hardcoded path,
   falls back to the matching ABI only (`*-arm64-v8a.apk` / `*-universal.apk`) so a missing asset
   fails fast with the list of available APKs instead of uploading another ABI under the wrong name,
