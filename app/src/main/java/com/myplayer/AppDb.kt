@@ -18,7 +18,12 @@ object AppDb {
     private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
             createCacheTables(db)
-            db.execSQL("CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT)")
+            createSettingsTable(db)
+        }
+
+        /** Settings holds roots/toggles/theme; create-if-missing so it can never be dropped. */
+        private fun createSettingsTable(db: SQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
         }
 
         /** The cache key is (tree_uri, parent_id): documentId alone can collide across roots/providers. */
@@ -37,6 +42,7 @@ object AppDb {
             db.execSQL("DROP TABLE IF EXISTS children")
             db.execSQL("DROP TABLE IF EXISTS scanned")
             createCacheTables(db)
+            createSettingsTable(db)
         }
     }
 }

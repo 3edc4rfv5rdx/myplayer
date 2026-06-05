@@ -10,8 +10,9 @@ import kotlin.math.pow
 object ReplayGain {
 
     private const val TAG_KEY = "REPLAYGAIN_TRACK_GAIN"
-    private const val PREAMP_DB = 0f
-    private const val MAX_LINEAR = 4f // cap at +12 dB to avoid heavy clipping
+
+    /** Cap positive gain to avoid heavy clipping on boost. */
+    const val MAX_BOOST_DB = 12f
 
     /** Returns the track gain in dB if present in the stream metadata, else null. */
     @UnstableApi
@@ -34,6 +35,9 @@ object ReplayGain {
     private fun parseDb(raw: String): Float? =
         raw.trim().substringBefore(' ').removeSuffix("dB").trim().toFloatOrNull()
 
-    fun toLinear(db: Float): Float =
-        10.0.pow(((db + PREAMP_DB) / 20.0)).toFloat().coerceIn(0f, MAX_LINEAR)
+    /** Linear volume multiplier (<= 1.0) for a non-positive [db]; for attenuation via player volume. */
+    fun attenuationVolume(db: Float): Float = 10.0.pow(db / 20.0).toFloat()
+
+    /** Capped boost in millibels for a positive [db], for LoudnessEnhancer (1 dB = 100 mB). */
+    fun boostMillibels(db: Float): Int = (db.coerceAtMost(MAX_BOOST_DB) * 100).toInt()
 }

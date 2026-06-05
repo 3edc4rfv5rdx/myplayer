@@ -117,6 +117,9 @@ class MainActivity : ComponentActivity() {
     // documentId of the folder the current playback was started from.
     private var playingFolderId: String? = null
 
+    // Cached so onMediaItemTransition needn't read the DB on every track change.
+    private var followEnabled = true
+
     /** Adds a root folder. This is the only place a SAF permission is requested. */
     private val folderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -135,6 +138,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
         themeState.value = Settings.getThemeMode(this)
+        followEnabled = Settings.isFollowEnabled(this)
         rootsState.value = Settings.getRoots(this).map(Uri::parse)
         savedInstanceState?.let(::restoreUiState)
 
@@ -196,6 +200,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onFollowChange = {
                                 follow = it
+                                followEnabled = it
                                 Settings.setFollowEnabled(this, it)
                                 followPlayingTrack(controllerState.value?.currentMediaItem)
                             },
@@ -250,6 +255,7 @@ class MainActivity : ComponentActivity() {
             try {
                 val c = future.get()
                 controllerState.value = c
+                errorState.value = null
                 c.addListener(object : Player.Listener {
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                         playingFolderId = playFolderIdOf(mediaItem) ?: playingFolderId
@@ -303,18 +309,16 @@ class MainActivity : ComponentActivity() {
         shuffleState.value = state.getBoolean(STATE_SHUFFLE, true)
     }
 
-    /** Highlights the playing track and, while browsing, navigates to its folder so the list can
-     *  center it. Stays put on the roots home screen. The folder path comes from the item's extras
-     *  captured at scan time (no documentId string-splitting); if they are missing or the root is no
-     *  longer held, the track is only highlighted where found and navigation is skipped. */
+    /** Always highlights the playing track wherever it is visible. When Follow is enabled it also
+     *  navigates the browser to the track's folder so the list can center it (no-op on the roots
+     *  home screen). The folder path comes from the item's extras captured at scan time (no
+     *  documentId string-splitting); if they are missing or the root is no longer held, the track is
+     *  only highlighted where found and navigation is skipped. */
     private fun followPlayingTrack(item: MediaItem?) {
-        if (!Settings.isFollowEnabled(this)) {
-            playingDocIdState.value = null
-            return
-        }
         val fileDocId = item?.mediaId
             ?.let { runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull() }
         playingDocIdState.value = fileDocId
+        if (!followEnabled) return
         if (treeUriState.value == null || item == null) return
         val extras = item.mediaMetadata.extras ?: return
         val owner = extras.getString(MusicScanner.EXTRA_TREE_URI)?.let(Uri::parse) ?: return
@@ -380,6 +384,8 @@ class MainActivity : ComponentActivity() {
             controller.stop()
             playingFolderId = null
             playingDocIdState.value = null
+            // clearMediaItems() emits no metadata event, so clear the now-playing labels ourselves.
+            clearTitleTickState.value++
         }
         runCatching {
             contentResolver.releasePersistableUriPermission(

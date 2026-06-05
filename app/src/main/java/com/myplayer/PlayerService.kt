@@ -2,6 +2,7 @@ package com.myplayer
 
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Bundle
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -15,7 +16,6 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import kotlin.math.pow
 
 /** Holds the ExoPlayer + MediaSession (background playback + shade controls).
  *  ReplayGain is applied without touching the render pipeline: attenuation via player volume,
@@ -23,6 +23,8 @@ import kotlin.math.pow
 class PlayerService : MediaSessionService() {
 
     companion object {
+        private const val TAG = "PlayerService"
+
         /** Custom session command: re-apply the ReplayGain setting to the current track live. */
         const val CMD_REPLAYGAIN = "com.myplayer.REPLAYGAIN_CHANGED"
     }
@@ -31,9 +33,12 @@ class PlayerService : MediaSessionService() {
     private var player: ExoPlayer? = null
     private var enhancer: LoudnessEnhancer? = null
     private var currentTrackGainDb: Float? = null
+    // Cached so applyGain() (called on every metadata/transition/session callback) needn't hit the DB.
+    private var replayGainEnabled = false
 
     override fun onCreate() {
         super.onCreate()
+        replayGainEnabled = Settings.isReplayGainEnabled(this)
 
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(
@@ -56,6 +61,7 @@ class PlayerService : MediaSessionService() {
                 enhancer = try {
                     LoudnessEnhancer(audioSessionId)
                 } catch (e: Exception) {
+                    Log.w(TAG, "LoudnessEnhancer unavailable; ReplayGain boost is a no-op", e)
                     null
                 }
                 applyGain()
@@ -101,6 +107,7 @@ class PlayerService : MediaSessionService() {
             args: Bundle
         ): ListenableFuture<SessionResult> {
             if (customCommand.customAction == CMD_REPLAYGAIN) {
+                replayGainEnabled = Settings.isReplayGainEnabled(this@PlayerService)
                 applyGain()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
@@ -112,22 +119,21 @@ class PlayerService : MediaSessionService() {
     private fun applyGain() {
         val p = player ?: return
         val db = currentTrackGainDb
-        if (!Settings.isReplayGainEnabled(this) || db == null) {
+        if (!replayGainEnabled || db == null) {
             p.volume = 1f
             enhancer?.enabled = false
             return
         }
-        val capped = db.coerceAtMost(12f)
-        if (capped <= 0f) {
+        if (db <= 0f) {
             // Attenuate quietly and precisely via the player volume.
-            p.volume = 10f.pow(capped / 20f)
+            p.volume = ReplayGain.attenuationVolume(db)
             enhancer?.enabled = false
         } else {
             // Boost via the loudness effect (player volume can't exceed 1.0).
             p.volume = 1f
             enhancer?.let {
                 runCatching {
-                    it.setTargetGain((capped * 100).toInt())
+                    it.setTargetGain(ReplayGain.boostMillibels(db))
                     it.enabled = true
                 }
             }

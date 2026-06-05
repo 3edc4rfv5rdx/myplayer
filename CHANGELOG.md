@@ -3,6 +3,22 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Audit (tofix2) fixes:
+  - ReplayGain: removed dead `toLinear`/`MAX_LINEAR`/`PREAMP_DB`; the dB→volume/millibel math and
+    the +12 dB cap now live solely in `ReplayGain` and are reused by the player (no duplication).
+  - Performance: persisted toggles are no longer read from SQLite on hot paths — `PlayerService`
+    caches the ReplayGain flag and `MainActivity` caches the Follow flag, so per-track / per-metadata
+    callbacks no longer touch the DB on the main thread.
+  - The now-playing connection error now clears on a successful reconnect instead of lingering.
+  - The legacy single-folder setting is migrated to the roots list once and persisted, instead of
+    being re-migrated on every read.
+  - Removing the root that is currently playing now also clears the now-playing title/path.
+  - `settings` table is created with `IF NOT EXISTS` (also on upgrade) so it can never be dropped.
+  - The playing track is now highlighted regardless of the Follow setting; Follow gates only the
+    auto-navigation to its folder.
+  - A diagnostic is logged when `LoudnessEnhancer` is unavailable (ReplayGain boost becomes a no-op).
+
 ## v0.3.20260605+54
 
 - The roots home list now highlights the selected folder: tapping a folder both opens it and marks

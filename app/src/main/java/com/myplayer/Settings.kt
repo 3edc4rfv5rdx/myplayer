@@ -40,7 +40,11 @@ object Settings {
             return stored.split('\n').filter { it.isNotEmpty() }
         }
         val legacy = get(context, KEY_FOLDER)
-        return if (legacy.isNullOrEmpty()) emptyList() else listOf(legacy)
+        if (legacy.isNullOrEmpty()) return emptyList()
+        // Migrate the legacy single folder to KEY_ROOTS once, so later reads don't redo it.
+        val migrated = listOf(legacy)
+        setRoots(context, migrated)
+        return migrated
     }
 
     private fun setRoots(context: Context, roots: List<String>) =
