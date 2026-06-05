@@ -79,6 +79,15 @@ import kotlinx.coroutines.withContext
 
 private enum class Screen { Browser, Settings }
 
+// Keys for the browser state saved across activity recreation (rotation, background return).
+private const val STATE_TREE = "tree_uri"
+private const val STATE_PATH_IDS = "path_ids"
+private const val STATE_PATH_NAMES = "path_names"
+private const val STATE_SELECTED = "selected_index"
+private const val STATE_SCREEN = "screen"
+private const val STATE_PLAY_FOLDER = "play_folder_id"
+private const val STATE_SHUFFLE = "shuffle"
+
 class MainActivity : ComponentActivity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -122,6 +131,7 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission()
         themeState.value = Settings.getThemeMode(this)
         rootsState.value = Settings.getRoots(this).map(Uri::parse)
+        savedInstanceState?.let(::restoreUiState)
 
         setContent {
             val theme by themeState
@@ -253,6 +263,34 @@ class MainActivity : ComponentActivity() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerState.value = null
         super.onStop()
+    }
+
+    /** Persist the browser location so recreation returns here instead of the roots home screen.
+     *  The path holds only folders (always dirs), so saving ids+names is enough to rebuild it. */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val path = pathState.value
+        outState.putString(STATE_TREE, treeUriState.value?.toString())
+        outState.putStringArray(STATE_PATH_IDS, path.map { it.documentId }.toTypedArray())
+        outState.putStringArray(STATE_PATH_NAMES, path.map { it.name }.toTypedArray())
+        outState.putString(STATE_SCREEN, screenState.value.name)
+        outState.putString(STATE_PLAY_FOLDER, playingFolderId)
+        outState.putBoolean(STATE_SHUFFLE, shuffleState.value)
+        selectedIndexState.value?.let { outState.putInt(STATE_SELECTED, it) }
+    }
+
+    private fun restoreUiState(state: Bundle) {
+        treeUriState.value = state.getString(STATE_TREE)?.let(Uri::parse)
+        val ids = state.getStringArray(STATE_PATH_IDS)
+        val names = state.getStringArray(STATE_PATH_NAMES)
+        if (ids != null && names != null && ids.size == names.size) {
+            pathState.value = ids.indices.map { Node(ids[it], names[it], true) }
+        }
+        selectedIndexState.value = if (state.containsKey(STATE_SELECTED)) state.getInt(STATE_SELECTED) else null
+        screenState.value = runCatching { Screen.valueOf(state.getString(STATE_SCREEN) ?: "") }
+            .getOrDefault(Screen.Browser)
+        playingFolderId = state.getString(STATE_PLAY_FOLDER)
+        shuffleState.value = state.getBoolean(STATE_SHUFFLE, true)
     }
 
     /** Highlights the playing track and, while browsing, navigates to its folder so the list can
