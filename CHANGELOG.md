@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- SAF read failures (revoked permission, unavailable USB/cloud provider, null cursor) are no longer
+  treated as an empty folder. The scanner now raises a distinct error instead of returning empty, so
+  a transient failure is never cached as a scanned-but-empty folder. The browser shows a clear
+  message with a Retry button near the list, and "Play this folder" skips unreadable subfolders
+  instead of aborting the whole playlist.
 - The ReplayGain toggle now takes effect on the current track immediately instead of only from the
   next track/metadata event. The Settings switch sends a custom session command to the player
   service, which re-applies the gain at once (resetting volume and the loudness effect when off).

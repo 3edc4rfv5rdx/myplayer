@@ -677,8 +677,16 @@ private fun FolderBrowser(
     var contents by remember(current.documentId) {
         mutableStateOf<Pair<List<Node>, List<Node>>?>(null)
     }
-    LaunchedEffect(current.documentId, rescanTick) {
-        contents = withContext(Dispatchers.IO) { FolderCache.children(context, treeUri, current) }
+    var loadFailed by remember(current.documentId) { mutableStateOf(false) }
+    var retryTick by remember(current.documentId) { mutableStateOf(0) }
+    LaunchedEffect(current.documentId, rescanTick, retryTick) {
+        loadFailed = false
+        contents = null
+        try {
+            contents = withContext(Dispatchers.IO) { FolderCache.children(context, treeUri, current) }
+        } catch (e: ScanException) {
+            loadFailed = true
+        }
     }
 
     // Scroll the playing track into the middle of the list (not flush against an edge).
@@ -730,7 +738,11 @@ private fun FolderBrowser(
         Spacer(Modifier.height(8.dp))
 
         val c = contents
-        if (c != null && c.first.isEmpty() && c.second.isEmpty()) {
+        if (loadFailed) {
+            Text(stringResource(R.string.folder_unreadable))
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { retryTick++ }) { Text(stringResource(R.string.retry)) }
+        } else if (c != null && c.first.isEmpty() && c.second.isEmpty()) {
             Text(stringResource(R.string.empty_folder))
         } else if (c != null) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {

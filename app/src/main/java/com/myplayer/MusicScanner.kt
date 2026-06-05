@@ -10,6 +10,10 @@ import androidx.media3.common.MediaMetadata
 /** A serializable folder/file entry within a SAF tree (no DocumentFile overhead). */
 data class Node(val documentId: String, val name: String, val isDir: Boolean)
 
+/** A folder could not be read (revoked permission, unavailable provider, null cursor). Distinct
+ *  from a genuinely empty folder so callers don't cache emptiness or crash on access loss. */
+class ScanException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
 /** Lists and collects mp3/flac from a SAF tree via DocumentsContract (fast, cache-friendly). */
 object MusicScanner {
 
@@ -33,13 +37,16 @@ object MusicScanner {
 
     private fun queryName(context: Context, treeUri: Uri, documentId: String): String? {
         val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
-        context.contentResolver.query(
-            uri, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null
-        )?.use { c -> if (c.moveToFirst()) return c.getString(0) }
+        runCatching {
+            context.contentResolver.query(
+                uri, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null
+            )?.use { c -> if (c.moveToFirst()) return c.getString(0) }
+        }
         return null
     }
 
-    /** Immediate subfolders and audio files of [parent], each sorted by name. */
+    /** Immediate subfolders and audio files of [parent], each sorted by name.
+     *  @throws ScanException if the provider can't be queried (don't confuse with an empty folder). */
     fun children(context: Context, treeUri: Uri, parent: Node): Pair<List<Node>, List<Node>> {
         val folders = ArrayList<Node>()
         val files = ArrayList<Node>()
@@ -50,7 +57,12 @@ object MusicScanner {
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE
         )
-        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { c ->
+        val cursor = try {
+            context.contentResolver.query(childrenUri, projection, null, null, null)
+        } catch (e: Exception) {
+            throw ScanException("Cannot query ${parent.name}", e)
+        } ?: throw ScanException("Null cursor for ${parent.name}")
+        cursor.use { c ->
             while (c.moveToNext()) {
                 val id = c.getString(0) ?: continue
                 val name = c.getString(1) ?: ""
@@ -80,7 +92,12 @@ object MusicScanner {
         out: MutableList<MediaItem>
     ) {
         // Go through the cache so a recursive walk (e.g. "Play this folder") also fills it.
-        val (subFolders, files) = FolderCache.children(context, treeUri, path.last())
+        // An unreadable subfolder is skipped rather than aborting the whole collection.
+        val (subFolders, files) = try {
+            FolderCache.children(context, treeUri, path.last())
+        } catch (e: ScanException) {
+            return
+        }
         for (file in files) out.add(mediaItem(treeUri, path, file, playFolderId))
         for (sub in subFolders) collect(context, treeUri, path + sub, playFolderId, out)
     }
