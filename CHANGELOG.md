@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Folder cache is now keyed by (root tree URI, parent document id) instead of document id alone,
+  so multiple roots or document providers with colliding document ids can no longer return each
+  other's contents. The cache database is bumped to version 2; on upgrade only the cache tables
+  are recreated — saved roots, settings and theme are preserved (a previous bug dropped them).
 - Removing a root folder now asks for confirmation first.
 - The roots list is sorted alphabetically by folder name.
 - Follow playing track (toggle in Settings, on by default): on each track change the browser

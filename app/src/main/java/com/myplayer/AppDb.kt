@@ -15,21 +15,28 @@ object AppDb {
         return h.writableDatabase
     }
 
-    private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 1) {
+    private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
-            db.execSQL(
-                "CREATE TABLE children(parent_id TEXT, doc_id TEXT, name TEXT, is_dir INTEGER)"
-            )
-            db.execSQL("CREATE INDEX idx_parent ON children(parent_id)")
-            db.execSQL("CREATE TABLE scanned(parent_id TEXT PRIMARY KEY)")
+            createCacheTables(db)
             db.execSQL("CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT)")
         }
 
+        /** The cache key is (tree_uri, parent_id): documentId alone can collide across roots/providers. */
+        private fun createCacheTables(db: SQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE children(tree_uri TEXT, parent_id TEXT, doc_id TEXT, name TEXT, is_dir INTEGER)"
+            )
+            db.execSQL("CREATE INDEX idx_parent ON children(tree_uri, parent_id)")
+            db.execSQL(
+                "CREATE TABLE scanned(tree_uri TEXT, parent_id TEXT, PRIMARY KEY(tree_uri, parent_id))"
+            )
+        }
+
+        // Only the cache tables are versioned data; `settings` (roots/toggles/theme) must survive.
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
             db.execSQL("DROP TABLE IF EXISTS children")
             db.execSQL("DROP TABLE IF EXISTS scanned")
-            db.execSQL("DROP TABLE IF EXISTS settings")
-            onCreate(db)
+            createCacheTables(db)
         }
     }
 }
