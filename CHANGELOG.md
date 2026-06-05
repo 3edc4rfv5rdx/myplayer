@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs: README updated to match the app — multiple music folders with add/remove instead of a single
+  changeable root, Media3 shuffle mode with a random start index (not a pre-shuffled playlist), and
+  the Repeat all / Follow playing track / Shuffle controls.
 - Release tooling: `12-SamsRELEASE.sh` now runs under `set -e`, fails with a clear message when no
   physical device is connected (instead of a broken `adb -s` call), warns and uses the first when
   several are connected, accepts an explicit serial argument, and quotes the device serial.
