@@ -55,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -82,6 +83,7 @@ private enum class Screen { Browser, Settings }
 
 // Keys for the browser state saved across activity recreation (rotation, background return).
 private const val STATE_TREE = "tree_uri"
+private const val STATE_SELECTED_ROOT = "selected_root"
 private const val STATE_PATH_IDS = "path_ids"
 private const val STATE_PATH_NAMES = "path_names"
 private const val STATE_SELECTED = "selected_index"
@@ -98,6 +100,8 @@ class MainActivity : ComponentActivity() {
     // Ordered list of root folders. The home screen lists these; null treeUri/empty path == home.
     private val rootsState = mutableStateOf<List<Uri>>(emptyList())
     private val treeUriState = mutableStateOf<Uri?>(null)
+    // Root last entered; stays highlighted in the home list even after navigating back to it.
+    private val selectedRootState = mutableStateOf<Uri?>(null)
     private val pathState = mutableStateOf<List<Node>>(emptyList())
     private val selectedIndexState = mutableStateOf<Int?>(null)
     // documentId of the currently playing track; highlighted and followed in the browser.
@@ -149,6 +153,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val controller by controllerState
                     val roots by rootsState
+                    val selectedRoot by selectedRootState
                     val treeUri by treeUriState
                     val path by pathState
                     val error by errorState
@@ -205,6 +210,7 @@ class MainActivity : ComponentActivity() {
                         Screen.Browser -> PlayerScreen(
                             controller = controller,
                             roots = roots,
+                            selectedRoot = selectedRoot,
                             treeUri = treeUri,
                             path = path,
                             error = error,
@@ -273,6 +279,7 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         val path = pathState.value
         outState.putString(STATE_TREE, treeUriState.value?.toString())
+        outState.putString(STATE_SELECTED_ROOT, selectedRootState.value?.toString())
         outState.putStringArray(STATE_PATH_IDS, path.map { it.documentId }.toTypedArray())
         outState.putStringArray(STATE_PATH_NAMES, path.map { it.name }.toTypedArray())
         outState.putString(STATE_SCREEN, screenState.value.name)
@@ -283,6 +290,7 @@ class MainActivity : ComponentActivity() {
 
     private fun restoreUiState(state: Bundle) {
         treeUriState.value = state.getString(STATE_TREE)?.let(Uri::parse)
+        selectedRootState.value = state.getString(STATE_SELECTED_ROOT)?.let(Uri::parse)
         val ids = state.getStringArray(STATE_PATH_IDS)
         val names = state.getStringArray(STATE_PATH_NAMES)
         if (ids != null && names != null && ids.size == names.size) {
@@ -314,6 +322,7 @@ class MainActivity : ComponentActivity() {
         val names = extras.getStringArray(MusicScanner.EXTRA_PATH_NAMES) ?: return
         if (ids.isEmpty() || ids.size != names.size) return
         if (rootsState.value.none { it == owner }) return
+        selectedRootState.value = owner
         treeUriState.value = owner
         pathState.value = ids.indices.map { Node(ids[it], names[it], true) }
         selectedIndexState.value = null
@@ -327,8 +336,9 @@ class MainActivity : ComponentActivity() {
     private fun playFolderTreeUriOf(item: MediaItem?): String? =
         item?.mediaMetadata?.extras?.getString(MusicScanner.EXTRA_TREE_URI)
 
-    /** Enters [treeUri] from the roots list, showing its top folder. */
+    /** Enters [treeUri] from the roots list, showing its top folder and marking it selected. */
     private fun enterRoot(treeUri: Uri) {
+        selectedRootState.value = treeUri
         treeUriState.value = treeUri
         pathState.value = listOf(MusicScanner.rootNode(this, treeUri))
         selectedIndexState.value = null
@@ -365,7 +375,7 @@ class MainActivity : ComponentActivity() {
         if (playingThisRoot) {
             // pause() first so onIsPlayingChanged(false) reaches the UI and the button leaves its
             // "pause" icon; then drop the queue and reset playback state.
-            controller!!.pause()
+            controller.pause()
             controller.clearMediaItems()
             controller.stop()
             playingFolderId = null
@@ -376,6 +386,7 @@ class MainActivity : ComponentActivity() {
                 treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         }
+        if (selectedRootState.value == treeUri) selectedRootState.value = null
         rootsState.value = Settings.removeRoot(this, treeUri.toString()).map(Uri::parse)
         FolderCache.clearRoot(this, treeUri)
     }
@@ -474,6 +485,7 @@ class MainActivity : ComponentActivity() {
 private fun PlayerScreen(
     controller: MediaController?,
     roots: List<Uri>,
+    selectedRoot: Uri?,
     treeUri: Uri?,
     path: List<Node>,
     error: String?,
@@ -503,6 +515,7 @@ private fun PlayerScreen(
             if (current == null || treeUri == null) {
                 RootsList(
                     roots = roots,
+                    selectedRoot = selectedRoot,
                     onEnterRoot = onEnterRoot,
                     onAddRoot = onAddRoot,
                     onRemoveRoot = onRemoveRoot,
@@ -540,6 +553,7 @@ private fun PlayerScreen(
 @Composable
 private fun RootsList(
     roots: List<Uri>,
+    selectedRoot: Uri?,
     onEnterRoot: (Uri) -> Unit,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
@@ -608,10 +622,19 @@ private fun RootsList(
             } else {
                 LazyColumn(Modifier.fillMaxSize().padding(8.dp)) {
                     items(labeled, key = { it.first.toString() }) { (uri, name) ->
+                        val selected = uri == selectedRoot
+                        val foreground =
+                            if (selected) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary
+                                    else Color.Transparent
+                                )
                                 .clickable { onEnterRoot(uri) }
                                 .padding(start = 8.dp, top = 6.dp, bottom = 6.dp)
                         ) {
@@ -620,13 +643,14 @@ private fun RootsList(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontSize = 22.sp,
+                                color = if (selected) foreground else Color.Unspecified,
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(onClick = { pendingRemoval = uri }) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_close),
                                     contentDescription = stringResource(R.string.remove_folder),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = foreground
                                 )
                             }
                         }

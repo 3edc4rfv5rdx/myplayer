@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- The roots home list now highlights the selected folder: tapping a folder both opens it and marks
+  its row selected, and the highlight stays after navigating back to the list. It follows the
+  playing track's root and survives screen rotation.
 - The Play button's triangle now has rounded corners.
 
 - Docs: README updated to match the app — multiple music folders with add/remove instead of a single
