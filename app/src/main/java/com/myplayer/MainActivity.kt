@@ -966,20 +966,20 @@ private fun NowPlaying(
     // (no track / on the home screen) never reflows the transport controls below.
     val showBar = !atHome && connectError == null && playerError == null && durationMs > 0L
     Spacer(Modifier.height(8.dp))
-    Box(modifier = Modifier.fillMaxWidth().height(24.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().height(32.dp)) {
         if (showBar) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 LinearProgressIndicator(
                     progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                    modifier = Modifier.fillMaxWidth().height(6.dp)
                 )
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(3.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(formatTime(positionMs), fontSize = 11.sp)
-                    Text(formatTime(durationMs), fontSize = 11.sp)
+                    Text(formatTime(positionMs), fontSize = 14.sp)
+                    Text(formatTime(durationMs), fontSize = 14.sp)
                 }
             }
         }
