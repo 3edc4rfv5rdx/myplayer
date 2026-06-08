@@ -2,6 +2,13 @@
 
 This document provides a comprehensive, line-by-line audit of the entire MusicPlayer codebase. Each finding is formatted as a prompt for an LLM: **Problem** description followed by a **Solution** prompt.
 
+> **Review outcome (2026-06-08).** Each finding below carries a **VERDICT**. Only two were real and
+> are fixed: **1.1** (`Settings` root add/remove made atomic) and **4.2** (`AppDb.onDowngrade` so a
+> sideloaded older APK doesn't crash). The rest are non-issues (wrong threading/lock model, invented
+> APIs/lines like `GainAudioProcessor`/`ArtBitmapFetcher`, premises already contradicted by the code),
+> already fixed in tofix3 (6.x), already implemented (7.2, 8.1), or out of scope by design
+> (crash reporting, Android Auto/Wear, unit tests).
+
 ---
 
 ## 1. Settings.kt (115 lines)
@@ -89,6 +96,11 @@ Batch all inserts in `store()` using `db.beginBatchedUpdates()` / `db.endBatched
 ## 3. ReplayGain.kt (43 lines)
 
 ### Issue 3.1 — `parseDb()` throws on malformed input
+**VERDICT: NOT A BUG (skipped).** The premise is wrong: `parseDb` starts with `.trim()`, so
+`" 6.48 "` → `"6.48"` → parses fine. `"-6.48 dB"`, `"-6.48"`, `"6.48dB"` all parse correctly too, and
+`toFloatOrNull` already makes malformed input a safe null (the title's "throws" is false). The only
+gap is uppercase `"DB"` with no space, which ReplayGain tags never use.
+
 **Problem:**  
 `parseDb()` (line 35-36) calls `removeSuffix("dB").trim().toFloatOrNull()` on the raw tag value. While `toFloatOrNull()` is safe (returns null on failure), the function's comment says it parses `"-6.48 dB"` or `"-6.48"`, but tags can also appear as `"6.48 dB ", " 6.48 ", "6.48dB"` (no space before dB). The current implementation would correctly parse `"6.48dB"` but fail on `" 6.48 "` because `substringBefore(' ')` would return `" 6.48 "` with leading/trailing spaces before `trim()`.
 
@@ -103,6 +115,10 @@ private fun parseDb(raw: String): Float? =
 ```
 
 ### Issue 3.2 — `boostMillibels()` has no upper limit beyond MAX_BOOST_DB
+**VERDICT: NOT A BUG (skipped).** `boostMillibels` is only ever called for `db > 0` (the boost branch
+in `applyGain`); non-positive gains go through `attenuationVolume` and never reach it. So a large
+negative mB value can't occur, and `coerceAtMost(12f)` is sufficient for the actual call contract.
+
 **Problem:**  
 `boostMillibels()` (line 41) uses `db.coerceAtMost(MAX_BOOST_DB)` which caps positive gains to 12dB. However, negative gains are multiplied by 100 and converted to `Int`, producing a large negative `Int` (e.g., -48dB → -4800mB). `LoudnessEnhancer` expects mB values; negative values lower the gain, which is correct. But if a file has a gain of -100dB (unlikely but possible), the value would be `-10000`, which may exceed `LoudnessEnhancer`'s internal limits.
 
@@ -303,6 +319,9 @@ Extract the theme selection into a separate composable scope that can be locally
 ## 8. AndroidManifest.xml (Permissions & Service)
 
 ### Issue 8.1 — `POST_NOTIFICATIONS` permission without runtime request
+**VERDICT: ALREADY DONE.** `MainActivity` registers a `RequestPermission()` launcher and requests
+`POST_NOTIFICATIONS` at runtime after a `checkSelfPermission` gate (MainActivity.kt:141, 500-503).
+
 **Problem:**  
 AndroidManifest.xml includes `POST_NOTIFICATIONS` permission (line 6) but the app must request this permission at runtime on Android 13+ (API 33+). If `RequestPermissions` is not called before creating a notification, Android silently drops the notification without error.
 
@@ -310,6 +329,10 @@ AndroidManifest.xml includes `POST_NOTIFICATIONS` permission (line 6) but the ap
 Ensure MainActivity.kt calls `rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())` for `Manifest.permission.POST_NOTIFICATIONS` on API 33+ before the `PlayerService` starts its foreground service. Show a rationale dialog if the user denies the permission.
 
 ### Issue 8.2 — `foregroundServiceType` not declared for pre-Android 14 compatibility
+**VERDICT: NOT A BUG (skipped).** Media3's `MediaSessionService` calls `startForeground` with the
+media notification itself across all supported API levels; no manual per-version setup is needed. The
+manifest already declares both `FOREGROUND_SERVICE_MEDIA_PLAYBACK` and the `mediaPlayback` type.
+
 **Problem:**  
 `PlayerService` uses `android:foregroundServiceType="mediaPlayback"` (line 32), which requires Android 14 (API 34+). For devices on Android 13 or earlier, this attribute is ignored (which is fine). However, the foreground service notification must be set up manually via `startForeground()` with a `Notification` object on API 33 and below — Media3's `MediaSessionService` handles this automatically on API 34+ but requires manual setup for earlier versions.
 
@@ -321,6 +344,9 @@ Check target SDK version at runtime and use Media3's `NotificationListenerServic
 ## 9. Cross-Cutting Concerns
 
 ### Issue 9.1 — No crash logging or analytics
+**VERDICT: WON'T DO (by design).** This is a deliberately primitive, internet-free, single-user
+player. No telemetry/analytics by design; logcat is sufficient for the one developer-user.
+
 **Problem:**  
 The app has no crash reporting, logging (beyond Android's logcat), or analytics. If users encounter bugs (e.g., SAF crashes, ReplayGain panics on certain files), there is no way to diagnose them in production.
 
@@ -328,6 +354,10 @@ The app has no crash reporting, logging (beyond Android's logcat), or analytics.
 Integrate a crash reporting SDK (e.g., Firebase Crashlytics) or implement a simple `Application.registerDefaultUncaughtExceptionHandler()` that saves crash logs to a file for manual collection. Add a "Share Logs" option in Settings.
 
 ### Issue 9.2 — No unit test scaffolding
+**VERDICT: SKIPPED (optional).** The only arguably useful item in this section, but at odds with the
+project's deliberate minimalism. Could add later if `ReplayGain` parsing / `Settings` concurrency
+grow more complex; not warranted now.
+
 **Problem:**  
 There are no test dependencies or test directories in the app. `Settings`, `FolderCache`, and `ReplayGain` are pure/static objects that could benefit from unit tests (e.g., edge-case ReplayGain parsing, thread-safety of `addRoot()`).
 
@@ -338,6 +368,11 @@ Add test infrastructure: add `testImplementation` dependencies in `build.gradle.
 - `FolderCache.children()` cache hit/miss logic
 
 ### Issue 9.3 — No ProGuard/R8 rules
+**VERDICT: NOT A BUG (skipped).** The premise is wrong: release already has `isMinifyEnabled=true`
+with a `proguard-rules.pro`, and releases ship and run fine. `GainAudioProcessor` no longer exists
+(ReplayGain uses `LoudnessEnhancer` + player volume), so the reflection worry is moot. A blanket
+`-keep class com.myplayer.** { *; }` would defeat R8 for no reason and is an anti-pattern.
+
 **Problem:**  
 The app does not include any `proguard-rules.pro` or `consumer-rules.pro` for the Release build. While the app uses standard Android APIs (which are RAG-aware), custom classes like `GainAudioProcessor` may be stripped or renamed if they are referenced only via reflection (e.g., in Media3's audio pipeline), causing crashes in the release build.
 
@@ -345,6 +380,9 @@ The app does not include any `proguard-rules.pro` or `consumer-rules.pro` for th
 Add R8 rules for all custom classes: `-keep class com.myplayer.** { *; }`. If `GainAudioProcessor` is referenced via reflection in Media3, also add `-keep class com.myplayer.GainAudioProcessor`. Run a release build and verify the `app-release-unsigned.apk` runs without crashes.
 
 ### Issue 9.4 — No support for Android Auto / wear
+**VERDICT: WON'T DO (by design).** Out of scope for a deliberately minimal phone-only player. Extra
+modules and Auto/Wear session plumbing would dwarf the app.
+
 **Problem:**  
 The app is tied to a mobile-only UI. It does not advertise itself as usable for Android Auto or Wear OS. For a music player, the lack of these integrations means users cannot play music from Car/Watch without a secondary app.
 
@@ -352,6 +390,9 @@ The app is tied to a mobile-only UI. It does not advertise itself as usable for 
 Add Android Auto and Wear OS support via additional `application` modules (`app-auto/`, `app-watch/`). Use Media3's `AutoMediaSessionConnection` and `WearMediaSession` APIs to sync playback state.
 
 ### Issue 9.5 — No caching for album art / thumbnails
+**VERDICT: NOT A BUG (invented).** The app loads no album art at all — there is no `ArtBitmapFetcher`,
+no `Bitmap` decoding, no artwork anywhere (grep-confirmed). The cited line and class don't exist.
+
 **Problem:**  
 `MainActivity.kt` loads album art via `ArtBitmapFetcher` or similar (line ~894) on the main thread. If the art is on disk (not in memory), the main thread will block during I/O — a severe UI performance problem for devices with slow storage (e.g., FAT32 external SD cards).
 
