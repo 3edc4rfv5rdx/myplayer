@@ -61,9 +61,13 @@ negligible and document that `Settings`/`AppDb` first-touch is main-thread by de
 
 ---
 
-## Finding 3 — Now-playing title/path blanks on *every* "Up", not just at home
-**Confidence: Medium. Severity: Low (UX). — FIXED.** `goUp` no longer bumps `clearTitleTick` on the
-intra-tree branch; labels persist while a track plays and clear only via `goHome`.
+## Finding 3 — Now-playing title/path blanks on "Up" while the bar stays (inconsistent)
+**Confidence: High. Severity: Low (UX). — FIXED.** Root cause confirmed with the user: navigating
+"Up" cleared the title/path (`clearTitleTick`) but the playback bar, kept alive by position polling,
+stayed visible — so the bar and labels disagreed. Resolution: navigation no longer clears the labels
+at all. The labels now persist while browsing, exactly like the bar, and both hide on the roots
+screen via the existing `atHome` gate. The only remaining force-clear is `removeRoot` (playback is
+torn down with no metadata event to blank the labels).
 
 **Problem:**
 `goUp()` bumps `clearTitleTickState` on **both** branches — when dropping one level inside the tree

@@ -377,16 +377,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Returns to the roots list (the home screen). */
+    /** Returns to the roots list (the home screen). The now-playing labels aren't cleared here: a
+     *  playing track keeps them while browsing, and the roots screen hides them via `atHome`. */
     private fun goHome() {
         treeUriState.value = null
         pathState.value = emptyList()
         selectedIndexState.value = null
-        clearTitleTickState.value++
     }
 
-    /** Up one level; from a root's top folder this returns to the roots list. The now-playing labels
-     *  stay put while still in the browser (a track keeps playing); only going home clears them. */
+    /** Up one level; from a root's top folder this returns to the roots list. */
     private fun goUp() {
         val path = pathState.value
         if (path.size > 1) {
@@ -952,7 +951,9 @@ private fun NowPlaying(
         onDispose { c.removeListener(listener) }
     }
 
-    // Clear the now-playing labels when navigating Up.
+    // Force-clear the labels when playback is torn down with no metadata event to do it (removing
+    // the playing root). Navigation never clears them: a playing track keeps its labels while you
+    // browse, and the roots screen hides them via `atHome`. The bar self-hides as duration drops to 0.
     LaunchedEffect(clearTitleTick) {
         if (clearTitleTick > 0) {
             title = ""
