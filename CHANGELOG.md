@@ -3,6 +3,12 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Audit (tofix4) fixes:
+  - `Settings.addRoot`/`removeRoot` now serialize their read-modify-write on a dedicated lock, so
+    concurrent add/remove can no longer lose an update (the cache lock only made each get/set atomic,
+    not the compound operation).
+
 ## v0.3.20260605+57
 
 - The app is now locked to portrait orientation; the screen no longer rotates.

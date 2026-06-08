@@ -29,6 +29,11 @@ object Settings {
     private val loaded = HashSet<String>()
     private val writer = Executors.newSingleThreadExecutor()
 
+    // Serializes the read-modify-write of the roots list so concurrent add/remove can't lose an
+    // update (the cache `lock` only makes each get/set atomic, not the compound operation). Held
+    // around get/set only, both of which work off the in-memory cache, so no disk I/O runs under it.
+    private val rootLock = Any()
+
     private fun get(context: Context, key: String): String? {
         synchronized(lock) { if (key in loaded) return cache[key] }
         val value = readDb(context, key)
@@ -81,7 +86,7 @@ object Settings {
         set(context, KEY_ROOTS, roots.joinToString("\n"))
 
     /** Appends [uri] if not already present; returns the updated list. */
-    fun addRoot(context: Context, uri: String): List<String> {
+    fun addRoot(context: Context, uri: String): List<String> = synchronized(rootLock) {
         val roots = getRoots(context)
         if (uri in roots) return roots
         val updated = roots + uri
@@ -90,7 +95,7 @@ object Settings {
     }
 
     /** Removes [uri]; returns the updated list. */
-    fun removeRoot(context: Context, uri: String): List<String> {
+    fun removeRoot(context: Context, uri: String): List<String> = synchronized(rootLock) {
         val updated = getRoots(context).filter { it != uri }
         setRoots(context, updated)
         return updated
