@@ -7,6 +7,8 @@ This document provides a comprehensive, line-by-line audit of the entire MusicPl
 ## 1. Settings.kt (115 lines)
 
 ### Issue 1.1 — `addRoot()` and `removeRoot()` are not atomic
+**VERDICT: FIXED.** Both now serialize their read-modify-write on a dedicated `rootLock`.
+
 **Problem:**  
 `Settings.addRoot(context, uri)` reads the existing roots list via `getRoots()`, checks for duplicates, then calls `setRoots()` in a separate operation. If two concurrent calls pass the duplicate check simultaneously, both will append the same URI, resulting in duplicate entries in the database. The same applies to `removeRoot()`.
 
@@ -39,6 +41,13 @@ Ensure migration is idempotent by writing `KEY_ROOTS` before checking `KEY_FOLDE
 ## 2. FolderCache.kt (115 lines)
 
 ### Issue 2.1 — Slow SAF operation held under read lock
+**VERDICT: NOT A BUG (skipped).** The premise is wrong: `ReentrantReadWriteLock`'s read lock is
+*shared* — concurrent readers never block each other. The read lock here only excludes
+`clear()`/`clearRoot()` (write lock), which is intended. Per-folder mutual exclusion is the
+`synchronized(keyLock(root, parent))`, scoped per (tree, parent), so different folders scan in
+parallel. The suggested "release read lock, store under write lock" would be a regression: it would
+serialize all stores globally and block reads.
+
 **Problem:**  
 `children()` (lines 24-39) acquires `rw.readLock()` on line 26 and holds it while calling `MusicScanner.children()` on line 30, which performs a slow SAF `DocumentFile.listFiles()` operation. This means all other concurrent callers trying to acquire the read lock must block — defeating the purpose of a read-write lock. For large folder hierarchies, the SAF call can take 100-500ms, during which the entire UI's folder browsing is blocked.
 
@@ -130,6 +139,12 @@ Make `onUpgrade()` explicit about what tables are preserved vs. migrated. Add a 
 ## 5. PlayerService.kt (MediaSession + Playback)
 
 ### Issue 5.1 — `replayGainEnabled` not synchronized across threads
+**VERDICT: NOT A BUG (skipped).** The premise is wrong: Media3 `ExoPlayer` is single-threaded. All
+`Player.Listener` callbacks (`onAudioSessionIdChanged`, `onMetadata`, `onMediaItemTransition`) and
+all `MediaSession.Callback` callbacks (`onCustomCommand`) are dispatched on the application looper —
+the same thread that built the player. There is no cross-thread read/write, so `@Volatile` is
+unnecessary.
+
 **Problem:**  
 `replayGainEnabled` is written in `onCreate()` (line 24) and in `SessionCallback.onCustomCommand()` (UI thread). It is read in `applyGain()` which is called from `onAudioSessionIdChanged()`, `onMediaMetadataChanged()`, and `onMediaItemTransition()` — callbacks that may execute on non-UI threads. Without `@Volatile` or a `Mutex`, reads can see stale values, causing inconsistent ReplayGain behavior during playback.
 
