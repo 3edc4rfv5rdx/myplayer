@@ -380,13 +380,13 @@ class MainActivity : ComponentActivity() {
         clearTitleTickState.value++
     }
 
-    /** Up one level; from a root's top folder this returns to the roots list. */
+    /** Up one level; from a root's top folder this returns to the roots list. The now-playing labels
+     *  stay put while still in the browser (a track keeps playing); only going home clears them. */
     private fun goUp() {
         val path = pathState.value
         if (path.size > 1) {
             pathState.value = path.dropLast(1)
             selectedIndexState.value = null
-            clearTitleTickState.value++
         } else {
             goHome()
         }

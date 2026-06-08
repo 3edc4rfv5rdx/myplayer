@@ -62,7 +62,8 @@ negligible and document that `Settings`/`AppDb` first-touch is main-thread by de
 ---
 
 ## Finding 3 — Now-playing title/path blanks on *every* "Up", not just at home
-**Confidence: Medium. Severity: Low (UX).**
+**Confidence: Medium. Severity: Low (UX). — FIXED.** `goUp` no longer bumps `clearTitleTick` on the
+intra-tree branch; labels persist while a track plays and clear only via `goHome`.
 
 **Problem:**
 `goUp()` bumps `clearTitleTickState` on **both** branches — when dropping one level inside the tree

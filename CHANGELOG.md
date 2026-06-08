@@ -7,6 +7,8 @@ Newest entries on top.
 - Audit (tofix5) fixes:
   - Entering a root folder no longer blocks the main thread on a SAF name query: the folder shows
     instantly with a fallback label and its real display name resolves in the background.
+  - The now-playing track name and path no longer blank out when navigating up one folder; they
+    persist while a track is playing and clear only on returning to the roots screen.
 
 ## v0.3.20260608+62
 
