@@ -353,12 +353,23 @@ class MainActivity : ComponentActivity() {
     private fun playFolderTreeUriOf(item: MediaItem?): String? =
         item?.mediaMetadata?.extras?.getString(MusicScanner.EXTRA_TREE_URI)
 
-    /** Enters [treeUri] from the roots list, showing its top folder and marking it selected. */
+    /** Enters [treeUri] from the roots list, showing its top folder and marking it selected. The
+     *  folder appears immediately with a cheap fallback label; the real display name is resolved off
+     *  the main thread, since the SAF name query can block on a slow provider. */
     private fun enterRoot(treeUri: Uri) {
         selectedRootState.value = treeUri
         treeUriState.value = treeUri
-        pathState.value = listOf(MusicScanner.rootNode(this, treeUri))
+        val docId = DocumentsContract.getTreeDocumentId(treeUri)
+        pathState.value = listOf(Node(docId, fallbackRootLabel(treeUri), true))
         selectedIndexState.value = null
+        lifecycleScope.launch {
+            val node = withContext(Dispatchers.IO) { MusicScanner.rootNode(this@MainActivity, treeUri) }
+            // Apply only if still sitting at this root's top folder (user hasn't navigated away).
+            val path = pathState.value
+            if (treeUriState.value == treeUri && path.size == 1 && path.first().documentId == docId) {
+                pathState.value = listOf(node)
+            }
+        }
     }
 
     /** Returns to the roots list (the home screen). */

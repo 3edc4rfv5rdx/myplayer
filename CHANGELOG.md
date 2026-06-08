@@ -3,6 +3,11 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Audit (tofix5) fixes:
+  - Entering a root folder no longer blocks the main thread on a SAF name query: the folder shows
+    instantly with a fallback label and its real display name resolves in the background.
+
 ## v0.3.20260608+62
 
 - The selected/playing row in the file list now has rounded corners, matching the roots list.
