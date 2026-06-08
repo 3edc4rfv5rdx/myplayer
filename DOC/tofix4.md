@@ -168,6 +168,10 @@ Add `@Volatile` to `replayGainEnabled` and `currentTrackGainDb` in `PlayerServic
 Ensure all reads and writes flow through the same variable; no direct assignments from outside the synchronized path.
 
 ### Issue 5.2 — `enhancer` lifecycle management
+**VERDICT: NOT A BUG (skipped).** Every access in `applyGain()` is a safe call (`enhancer?.enabled`,
+`enhancer?.let { ... }`), so a null `enhancer` (no audio session yet, or `LoudnessEnhancer`
+unavailable) is already a no-op, not a null dereference.
+
 **Problem:**  
 `enhancer` (a `LoudnessEnhancer` instance) is released in `onDestroy()` (line 146) but created in `onAudioSessionIdChanged()` without proper null-safety. If `enabler` is called (line 60) between the old `enhancer` being released and a new one being created, the call will pass a null reference.
 
@@ -175,6 +179,11 @@ Ensure all reads and writes flow through the same variable; no direct assignment
 Safeguard `enhancer` lifecycle: in `applyGain()`, check `enhancer != null` before calling `enabler`. If `enhancer` was null (new audio session), create a new `LoudnessEnhancer` and assign it. Document that `enhancer` belongs to the current `ExoPlayer`'s audio session and must be recreated on each `onAudioSessionIdChanged()`.
 
 ### Issue 5.3 — `applyGain()` called from multiple callbacks without guards
+**VERDICT: SKIPPED (low value).** The premise overstates the cost: `applyGain()` does NOT
+create/destroy a `LoudnessEnhancer` per transition — that happens only in `onAudioSessionIdChanged()`.
+Per transition it just sets `volume`/`setTargetGain`/`enabled`, which is cheap. A dedup guard would
+add state for a micro-optimization.
+
 **Problem:**  
 `applyGain()` is invoked from `onMediaMetadataChanged()`, `onMediaItemTransition()`, and `onAudioSessionIdChanged()`. For a fast playlist with many item transitions, these can fire in rapid succession, causing multiple `applyGain()` calls for the same track. Each call creates/destroys a `LoudnessEnhancer`, causing unnecessary churn.
 
@@ -182,6 +191,10 @@ Safeguard `enhancer` lifecycle: in `applyGain()`, check `enhancer != null` befor
 Add a guard in `applyGain()`: skip if `currentTrackGainDb` equals the previously applied gain (with a small epsilon for floating-point comparison). Cache the last applied gain and mB value to avoid redundant calls.
 
 ### Issue 5.4 — `player` not null-checked in `applyGain()` after `onDestroy()`
+**VERDICT: NOT A BUG (skipped).** `applyGain()` already starts with `val p = player ?: return`. The
+"race window" doesn't exist: all `Player.Listener` callbacks and `onDestroy()` run on the same
+application thread (see 5.1), so a callback can't interleave with `onDestroy()`.
+
 **Problem:**  
 If `applyGain()` is called from a late callback after `onDestroy()` has been invoked, `player` may be null (set to null in `onDestroy()` line 149). The function starts with `val p = player ?: return` which guards this. But if the callback occurs during the race window between `onStop()` and `onDestroy()`, the ` player` may be in an inconsistent state (released but not yet null).
 
@@ -241,6 +254,10 @@ the controller lifecycle is a large, risky refactor unjustified by the remaining
 Refactor `MainActivity.kt` to use a `ViewModel` that holds the `MediaController`, `PlaybackState`, and `MediaMetadata`. Implement the `MediaController` lifecycle via `onStart()` / `onStop()` in the `ViewModel`, not the `Activity`. Use `SavedStateHandle` or `by viewModels()` to survive recreation.
 
 ### Issue 7.2 — `LaunchedEffect` dependency graph produces flicker
+**VERDICT: ALREADY FIXED.** The load is a single `LaunchedEffect(current.documentId, rescanTick,
+retryTick)` that resets `loadFailed`/`contents` and then loads, exactly the merge the audit suggests.
+The second `LaunchedEffect` is unrelated (scroll-into-view) and never touches `loadFailed`.
+
 **Problem:**  
 Lines 737-749 in `MainActivity.kt` define:
 ```kotlin
@@ -258,6 +275,12 @@ When `rescanTick` changes (user triggers a resync), `contents` is set to `null`,
 Merge the two `LaunchedEffect` declarations into a single effect with a combined key: `LaunchedEffect(current.documentId, rescanTick, retryTick)`. Or track `loadingFailed` separately from the `LaunchedEffect` and only reset it in `onRetryClick` to avoid the flicker.
 
 ### Issue 7.3 — No error handling for SAF permission loss
+**VERDICT: NOT A BUG (skipped).** The premise is wrong: the app never calls
+`DocumentFile.fromTreeUri` (grep-confirmed). All access goes through `DocumentsContract.query`, which
+`MusicScanner.children` wraps in try/catch and surfaces as `ScanException` → the UI shows "load
+failed" with retry, and `collectAudio` skips the folder. A revoked permission degrades gracefully,
+it doesn't crash. A proactive `persistedUriPermissions` check is optional polish.
+
 **Problem:**  
 When the user picks a folder via SAF, the app calls `takePersistableUriPermission()` (line ~180). If the user later revokes the permission (e.g., via Settings → Storage), the app continues to use the stored URI and will crash on `DocumentFile.fromTreeUri()` calls.
 
@@ -265,6 +288,10 @@ When the user picks a folder via SAF, the app calls `takePersistableUriPermissio
 Add a permission check in `FolderCache.children()` or `MusicScanner.children()`: verify the persisted URI permission is still active with `contentResolver.persistedUriPermissions.any { it.uri == treeUri }`. If revoked, notify the user to pick a new folder.
 
 ### Issue 7.4 — `onThemeChange` recomposes the entire activity unnecessarily
+**VERDICT: SKIPPED (low value).** Changing the theme is a rare, explicit user action in Settings, and
+re-theming the visible tree on a theme change is expected and correct. The theme is already applied
+near the composition root; a `CompositionLocalProvider` micro-optimization isn't worth the churn.
+
 **Problem:**  
 Every time the theme changes (line 1006), the entire `MainActivity` recomposes because the theme state is at the top of the composition hierarchy. For complex screens like the now-playing view with large thumbnails, this can cause noticeable flicker.
 
