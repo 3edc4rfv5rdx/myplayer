@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -78,6 +80,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -237,6 +240,7 @@ class MainActivity : ComponentActivity() {
                             onEnterRoot = { enterRoot(it) },
                             onAddRoot = { folderPicker.launch(null) },
                             onRemoveRoot = { removeRoot(it) },
+                            onExit = { exitApp() },
                             onOpenSettings = { screenState.value = Screen.Settings },
                             onDescend = {
                                 pathState.value = path + it
@@ -421,6 +425,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Fully quits: stops playback, tears down the player service (and its notification), and
+     *  removes the task so nothing lingers in the background. */
+    private fun exitApp() {
+        controllerState.value?.run {
+            pause()
+            clearMediaItems()
+            stop()
+        }
+        stopService(Intent(this, PlayerService::class.java))
+        finishAndRemoveTask()
+    }
+
     /** Plays everything under [folder] recursively. ExoPlayer's shuffle (toggled live) handles the
      *  order; with shuffle on we start on a random track, off starts from the top. */
     private fun playFolder(folder: Node) {
@@ -527,6 +543,7 @@ private fun PlayerScreen(
     onEnterRoot: (Uri) -> Unit,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
+    onExit: () -> Unit,
     onOpenSettings: () -> Unit,
     onDescend: (Node) -> Unit,
     onUp: () -> Unit,
@@ -548,6 +565,7 @@ private fun PlayerScreen(
                     onEnterRoot = onEnterRoot,
                     onAddRoot = onAddRoot,
                     onRemoveRoot = onRemoveRoot,
+                    onExit = onExit,
                     onOpenSettings = onOpenSettings,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -585,6 +603,15 @@ private fun fallbackRootLabel(uri: Uri): String {
     return seg.substringAfterLast(':').substringAfterLast('/').ifEmpty { seg }
 }
 
+/** Formats a millisecond position as m:ss (or h:mm:ss for tracks an hour or longer). */
+private fun formatTime(ms: Long): String {
+    val totalSec = ms / 1000
+    val s = totalSec % 60
+    val m = (totalSec / 60) % 60
+    val h = totalSec / 3600
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
 /** Home screen: the list of root folders on a distinct background, with add/remove. */
 @Composable
 private fun RootsList(
@@ -593,6 +620,7 @@ private fun RootsList(
     onEnterRoot: (Uri) -> Unit,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
+    onExit: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -614,27 +642,27 @@ private fun RootsList(
     }
 
     Column(modifier = modifier) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            IconButton(onClick = onExit) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = stringResource(R.string.exit)
+                )
+            }
             Text(
                 text = stringResource(R.string.music_folders),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.CenterStart)
+                modifier = Modifier.weight(1f)
             )
-            IconButton(
-                onClick = onAddRoot,
-                modifier = Modifier.align(Alignment.Center)
-            ) {
+            IconButton(onClick = onAddRoot) {
                 Icon(
                     painter = painterResource(R.drawable.ic_add_circle),
                     contentDescription = stringResource(R.string.add_folder),
                     modifier = Modifier.size(32.dp)
                 )
             }
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            ) {
+            IconButton(onClick = onOpenSettings) {
                 Icon(
                     painter = painterResource(R.drawable.ic_settings),
                     contentDescription = stringResource(R.string.settings)
@@ -805,7 +833,7 @@ private fun FolderBrowser(
         } else if (c != null && c.first.isEmpty() && c.second.isEmpty()) {
             Text(stringResource(R.string.empty_folder))
         } else if (c != null) {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
                     Text(
                         text = "📁  ${folder.name}",
@@ -815,7 +843,7 @@ private fun FolderBrowser(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onDescend(folder) }
-                            .padding(vertical = 10.dp)
+                            .padding(horizontal = 8.dp, vertical = 10.dp)
                     )
                 }
                 itemsIndexed(c.second, key = { _, file -> file.documentId }) { index, file ->
@@ -832,9 +860,10 @@ private fun FolderBrowser(
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
                             .background(background)
                             .clickable { onSelectFile(index) }
-                            .padding(vertical = 10.dp)
+                            .padding(horizontal = 8.dp, vertical = 10.dp)
                     )
                 }
             }
@@ -856,6 +885,18 @@ private fun NowPlaying(
     var path by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
     var playerError by remember { mutableStateOf<String?>(null) }
+    var positionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
+
+    // Poll the controller for the playback position (Media3 has no position-changed callback);
+    // a light 500 ms tick is enough for a thin progress bar and the edge timestamps.
+    LaunchedEffect(controller) {
+        while (controller != null) {
+            positionMs = controller.currentPosition.coerceAtLeast(0L)
+            durationMs = controller.duration.takeIf { it > 0L } ?: 0L
+            delay(500)
+        }
+    }
 
     DisposableEffect(controller) {
         val c = controller ?: return@DisposableEffect onDispose {}
@@ -921,7 +962,29 @@ private fun NowPlaying(
             modifier = Modifier.fillMaxWidth()
         )
     }
-    Spacer(Modifier.height(16.dp))
+    // Thin playback bar with elapsed/total times at the edges. Fixed height so showing/hiding it
+    // (no track / on the home screen) never reflows the transport controls below.
+    val showBar = !atHome && connectError == null && playerError == null && durationMs > 0L
+    Spacer(Modifier.height(8.dp))
+    Box(modifier = Modifier.fillMaxWidth().height(24.dp)) {
+        if (showBar) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LinearProgressIndicator(
+                    progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(formatTime(positionMs), fontSize = 11.sp)
+                    Text(formatTime(durationMs), fontSize = 11.sp)
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
