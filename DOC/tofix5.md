@@ -122,12 +122,11 @@ read at all. Low priority — only matters when a permission is revoked while th
 
 ---
 
-## Nit — dead initializer in `PlayerService`
-**Confidence: High. Severity: Trivial.**
-
-`private var replayGainEnabled = false` (PlayerService.kt:37) is immediately overwritten by
-`replayGainEnabled = Settings.isReplayGainEnabled(this)` in `onCreate` (line 41). Harmless; could
-initialize once at the declaration via a lazy/`onCreate`-only assignment to avoid the throwaway value.
+## Nit — `replayGainEnabled` initializer in `PlayerService`
+**Confidence: High. Severity: Trivial. — NOT A BUG (kept, documented).** The `= false` is **required**:
+a `var Boolean` needs an initializer and `lateinit` isn't allowed on primitives. It is loaded from
+`Settings` in `onCreate` before the player/listeners exist, so the default is never observed. Added a
+comment clarifying that; nothing to remove.
 
 ---
 
@@ -140,4 +139,7 @@ initialize once at the declaration via a lazy/`onCreate`-only assignment to avoi
 | 3 | Title blanks on every Up navigation | MainActivity.kt | Low (UX) |
 | 4 | Shuffle desync after process death | MainActivity / PlayerService | Low |
 | 5 | "Nothing to play" vs "unreadable" message split | MusicScanner / MainActivity | Very low |
-| — | Dead `replayGainEnabled = false` initializer | PlayerService.kt | Trivial |
+
+Outcome: #1, #3, #4, #5 fixed. #2 (main-thread first DB read) deliberately left as-is — a true fix
+needs async settings loading and risks first-frame theme/roots flicker for a negligible, one-time,
+local-SQLite cost. The `replayGainEnabled` "nit" turned out to be a required initializer, not dead code.

@@ -34,6 +34,7 @@ class PlayerService : MediaSessionService() {
     private var enhancer: LoudnessEnhancer? = null
     private var currentTrackGainDb: Float? = null
     // Cached so applyGain() (called on every metadata/transition/session callback) needn't hit the DB.
+    // Loaded from Settings in onCreate, before the player or any listener exists.
     private var replayGainEnabled = false
 
     override fun onCreate() {
