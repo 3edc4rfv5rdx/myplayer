@@ -114,6 +114,10 @@ Add a floor to the boost calculation: `db.coerceIn(-24f, 12f)` to bound both pos
 ## 4. AppDb.kt (schema version management)
 
 ### Issue 4.1 — `onUpgrade()` drops the entire cache on every update
+**VERDICT: NOT A BUG (skipped).** The premise is wrong: `onUpgrade()` fires only when the schema
+version constant is bumped, not on every app update. Dropping the rebuildable cache on a genuine
+schema migration is the intended behavior; `settings` is preserved via `CREATE TABLE IF NOT EXISTS`.
+
 **Problem:**  
 `AppDb.kt` uses SQLiteOpenHelper with version 2. Every `onUpgrade()` call drops both `children` and `scanned` tables, destroying the entire folder listing cache. This means the app must rescans the entire music library on every app update, significantly degrading user experience.
 
@@ -121,6 +125,9 @@ Add a floor to the boost calculation: `db.coerceIn(-24f, 12f)` to bound both pos
 Update `AppDb.kt` to preserve cache tables across app updates. If the schema for `children` and `scanned` hasn't changed, do nothing in `onUpgrade()`. If new columns are needed, use `ALTER TABLE` instead of `DROP TABLE`. Implement incremental version checks (v1→v2, v2→v3) with appropriate per-version migrations.
 
 ### Issue 4.2 — No `onDowngrade()` implementation
+**VERDICT: FIXED.** `onDowngrade()` now delegates to `onUpgrade()` (reset the rebuildable cache,
+keep `settings`), so a sideloaded older APK no longer crashes on first DB access.
+
 **Problem:**  
 If the user downgrades the app (e.g., installs an older version), `SQLiteOpenHelper.onDowngrade()` will throw an `SQLiteException` because it's not overriden. This crashes the app on downgrade.
 
@@ -128,6 +135,10 @@ If the user downgrades the app (e.g., installs an older version), `SQLiteOpenHel
 Override `onDowngrade()` in the `Helper` class. For cache tables, delete them and call `onCreate()`. For the `settings` table, preserve existing settings data if possible (migrate columns as needed) or delete and re-initialize with defaults. Document downgrade behavior.
 
 ### Issue 4.3 — `settings` table not created in `onCreate()` for older versions
+**VERDICT: SKIPPED (speculative).** There is no v3 schema; the suggested ALTER-on-v3 migration is
+premature. `settings` already survives upgrades via `CREATE TABLE IF NOT EXISTS`. Revisit only when a
+new `settings` column is actually introduced.
+
 **Problem:**  
 If v1 of the app has only the `settings` table (no cache tables), and v2 adds `children`/`scanned`, the `onUpgrade()` drops nothing and creates the new tables. But if a v1 app is upgraded through v2 to v3, `onUpgrade()` drops and recreates `children`/`scanned` but does NOT drop/recreate `settings`. This means `settings` survives across migrations (by design), but any new columns added to `settings` in v3 would require a custom migration not captured in `onUpgrade()`.
 
@@ -182,6 +193,10 @@ Set a `private var isDestroyed = false` flag in `onDestroy()` as the first line,
 ## 6. MusicScanner.kt (Directory Traversal)
 
 ### Issue 6.1 — `collectAudio()` holds deep object lifecycle
+**VERDICT: ALREADY ADDRESSED (tofix3).** `collectAudio()` is iterative (explicit `ArrayDeque`
+stack), and `PathContext` is built once per folder, not per file. One `MediaItem` per file is the
+required output, not avoidable churn.
+
 **Problem:**  
 In `collectAudio()`, each recursive call creates a `PathContext` object with a `mediaItem` (line 117). For a library with 50,000 tracks, this creates 50,000 intermediate objects, each holding a `MediaItem` with its own `Bundle`. For long playlists, this causes significant GC pressure.
 
@@ -189,6 +204,9 @@ In `collectAudio()`, each recursive call creates a `PathContext` object with a `
 Refactor `MusicScanner.kt` to reuse `PathContext` instances or use a flat array/list to accumulate results instead of recursive object allocation. For example, collect folder URIs in a queue and process them iteratively, reducing the depth of object creation.
 
 ### Issue 6.2 — No depth limit for folder traversal
+**VERDICT: NOT A BUG (tofix3).** The traversal is iterative (heap stack), not recursive, so a deep
+tree cannot overflow the call stack. No depth cap needed.
+
 **Problem:**  
 `collectAudio()` recursively traverses all subfolders without any depth limit. A deeply nested folder structure (e.g., 100+ levels) can cause a `StackOverflowError` during the DFS traversal.
 
@@ -196,6 +214,11 @@ Refactor `MusicScanner.kt` to reuse `PathContext` instances or use a flat array/
 Add a maximum depth parameter to `collectAudio()` (e.g., `maxDepth = 50`). Track current depth and skip folders that exceed the limit, logging a warning. Document this limit as a hard constraint.
 
 ### Issue 6.3 — File extension filtering is case-sensitive
+**VERDICT: NOT A BUG.** The code uses `name.substringAfterLast('.', "").lowercase() in
+AUDIO_EXTENSIONS`, which is case-insensitive and stricter than `endsWith` — `"song.mp3.txt"` yields
+ext `"txt"` and is correctly rejected. The audit even references a stale `endsWith` line that no
+longer exists.
+
 **Problem:**  
 The file extension check (line 135) is `file.name.lowercase().endsWith(".mp3") || ...` — which correctly handles case-insensitive matching. But if the file has no extension at all, `lowercase().endsWith(".mp3")` will correctly return false. However, files like `"song.mp3.backup"` would incorrectly match because `lowercase()` doesn't strip the backup extension — `endsWith(".mp3.backup")` would be false.
 
@@ -207,6 +230,10 @@ The `endsWith()` check is correct for standard filenames. Consider adding an exp
 ## 7. MainActivity.kt (UI layer)
 
 ### Issue 7.1 — State loss on configuration change
+**VERDICT: SKIPPED.** The motivating symptom (rotation glitch) is already eliminated — the app is
+locked to portrait. Remaining config changes (theme/locale) are rare, and a full ViewModel rewrite of
+the controller lifecycle is a large, risky refactor unjustified by the remaining benefit.
+
 **Problem:**  
 `MainActivity` directly binds to `MediaController` and accesses `PlayerService` state without a `ViewModel`. When the screen rotates (or configuration changes), the `Activity` is destroyed and recreated, losing the `MediaController` reference. The code handles this via `connectToMediaSession()` / `disconnectAndReleaseMediaController()` but the brief period of disconnected state causes a visible UI glitch (the screen momentarily shows "Choose a folder" even though playback was active).
 

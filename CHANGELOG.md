@@ -8,6 +8,8 @@ Newest entries on top.
   - `Settings.addRoot`/`removeRoot` now serialize their read-modify-write on a dedicated lock, so
     concurrent add/remove can no longer lose an update (the cache lock only made each get/set atomic,
     not the compound operation).
+  - `AppDb` now handles a database downgrade (an older APK installed over a newer one): it resets the
+    rebuildable cache tables and keeps `settings`, instead of crashing on first DB access.
 
 ## v0.3.20260605+57
 

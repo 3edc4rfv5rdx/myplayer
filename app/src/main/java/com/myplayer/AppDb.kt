@@ -44,5 +44,10 @@ object AppDb {
             createCacheTables(db)
             createSettingsTable(db)
         }
+
+        // A downgrade (older APK sideloaded over a newer one) would otherwise throw and crash on
+        // first DB access. The cache is rebuildable, so reset it the same way and keep `settings`.
+        override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) =
+            onUpgrade(db, oldVersion, newVersion)
     }
 }
