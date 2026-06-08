@@ -104,7 +104,9 @@ actual `shuffleModeEnabled` back into `shuffleState` so UI and engine agree from
 ---
 
 ## Finding 5 — Unreadable "Play this folder" reports "Nothing to play here"
-**Confidence: High. Severity: Very low (cosmetic).**
+**Confidence: High. Severity: Very low (cosmetic). — FIXED.** `collectAudio` now rethrows the
+`ScanException` when the *target* folder is unreadable (subfolders still skipped); `playFolder`
+catches it and shows `folder_unreadable`.
 
 **Problem:**
 If the *target* folder itself can't be read, `collectAudio` catches the `ScanException` on the very

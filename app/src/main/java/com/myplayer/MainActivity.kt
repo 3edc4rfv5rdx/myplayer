@@ -465,7 +465,12 @@ class MainActivity : ComponentActivity() {
         playingFolderId = folder.documentId
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
-            val items = withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, path) }
+            val items = try {
+                withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, path) }
+            } catch (e: ScanException) {
+                if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
+                return@launch
+            }
             val controller = liveController() ?: return@launch
             if (items.isEmpty()) {
                 errorState.value = getString(R.string.nothing_to_play)

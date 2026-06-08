@@ -11,6 +11,8 @@ Newest entries on top.
     persist while a track is playing and clear only on returning to the roots screen.
   - The shuffle toggle and the player can no longer disagree after the app process is recreated: on
     reconnect a live queue's shuffle state wins, otherwise the toggle's value is pushed to the player.
+  - "Play this folder" on a folder whose storage is unavailable / permission was revoked now shows
+    the "can't read this folder" message instead of the misleading "nothing to play here".
 
 ## v0.3.20260608+62
 

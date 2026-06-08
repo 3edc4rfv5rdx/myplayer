@@ -81,19 +81,25 @@ object MusicScanner {
 
     /** All audio under the folder at the end of [path] (root..folder), recursively, as MediaItems.
      *  [path] is recorded on each item as its ancestor chain; its last node is the play-start folder.
-     *  Iterative (explicit stack) so a deeply nested tree can't overflow the call stack. */
+     *  Iterative (explicit stack) so a deeply nested tree can't overflow the call stack.
+     *  @throws ScanException if the chosen folder itself can't be read (so the caller can say
+     *  "unreadable" rather than "nothing to play"); unreadable *subfolders* are skipped, not fatal. */
     fun collectAudio(context: Context, treeUri: Uri, path: List<Node>): List<MediaItem> {
         val out = ArrayList<MediaItem>()
         val playFolderId = path.last().documentId
         val stack = ArrayDeque<List<Node>>()
         stack.addLast(path)
+        var isTarget = true
         while (stack.isNotEmpty()) {
             val cur = stack.removeLast()
             // Go through the cache so a recursive walk (e.g. "Play this folder") also fills it.
-            // An unreadable subfolder is skipped rather than aborting the whole collection.
+            // An unreadable subfolder is skipped; an unreadable target folder is reported.
+            val target = isTarget
+            isTarget = false
             val (subFolders, files) = try {
                 FolderCache.children(context, treeUri, cur.last())
             } catch (e: ScanException) {
+                if (target) throw e
                 continue
             }
             if (files.isNotEmpty()) {
