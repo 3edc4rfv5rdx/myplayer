@@ -7,7 +7,7 @@ Newest entries on top.
 - The selected/playing row in the file list now has rounded corners, matching the roots list.
 - The app icon's play triangle has its sharp corners shaved off.
 - Now-playing shows a thin playback progress bar under the track name, with the elapsed time and the
-  track duration at its edges.
+  track duration at its edges. Tap or drag the bar to seek within the track.
 - Exit button on the roots screen (top-left): stops playback, tears down the player service, and
   closes the app.
 

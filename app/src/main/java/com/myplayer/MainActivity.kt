@@ -15,6 +15,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -887,6 +890,9 @@ private fun NowPlaying(
     var playerError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
+    // Non-null while the user is dragging the bar: the scrubbed fraction (0..1) overrides the live
+    // position so the bar/time follow the finger and don't jump back until the seek lands.
+    var scrubFraction by remember { mutableStateOf<Float?>(null) }
 
     // Poll the controller for the playback position (Media3 has no position-changed callback);
     // a light 500 ms tick is enough for a thin progress bar and the edge timestamps.
@@ -962,23 +968,60 @@ private fun NowPlaying(
             modifier = Modifier.fillMaxWidth()
         )
     }
-    // Thin playback bar with elapsed/total times at the edges. Fixed height so showing/hiding it
-    // (no track / on the home screen) never reflows the transport controls below.
+    // Thin playback bar with elapsed/total times at the edges, draggable/tappable to seek. Fixed
+    // height so showing/hiding it (no track / on the home screen) never reflows the controls below.
     val showBar = !atHome && connectError == null && playerError == null && durationMs > 0L
+    val barFraction = scrubFraction ?: (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    val leftMs = scrubFraction?.let { (it * durationMs).toLong() } ?: positionMs
     Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth().height(32.dp)) {
         if (showBar) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                LinearProgressIndicator(
-                    progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(6.dp)
-                )
-                Spacer(Modifier.height(3.dp))
+                // Taller-than-the-bar touch strip so the thin bar is still easy to hit.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .pointerInput(controller, durationMs) {
+                            detectTapGestures { offset ->
+                                val f = (offset.x / size.width).coerceIn(0f, 1f)
+                                val target = (f * durationMs).toLong()
+                                controller?.seekTo(target)
+                                positionMs = target
+                            }
+                        }
+                        .pointerInput(controller, durationMs) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { offset ->
+                                    scrubFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                },
+                                onHorizontalDrag = { change, _ ->
+                                    scrubFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                },
+                                onDragEnd = {
+                                    scrubFraction?.let {
+                                        val target = (it * durationMs).toLong()
+                                        controller?.seekTo(target)
+                                        positionMs = target
+                                    }
+                                    scrubFraction = null
+                                },
+                                onDragCancel = { scrubFraction = null }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    LinearProgressIndicator(
+                        progress = { barFraction },
+                        modifier = Modifier.fillMaxWidth().height(6.dp)
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(formatTime(positionMs), fontSize = 14.sp)
+                    Text(formatTime(leftMs), fontSize = 14.sp)
                     Text(formatTime(durationMs), fontSize = 14.sp)
                 }
             }
