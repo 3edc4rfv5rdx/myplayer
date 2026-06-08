@@ -377,12 +377,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Returns to the roots list (the home screen). The now-playing labels aren't cleared here: a
-     *  playing track keeps them while browsing, and the roots screen hides them via `atHome`. */
+    /** Drops the now-playing labels/bar when nothing is actively playing, so navigating away from a
+     *  stopped or paused track lets it go; a playing track keeps its now-playing while you browse.
+     *  Resuming re-populates the labels from the controller (see NowPlaying.onIsPlayingChanged). */
+    private fun clearNowPlayingIfStopped() {
+        if (controllerState.value?.isPlaying != true) clearTitleTickState.value++
+    }
+
+    /** Returns to the roots list (the home screen). */
     private fun goHome() {
         treeUriState.value = null
         pathState.value = emptyList()
         selectedIndexState.value = null
+        clearNowPlayingIfStopped()
     }
 
     /** Up one level; from a root's top folder this returns to the roots list. */
@@ -391,6 +398,7 @@ class MainActivity : ComponentActivity() {
         if (path.size > 1) {
             pathState.value = path.dropLast(1)
             selectedIndexState.value = null
+            clearNowPlayingIfStopped()
         } else {
             goHome()
         }
@@ -910,6 +918,9 @@ private fun NowPlaying(
     var playerError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
+    // Set when navigating away from a stopped/paused track; hides the playback bar too (its duration
+    // is kept fresh by polling, so it needs its own gate). Reset when a track plays/metadata arrives.
+    var cleared by remember { mutableStateOf(false) }
     // Non-null while the user is dragging the bar: the scrubbed fraction (0..1) overrides the live
     // position so the bar/time follow the finger and don't jump back until the seek lands.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
@@ -930,10 +941,17 @@ private fun NowPlaying(
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 title = mediaMetadata.title?.toString().orEmpty()
                 path = mediaMetadata.subtitle?.toString().orEmpty()
+                cleared = false
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+                // Resuming re-shows the now-playing even if it was cleared while stopped/browsing.
+                if (playing) {
+                    title = c.mediaMetadata.title?.toString().orEmpty()
+                    path = c.mediaMetadata.subtitle?.toString().orEmpty()
+                    cleared = false
+                }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -951,13 +969,13 @@ private fun NowPlaying(
         onDispose { c.removeListener(listener) }
     }
 
-    // Force-clear the labels when playback is torn down with no metadata event to do it (removing
-    // the playing root). Navigation never clears them: a playing track keeps its labels while you
-    // browse, and the roots screen hides them via `atHome`. The bar self-hides as duration drops to 0.
+    // Clear the labels and bar on request: navigating away from a stopped/paused track, or removing
+    // the playing root. A playing track keeps its now-playing while browsing (no tick is sent then).
     LaunchedEffect(clearTitleTick) {
         if (clearTitleTick > 0) {
             title = ""
             path = ""
+            cleared = true
         }
     }
 
@@ -992,7 +1010,7 @@ private fun NowPlaying(
     }
     // Thin playback bar with elapsed/total times at the edges, draggable/tappable to seek. Fixed
     // height so showing/hiding it (no track / on the home screen) never reflows the controls below.
-    val showBar = !atHome && connectError == null && playerError == null && durationMs > 0L
+    val showBar = !atHome && !cleared && connectError == null && playerError == null && durationMs > 0L
     val barFraction = scrubFraction ?: (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
     val leftMs = scrubFraction?.let { (it * durationMs).toLong() } ?: positionMs
     Spacer(Modifier.height(8.dp))

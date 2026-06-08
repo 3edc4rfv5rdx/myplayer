@@ -7,9 +7,10 @@ Newest entries on top.
 - Audit (tofix5) fixes:
   - Entering a root folder no longer blocks the main thread on a SAF name query: the folder shows
     instantly with a fallback label and its real display name resolves in the background.
-  - The now-playing track name and path now stay visible while you browse folders (matching the
-    playback bar) instead of blanking out on "Up"; both hide together on the roots screen and clear
-    only when the currently playing folder is removed.
+  - The now-playing name, path, and playback bar now behave as one: while a track is playing they
+    stay visible as you browse folders; navigating "Up" away from a stopped or paused track clears
+    all three together (resuming brings them back), and they also clear when the playing folder is
+    removed or you reach the roots screen.
   - The shuffle toggle and the player can no longer disagree after the app process is recreated: on
     reconnect a live queue's shuffle state wins, otherwise the toggle's value is pushed to the player.
   - "Play this folder" on a folder whose storage is unavailable / permission was revoked now shows

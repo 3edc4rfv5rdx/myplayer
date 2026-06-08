@@ -69,6 +69,12 @@ at all. The labels now persist while browsing, exactly like the bar, and both hi
 screen via the existing `atHome` gate. The only remaining force-clear is `removeRoot` (playback is
 torn down with no metadata event to blank the labels).
 
+Refined further (per user): the labels/bar should stay only *while playing*. Navigating "Up" away
+from a stopped or paused track now clears all three (name, path, bar) via `clearNowPlayingIfStopped`
+(ticks only when `!isPlaying`); resuming re-populates them from the controller in
+`onIsPlayingChanged`. The bar shares the labels' `cleared` gate so it hides in lockstep instead of
+being restored by position polling.
+
 **Problem:**
 `goUp()` bumps `clearTitleTickState` on **both** branches — when dropping one level inside the tree
 *and* when returning home (MainActivity.kt:373-382). The `NowPlaying` `LaunchedEffect(clearTitleTick)`
