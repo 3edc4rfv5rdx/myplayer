@@ -84,7 +84,8 @@ way, make the bar's and title's visibility conditions consistent.
 ---
 
 ## Finding 4 — Shuffle state can desync from the player after process death
-**Confidence: Medium. Severity: Low.**
+**Confidence: Medium. Severity: Low. — FIXED.** `onStart` reconciles on connect: a live queue's
+`shuffleModeEnabled` wins, otherwise the UI's `shuffleState` is pushed to the controller.
 
 **Problem:**
 `shuffleState` is restored from the saved bundle (default `true`) in `restoreUiState`

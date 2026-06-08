@@ -9,6 +9,8 @@ Newest entries on top.
     instantly with a fallback label and its real display name resolves in the background.
   - The now-playing track name and path no longer blank out when navigating up one folder; they
     persist while a track is playing and clear only on returning to the roots screen.
+  - The shuffle toggle and the player can no longer disagree after the app process is recreated: on
+    reconnect a live queue's shuffle state wins, otherwise the toggle's value is pushed to the player.
 
 ## v0.3.20260608+62
 
