@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.3.20260608+62
 
 - The selected/playing row in the file list now has rounded corners, matching the roots list.
 - The app icon's play triangle has its sharp corners shaved off.
