@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.3.20260608+58
 
 - Audit (tofix4) fixes:
   - `Settings.addRoot`/`removeRoot` now serialize their read-modify-write on a dedicated lock, so
