@@ -13,7 +13,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -48,7 +50,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -288,6 +289,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onUp = { goUp() },
                             onPlayFolder = { playFolder(it) },
+                            onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() }
                             )
@@ -628,6 +630,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Permanently deletes [folder] and its files from storage, then forgets its book state and
+     *  refreshes the parent listing. Stops playback first if the playing track is inside it. */
+    private fun deleteBook(folder: Node) {
+        val tree = treeUriState.value ?: return
+        val parent = pathState.value.lastOrNull() ?: return
+        stopIfPlayingUnder(folder)
+        val docUri = DocumentsContract.buildDocumentUriUsingTree(tree, folder.documentId)
+        val ok = runCatching { DocumentsContract.deleteDocument(contentResolver, docUri) }
+            .getOrDefault(false)
+        if (!ok) {
+            errorState.value = getString(R.string.delete_failed)
+            return
+        }
+        Settings.clearBook(this, Settings.bookKey(tree.toString(), folder.documentId))
+        FolderCache.invalidate(this, tree, parent.documentId)
+        rescanTickState.value++
+    }
+
+    /** Stops and clears playback when the playing track lives inside [folder] (so deleting it can't
+     *  leave the player on now-dangling content URIs). */
+    private fun stopIfPlayingUnder(folder: Node) {
+        val controller = controllerState.value ?: return
+        val extras = controller.currentMediaItem?.mediaMetadata?.extras ?: return
+        val ids = extras.getStringArray(MusicScanner.EXTRA_PATH_IDS)
+        val playFolderId = extras.getString(MusicScanner.EXTRA_PLAY_FOLDER_ID)
+        val under = playFolderId == folder.documentId || ids?.contains(folder.documentId) == true
+        if (!under) return
+        controller.pause()
+        controller.clearMediaItems()
+        controller.stop()
+        playingFolderId = null
+        playingAbookState.value = false
+        playingDocIdState.value = null
+        clearTitleTickState.value++
+    }
+
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -669,6 +707,7 @@ private fun PlayerScreen(
     onDescend: (Node) -> Unit,
     onUp: () -> Unit,
     onPlayFolder: (Node) -> Unit,
+    onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onPlayPause: () -> Unit
 ) {
@@ -701,6 +740,7 @@ private fun PlayerScreen(
                     onUp = onUp,
                     onDescend = onDescend,
                     onPlayFolder = onPlayFolder,
+                    onDeleteBook = onDeleteBook,
                     onSelectFile = onSelectFile,
                     onOpenSettings = onOpenSettings,
                     modifier = Modifier.fillMaxSize()
@@ -853,13 +893,13 @@ private fun RootsList(
                 title = { Text(stringResource(R.string.remove_folder)) },
                 text = { Text(stringResource(R.string.remove_folder_message, name) + "?") },
                 confirmButton = {
-                    TextButton(onClick = {
+                    Button(onClick = {
                         onRemoveRoot(uri)
                         pendingRemoval = null
                     }) { Text(stringResource(R.string.remove)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingRemoval = null }) {
+                    Button(onClick = { pendingRemoval = null }) {
                         Text(stringResource(R.string.cancel))
                     }
                 }
@@ -868,6 +908,7 @@ private fun RootsList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderBrowser(
     treeUri: Uri,
@@ -879,10 +920,12 @@ private fun FolderBrowser(
     onUp: () -> Unit,
     onDescend: (Node) -> Unit,
     onPlayFolder: (Node) -> Unit,
+    onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var pendingDelete by remember { mutableStateOf<Node?>(null) }
     val context = LocalContext.current
     val listState = rememberLazyListState()
     var contents by remember(current.documentId) {
@@ -958,14 +1001,20 @@ private fun FolderBrowser(
         } else if (c != null) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
+                    val isBook = Settings.isAbook(
+                        context, Settings.bookKey(treeUri.toString(), folder.documentId)
+                    )
                     Text(
-                        text = "📁  ${folder.name}",
+                        text = "${if (isBook) "📖" else "📁"}  ${folder.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 22.sp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onDescend(folder) }
+                            .combinedClickable(
+                                onClick = { onDescend(folder) },
+                                onLongClick = { pendingDelete = folder }
+                            )
                             .padding(horizontal = 8.dp, vertical = 10.dp)
                     )
                 }
@@ -990,6 +1039,42 @@ private fun FolderBrowser(
                     )
                 }
             }
+        }
+
+        pendingDelete?.let { folder ->
+            var confirmed by remember(folder) { mutableStateOf(false) }
+            AlertDialog(
+                onDismissRequest = { pendingDelete = null },
+                title = { Text(stringResource(R.string.delete_book)) },
+                text = {
+                    Column {
+                        Text(stringResource(R.string.delete_book_message, folder.name) + "?")
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { confirmed = !confirmed }
+                        ) {
+                            // Delete stays disabled until this is checked, so it can't be a one-tap mistake.
+                            Checkbox(checked = confirmed, onCheckedChange = null)
+                            Text(stringResource(R.string.delete_book_confirm))
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        enabled = confirmed,
+                        onClick = {
+                            onDeleteBook(folder)
+                            pendingDelete = null
+                        }
+                    ) { Text(stringResource(R.string.delete)) }
+                },
+                dismissButton = {
+                    Button(onClick = { pendingDelete = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
         }
     }
 }
@@ -1169,21 +1254,23 @@ private fun NowPlaying(
         }
     }
     // Book progress: which file of the book plus an approximate overall percent (files vary in
-    // length, so it's marked "~"), with a thin bar. Only shown while a book is the live queue.
+    // length), with a thin bar. Only shown while a book is the live queue.
     if (playingAbook && !atHome && !cleared && mediaCount > 0) {
         val fileFrac = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
         val bookFraction = ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
         val percent = String.format(Locale.US, "%.1f", bookFraction * 100)
         Spacer(Modifier.height(8.dp))
-        Text(
-            text = "${stringResource(R.string.file_label)} ${mediaIndex + 1} / $mediaCount  ~$percent%",
-            fontSize = 12.sp,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount", fontSize = 14.sp)
+            Text("$percent%", fontSize = 14.sp)
+        }
         Spacer(Modifier.height(2.dp))
         LinearProgressIndicator(
             progress = { bookFraction },
-            modifier = Modifier.fillMaxWidth().height(4.dp)
+            modifier = Modifier.fillMaxWidth().height(5.dp)
         )
     }
     Spacer(Modifier.height(8.dp))

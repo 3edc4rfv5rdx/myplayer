@@ -9,7 +9,13 @@ Newest entries on top.
   position is remembered — the current file and offset are saved as you listen (on pause, on file
   change, periodically, and in the background) and restored on the next open, rewound 15s for
   context. Finishing a book clears its resume point so it starts over.
-  - While a book plays, the now-playing area shows its progress: "File N / M ~XX.X%" with a thin bar.
+  - While a book plays, the now-playing area shows its progress: "File N/M" on the left with the
+    percent on the right, over a thin bar.
+  - Book folders are marked with a 📖 icon (instead of 📁) in the browser listing.
+  - Delete a folder and all its files from storage by long-pressing it in the browser: a dialog
+    asks to tick "Confirm" before the Delete button enables. Playback from that folder is stopped
+    first, and its remembered book state is cleared.
+  - Dialog buttons now have a filled (colored) background.
   - The abook checkbox sits below the shuffle toggle without shifting it.
   - Fixed the saved position being lost on exit: clearing the queue no longer counts as the book
     finishing, and the final position write is flushed to disk before the service is torn down.
