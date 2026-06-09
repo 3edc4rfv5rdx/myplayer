@@ -9,6 +9,9 @@ Newest entries on top.
   position is remembered — the current file and offset are saved as you listen (on pause, on file
   change, periodically, and in the background) and restored on the next open, rewound 20s for
   context. Finishing a book clears its resume point so it starts over.
+  - The abook checkbox sits below the shuffle toggle without shifting it.
+  - Fixed the saved position being lost on exit: clearing the queue no longer counts as the book
+    finishing, and the final position write is flushed to disk before the service is torn down.
 
 - Audit (tofix5) fixes:
   - Entering a root folder no longer blocks the main thread on a SAF name query: the folder shows

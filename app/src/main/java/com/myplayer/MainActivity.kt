@@ -1139,31 +1139,36 @@ private fun NowPlaying(
     }
     Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.align(Alignment.CenterStart)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // abook forces sequential play, so shuffle is disabled while it is on.
-                Switch(
-                    checked = shuffleEnabled,
-                    onCheckedChange = onShuffleToggle,
-                    enabled = !abookEnabled
-                )
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    painter = painterResource(R.drawable.ic_shuffle),
-                    contentDescription = stringResource(R.string.shuffle),
-                    tint = if (shuffleEnabled && !abookEnabled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (abookVisible) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onAbookToggle(!abookEnabled) }
-                ) {
-                    // The whole row toggles; the box itself stays non-interactive to avoid a double event.
-                    Checkbox(checked = abookEnabled, onCheckedChange = null)
-                    Text(stringResource(R.string.audiobook_mode))
-                }
+        // Shuffle stays vertically centered (fixed position); the abook checkbox sits below it and
+        // must not shift it, so the two are separate children rather than a growing column.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            // abook forces sequential play, so shuffle is disabled while it is on.
+            Switch(
+                checked = shuffleEnabled,
+                onCheckedChange = onShuffleToggle,
+                enabled = !abookEnabled
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                painter = painterResource(R.drawable.ic_shuffle),
+                contentDescription = stringResource(R.string.shuffle),
+                tint = if (shuffleEnabled && !abookEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (abookVisible) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .clickable { onAbookToggle(!abookEnabled) }
+            ) {
+                // The whole row toggles; the box itself stays non-interactive to avoid a double event.
+                Checkbox(checked = abookEnabled, onCheckedChange = null)
+                Text(stringResource(R.string.audiobook_mode))
             }
         }
         Button(

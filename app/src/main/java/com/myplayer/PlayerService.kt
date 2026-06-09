@@ -103,8 +103,12 @@ class PlayerService : MediaSessionService() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                // Book finished (repeat is off in abook): forget the resume point so it starts over.
-                if (playbackState == Player.STATE_ENDED) bookFolderKey?.let { Settings.clearBookPos(this@PlayerService, it) }
+                // Book genuinely finished (repeat is off in abook): forget the resume point so it
+                // starts over. Guard on a non-empty queue so clearing items on exit — which also
+                // reports STATE_ENDED — doesn't wipe the saved position.
+                if (playbackState == Player.STATE_ENDED && (player?.mediaItemCount ?: 0) > 0) {
+                    bookFolderKey?.let { Settings.clearBookPos(this@PlayerService, it) }
+                }
             }
 
             @UnstableApi
@@ -195,6 +199,7 @@ class PlayerService : MediaSessionService() {
     override fun onDestroy() {
         saveBookPosition()
         saveHandler.removeCallbacks(saveTick)
+        Settings.flush() // make sure the final position write reaches disk before the process can die
         enhancer?.release()
         enhancer = null
         session?.run {
