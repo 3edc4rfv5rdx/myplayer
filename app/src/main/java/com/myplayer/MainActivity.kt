@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -121,6 +122,10 @@ class MainActivity : ComponentActivity() {
 
     // Random playback order, on by default; intentionally not persisted (resets each launch).
     private val shuffleState = mutableStateOf(true)
+
+    // Audiobook mode of the folder currently open in the browser (persisted per folder). Mirrors
+    // Settings.isAbook for the open folder; kept in sync as the browser navigates.
+    private val abookState = mutableStateOf(false)
 
     // documentId of the folder the current playback was started from.
     private var playingFolderId: String? = null
@@ -224,7 +229,18 @@ class MainActivity : ComponentActivity() {
                             onBack = { screenState.value = Screen.Browser }
                         )
 
-                        Screen.Browser -> PlayerScreen(
+                        Screen.Browser -> {
+                            // The book key of the folder open in the browser; null on the home
+                            // screen. Drives the abook checkbox and keeps it in sync as we navigate.
+                            val currentFolderKey = treeUri?.let { t ->
+                                path.lastOrNull()?.let { Settings.bookKey(t.toString(), it.documentId) }
+                            }
+                            val abook by abookState
+                            LaunchedEffect(currentFolderKey) {
+                                abookState.value = currentFolderKey != null &&
+                                    Settings.isAbook(this@MainActivity, currentFolderKey)
+                            }
+                            PlayerScreen(
                             controller = controller,
                             roots = roots,
                             selectedRoot = selectedRoot,
@@ -240,6 +256,19 @@ class MainActivity : ComponentActivity() {
                                 shuffleState.value = it
                                 controllerState.value?.shuffleModeEnabled = it
                             },
+                            abookEnabled = abook,
+                            abookVisible = currentFolderKey != null,
+                            onAbookToggle = { enabled ->
+                                currentFolderKey?.let { key ->
+                                    abookState.value = enabled
+                                    Settings.setAbook(this, key, enabled)
+                                    // abook plays sequentially: drop shuffle on the live queue too.
+                                    if (enabled) {
+                                        shuffleState.value = false
+                                        controllerState.value?.shuffleModeEnabled = false
+                                    }
+                                }
+                            },
                             onEnterRoot = { enterRoot(it) },
                             onAddRoot = { folderPicker.launch(null) },
                             onRemoveRoot = { removeRoot(it) },
@@ -253,7 +282,8 @@ class MainActivity : ComponentActivity() {
                             onPlayFolder = { playFolder(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -483,8 +513,19 @@ class MainActivity : ComponentActivity() {
                 errorState.value = getString(R.string.nothing_to_play)
                 return@launch
             }
-            val start = if (shuffleState.value) items.indices.random() else 0
-            startQueue(controller, items, start)
+            val key = Settings.bookKey(tree.toString(), folder.documentId)
+            val abook = Settings.isAbook(this@MainActivity, key)
+            // Resume an abook from its saved file + offset, rewound 20s for context; new books start at 0.
+            val saved = if (abook) Settings.getBookPos(this@MainActivity, key) else null
+            val savedIdx = saved?.let { (uri, _) -> items.indexOfFirst { it.mediaId == uri } } ?: -1
+            val start = when {
+                abook -> savedIdx.coerceAtLeast(0)
+                shuffleState.value -> items.indices.random()
+                else -> 0
+            }
+            val startPos =
+                if (savedIdx >= 0) (saved!!.second - 20_000).coerceAtLeast(0L) else 0L
+            startQueue(controller, items, start, abook, key, startPos)
         }
     }
 
@@ -495,14 +536,33 @@ class MainActivity : ComponentActivity() {
         return controllerState.value
     }
 
-    /** Installs and starts [items] at [startIndex] with the live shuffle/repeat settings. */
-    private fun startQueue(controller: MediaController, items: List<MediaItem>, startIndex: Int) {
+    /** Installs and starts [items] at [startIndex]. In abook mode the queue plays sequentially with
+     *  no looping and the service tracks its position under [bookFolderKey]; otherwise it follows the
+     *  live shuffle/repeat settings and position tracking is off. */
+    private fun startQueue(
+        controller: MediaController,
+        items: List<MediaItem>,
+        startIndex: Int,
+        abook: Boolean,
+        bookFolderKey: String? = null,
+        startPositionMs: Long = 0L
+    ) {
         errorState.value = null
-        controller.shuffleModeEnabled = shuffleState.value
-        controller.repeatMode = loopRepeatMode()
-        controller.setMediaItems(items, startIndex, 0L)
+        controller.shuffleModeEnabled = !abook && shuffleState.value
+        controller.repeatMode = if (abook) Player.REPEAT_MODE_OFF else loopRepeatMode()
+        controller.setMediaItems(items, startIndex, startPositionMs)
         controller.prepare()
         controller.play()
+        sendBookMode(controller, if (abook) bookFolderKey else null)
+    }
+
+    /** Tells the service which book the active queue belongs to (null = plain music, no tracking). */
+    private fun sendBookMode(controller: MediaController, folderKey: String?) {
+        val command = SessionCommand(PlayerService.CMD_BOOK_MODE, Bundle.EMPTY)
+        if (controller.isSessionCommandAvailable(command)) {
+            val args = Bundle().apply { putString(PlayerService.KEY_BOOK_FOLDER, folderKey ?: "") }
+            controller.sendCustomCommand(command, args)
+        }
     }
 
     /** Tells the service to re-apply ReplayGain to the current track immediately (no track wait). */
@@ -537,7 +597,9 @@ class MainActivity : ComponentActivity() {
                 return@launch
             }
             val items = MusicScanner.mediaItems(tree, path, files)
-            startQueue(controller, items, index)
+            val key = Settings.bookKey(tree.toString(), folder.documentId)
+            val abook = Settings.isAbook(this@MainActivity, key)
+            startQueue(controller, items, index, abook, key)
             selectedIndexState.value = null
         }
     }
@@ -571,6 +633,9 @@ private fun PlayerScreen(
     clearTitleTick: Int,
     shuffleEnabled: Boolean,
     onShuffleToggle: (Boolean) -> Unit,
+    abookEnabled: Boolean,
+    abookVisible: Boolean,
+    onAbookToggle: (Boolean) -> Unit,
     onEnterRoot: (Uri) -> Unit,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
@@ -621,7 +686,9 @@ private fun PlayerScreen(
         Spacer(Modifier.height(12.dp))
         NowPlaying(
             controller, error, clearTitleTick, treeUri == null,
-            shuffleEnabled, onShuffleToggle, onPlayPause
+            shuffleEnabled, onShuffleToggle,
+            abookEnabled, abookVisible, onAbookToggle,
+            onPlayPause
         )
         Spacer(Modifier.height(32.dp))
     }
@@ -910,6 +977,9 @@ private fun NowPlaying(
     atHome: Boolean,
     shuffleEnabled: Boolean,
     onShuffleToggle: (Boolean) -> Unit,
+    abookEnabled: Boolean,
+    abookVisible: Boolean,
+    onAbookToggle: (Boolean) -> Unit,
     onPlayPause: () -> Unit
 ) {
     var title by remember { mutableStateOf("") }
@@ -1069,18 +1139,32 @@ private fun NowPlaying(
     }
     Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.align(Alignment.CenterStart)
-        ) {
-            Switch(checked = shuffleEnabled, onCheckedChange = onShuffleToggle)
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                painter = painterResource(R.drawable.ic_shuffle),
-                contentDescription = stringResource(R.string.shuffle),
-                tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Column(modifier = Modifier.align(Alignment.CenterStart)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // abook forces sequential play, so shuffle is disabled while it is on.
+                Switch(
+                    checked = shuffleEnabled,
+                    onCheckedChange = onShuffleToggle,
+                    enabled = !abookEnabled
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    painter = painterResource(R.drawable.ic_shuffle),
+                    contentDescription = stringResource(R.string.shuffle),
+                    tint = if (shuffleEnabled && !abookEnabled) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (abookVisible) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onAbookToggle(!abookEnabled) }
+                ) {
+                    // The whole row toggles; the box itself stays non-interactive to avoid a double event.
+                    Checkbox(checked = abookEnabled, onCheckedChange = null)
+                    Text(stringResource(R.string.audiobook_mode))
+                }
+            }
         }
         Button(
             onClick = onPlayPause,

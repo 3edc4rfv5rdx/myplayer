@@ -2,6 +2,8 @@ package com.myplayer
 
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -27,6 +29,14 @@ class PlayerService : MediaSessionService() {
 
         /** Custom session command: re-apply the ReplayGain setting to the current track live. */
         const val CMD_REPLAYGAIN = "com.myplayer.REPLAYGAIN_CHANGED"
+
+        /** Custom session command: declare the active queue's book key (empty = plain music, no
+         *  position tracking). Sent by the activity whenever it installs a new queue. */
+        const val CMD_BOOK_MODE = "com.myplayer.BOOK_MODE"
+        const val KEY_BOOK_FOLDER = "book_folder"
+
+        // How often the playing book's position is persisted, so a process kill loses at most this.
+        private const val SAVE_INTERVAL_MS = 10_000L
     }
 
     private var session: MediaSession? = null
@@ -36,6 +46,17 @@ class PlayerService : MediaSessionService() {
     // Cached so applyGain() (called on every metadata/transition/session callback) needn't hit the DB.
     // Loaded from Settings in onCreate, before the player or any listener exists.
     private var replayGainEnabled = false
+
+    // Book key of the active queue, or null for plain music. When set, the current file uri and
+    // offset are persisted as the book's resume point (see [saveBookPosition]).
+    private var bookFolderKey: String? = null
+    private val saveHandler = Handler(Looper.getMainLooper())
+    private val saveTick = object : Runnable {
+        override fun run() {
+            if (player?.isPlaying == true) saveBookPosition()
+            saveHandler.postDelayed(this, SAVE_INTERVAL_MS)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -71,6 +92,19 @@ class PlayerService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 currentTrackGainDb = null
                 applyGain()
+                // A real move to another file (auto-advance or skip) makes it the book's new resume
+                // point; the initial setMediaItems (PLAYLIST_CHANGED) must not overwrite the restore.
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) saveBookPosition()
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Pausing/stopping is the most important moment to persist the exact position.
+                if (!isPlaying) saveBookPosition()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                // Book finished (repeat is off in abook): forget the resume point so it starts over.
+                if (playbackState == Player.STATE_ENDED) bookFolderKey?.let { Settings.clearBookPos(this@PlayerService, it) }
             }
 
             @UnstableApi
@@ -84,6 +118,16 @@ class PlayerService : MediaSessionService() {
 
         this.player = player
         session = MediaSession.Builder(this, player).setCallback(SessionCallback()).build()
+        saveHandler.postDelayed(saveTick, SAVE_INTERVAL_MS)
+    }
+
+    /** Persists the playing book's current file uri and offset as its resume point. No-op for plain
+     *  music queues (no [bookFolderKey]) or before a track is loaded. */
+    private fun saveBookPosition() {
+        val key = bookFolderKey ?: return
+        val p = player ?: return
+        val uri = p.currentMediaItem?.mediaId ?: return
+        Settings.setBookPos(this, key, uri, p.currentPosition.coerceAtLeast(0L))
     }
 
     /** Grants the ReplayGain command to controllers and applies the toggle live on request. */
@@ -95,6 +139,7 @@ class PlayerService : MediaSessionService() {
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(CMD_REPLAYGAIN, Bundle.EMPTY))
+                .add(SessionCommand(CMD_BOOK_MODE, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -110,6 +155,10 @@ class PlayerService : MediaSessionService() {
             if (customCommand.customAction == CMD_REPLAYGAIN) {
                 replayGainEnabled = Settings.isReplayGainEnabled(this@PlayerService)
                 applyGain()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == CMD_BOOK_MODE) {
+                bookFolderKey = args.getString(KEY_BOOK_FOLDER)?.takeIf { it.isNotEmpty() }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             return super.onCustomCommand(session, controller, customCommand, args)
@@ -144,6 +193,8 @@ class PlayerService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
+        saveBookPosition()
+        saveHandler.removeCallbacks(saveTick)
         enhancer?.release()
         enhancer = null
         session?.run {

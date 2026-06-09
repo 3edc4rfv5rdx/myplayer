@@ -4,6 +4,12 @@ Newest entries on top.
 
 ## Unreleased
 
+- Audiobook mode: an "abook" checkbox under the shuffle toggle marks the open folder as a book
+  (remembered per folder). A book plays sequentially with shuffle disabled and looping off, and its
+  position is remembered — the current file and offset are saved as you listen (on pause, on file
+  change, periodically, and in the background) and restored on the next open, rewound 20s for
+  context. Finishing a book clears its resume point so it starts over.
+
 - Audit (tofix5) fixes:
   - Entering a root folder no longer blocks the main thread on a SAF name query: the folder shows
     instantly with a fallback label and its real display name resolves in the background.

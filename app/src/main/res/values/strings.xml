@@ -25,6 +25,7 @@
     <string name="pause">Pause</string>
     <string name="next">Next</string>
     <string name="shuffle">Shuffle</string>
+    <string name="audiobook_mode">abook</string>
     <string name="repeat">Repeat all</string>
     <string name="replaygain">ReplayGain</string>
     <string name="follow_playing">Follow playing track</string>
