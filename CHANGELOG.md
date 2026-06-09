@@ -7,11 +7,14 @@ Newest entries on top.
 - Audiobook mode: an "abook" checkbox under the shuffle toggle marks the open folder as a book
   (remembered per folder). A book plays sequentially with shuffle disabled and looping off, and its
   position is remembered — the current file and offset are saved as you listen (on pause, on file
-  change, periodically, and in the background) and restored on the next open, rewound 20s for
+  change, periodically, and in the background) and restored on the next open, rewound 15s for
   context. Finishing a book clears its resume point so it starts over.
+  - While a book plays, the now-playing area shows its progress: "File N / M ~XX.X%" with a thin bar.
   - The abook checkbox sits below the shuffle toggle without shifting it.
   - Fixed the saved position being lost on exit: clearing the queue no longer counts as the book
     finishing, and the final position write is flushed to disk before the service is torn down.
+  - Reaching the end of a book clears the now-playing labels, bar, and progress, and resets the
+    saved position (no longer re-saved by the pause that accompanies the end).
 
 - Audit (tofix5) fixes:
   - Entering a root folder no longer blocks the main thread on a SAF name query: the folder shows

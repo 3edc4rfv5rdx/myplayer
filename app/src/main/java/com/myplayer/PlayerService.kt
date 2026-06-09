@@ -98,8 +98,10 @@ class PlayerService : MediaSessionService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                // Pausing/stopping is the most important moment to persist the exact position.
-                if (!isPlaying) saveBookPosition()
+                // Pausing/stopping is the most important moment to persist the exact position — but
+                // not when the book just ended, or we'd re-save the end position right after
+                // onPlaybackStateChanged(STATE_ENDED) cleared it (the two events race).
+                if (!isPlaying && player?.playbackState != Player.STATE_ENDED) saveBookPosition()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {

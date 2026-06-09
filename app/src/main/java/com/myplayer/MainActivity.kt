@@ -82,6 +82,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -99,6 +100,7 @@ private const val STATE_SELECTED = "selected_index"
 private const val STATE_SCREEN = "screen"
 private const val STATE_PLAY_FOLDER = "play_folder_id"
 private const val STATE_SHUFFLE = "shuffle"
+private const val STATE_PLAYING_ABOOK = "playing_abook"
 
 class MainActivity : ComponentActivity() {
 
@@ -126,6 +128,10 @@ class MainActivity : ComponentActivity() {
     // Audiobook mode of the folder currently open in the browser (persisted per folder). Mirrors
     // Settings.isAbook for the open folder; kept in sync as the browser navigates.
     private val abookState = mutableStateOf(false)
+
+    // Whether the live queue is a book (set when a queue is installed). Gates the book progress
+    // readout, which is meaningless for shuffled music.
+    private val playingAbookState = mutableStateOf(false)
 
     // documentId of the folder the current playback was started from.
     private var playingFolderId: String? = null
@@ -184,6 +190,7 @@ class MainActivity : ComponentActivity() {
                     val rescanTick by rescanTickState
                     val clearTitleTick by clearTitleTickState
                     val shuffle by shuffleState
+                    val playingAbook by playingAbookState
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var loop by remember { mutableStateOf(Settings.isLoopEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
@@ -258,6 +265,7 @@ class MainActivity : ComponentActivity() {
                             },
                             abookEnabled = abook,
                             abookVisible = currentFolderKey != null,
+                            playingAbook = playingAbook,
                             onAbookToggle = { enabled ->
                                 currentFolderKey?.let { key ->
                                     abookState.value = enabled
@@ -304,6 +312,18 @@ class MainActivity : ComponentActivity() {
                         playingFolderId = playFolderIdOf(mediaItem) ?: playingFolderId
                         followPlayingTrack(mediaItem)
                     }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        // Queue reached its end (book finished, or a playlist with repeat off): clear
+                        // the now-playing labels, bar, and book progress so a 100%-done book doesn't
+                        // linger on screen. Guard on a non-empty queue so clearing items isn't caught.
+                        if (playbackState == Player.STATE_ENDED && c.mediaItemCount > 0) {
+                            playingAbookState.value = false
+                            playingFolderId = null
+                            playingDocIdState.value = null
+                            clearTitleTickState.value++
+                        }
+                    }
                 })
                 // The service keeps playing across activity recreation; recover which folder the
                 // live playlist was started from so Play in the same folder resumes, not restarts.
@@ -339,6 +359,7 @@ class MainActivity : ComponentActivity() {
         outState.putString(STATE_SCREEN, screenState.value.name)
         outState.putString(STATE_PLAY_FOLDER, playingFolderId)
         outState.putBoolean(STATE_SHUFFLE, shuffleState.value)
+        outState.putBoolean(STATE_PLAYING_ABOOK, playingAbookState.value)
         selectedIndexState.value?.let { outState.putInt(STATE_SELECTED, it) }
     }
 
@@ -355,6 +376,7 @@ class MainActivity : ComponentActivity() {
             .getOrDefault(Screen.Browser)
         playingFolderId = state.getString(STATE_PLAY_FOLDER)
         shuffleState.value = state.getBoolean(STATE_SHUFFLE, true)
+        playingAbookState.value = state.getBoolean(STATE_PLAYING_ABOOK, false)
     }
 
     /** Always highlights the playing track wherever it is visible. When Follow is enabled it also
@@ -449,6 +471,7 @@ class MainActivity : ComponentActivity() {
             controller.clearMediaItems()
             controller.stop()
             playingFolderId = null
+            playingAbookState.value = false
             playingDocIdState.value = null
             // clearMediaItems() emits no metadata event, so clear the now-playing labels ourselves.
             clearTitleTickState.value++
@@ -515,7 +538,7 @@ class MainActivity : ComponentActivity() {
             }
             val key = Settings.bookKey(tree.toString(), folder.documentId)
             val abook = Settings.isAbook(this@MainActivity, key)
-            // Resume an abook from its saved file + offset, rewound 20s for context; new books start at 0.
+            // Resume an abook from its saved file + offset, rewound 15s for context; new books start at 0.
             val saved = if (abook) Settings.getBookPos(this@MainActivity, key) else null
             val savedIdx = saved?.let { (uri, _) -> items.indexOfFirst { it.mediaId == uri } } ?: -1
             val start = when {
@@ -524,7 +547,7 @@ class MainActivity : ComponentActivity() {
                 else -> 0
             }
             val startPos =
-                if (savedIdx >= 0) (saved!!.second - 20_000).coerceAtLeast(0L) else 0L
+                if (savedIdx >= 0) (saved!!.second - 15_000).coerceAtLeast(0L) else 0L
             startQueue(controller, items, start, abook, key, startPos)
         }
     }
@@ -548,6 +571,7 @@ class MainActivity : ComponentActivity() {
         startPositionMs: Long = 0L
     ) {
         errorState.value = null
+        playingAbookState.value = abook
         controller.shuffleModeEnabled = !abook && shuffleState.value
         controller.repeatMode = if (abook) Player.REPEAT_MODE_OFF else loopRepeatMode()
         controller.setMediaItems(items, startIndex, startPositionMs)
@@ -635,6 +659,7 @@ private fun PlayerScreen(
     onShuffleToggle: (Boolean) -> Unit,
     abookEnabled: Boolean,
     abookVisible: Boolean,
+    playingAbook: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     onEnterRoot: (Uri) -> Unit,
     onAddRoot: () -> Unit,
@@ -688,7 +713,7 @@ private fun PlayerScreen(
             controller, error, clearTitleTick, treeUri == null,
             shuffleEnabled, onShuffleToggle,
             abookEnabled, abookVisible, onAbookToggle,
-            onPlayPause
+            playingAbook, onPlayPause
         )
         Spacer(Modifier.height(32.dp))
     }
@@ -980,6 +1005,7 @@ private fun NowPlaying(
     abookEnabled: Boolean,
     abookVisible: Boolean,
     onAbookToggle: (Boolean) -> Unit,
+    playingAbook: Boolean,
     onPlayPause: () -> Unit
 ) {
     var title by remember { mutableStateOf("") }
@@ -988,6 +1014,9 @@ private fun NowPlaying(
     var playerError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
+    // Current track index and queue size, for the book progress readout.
+    var mediaIndex by remember { mutableStateOf(0) }
+    var mediaCount by remember { mutableStateOf(0) }
     // Set when navigating away from a stopped/paused track; hides the playback bar too (its duration
     // is kept fresh by polling, so it needs its own gate). Reset when a track plays/metadata arrives.
     var cleared by remember { mutableStateOf(false) }
@@ -1001,6 +1030,8 @@ private fun NowPlaying(
         while (controller != null) {
             positionMs = controller.currentPosition.coerceAtLeast(0L)
             durationMs = controller.duration.takeIf { it > 0L } ?: 0L
+            mediaIndex = controller.currentMediaItemIndex
+            mediaCount = controller.mediaItemCount
             delay(500)
         }
     }
@@ -1136,6 +1167,24 @@ private fun NowPlaying(
                 }
             }
         }
+    }
+    // Book progress: which file of the book plus an approximate overall percent (files vary in
+    // length, so it's marked "~"), with a thin bar. Only shown while a book is the live queue.
+    if (playingAbook && !atHome && !cleared && mediaCount > 0) {
+        val fileFrac = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+        val bookFraction = ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
+        val percent = String.format(Locale.US, "%.1f", bookFraction * 100)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "${stringResource(R.string.file_label)} ${mediaIndex + 1} / $mediaCount  ~$percent%",
+            fontSize = 12.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(2.dp))
+        LinearProgressIndicator(
+            progress = { bookFraction },
+            modifier = Modifier.fillMaxWidth().height(4.dp)
+        )
     }
     Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
