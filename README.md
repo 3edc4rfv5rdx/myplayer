@@ -12,6 +12,8 @@ No equalizer, no internet, no media library — just folders and shuffle.
   music folders; the home screen lists them.
 - Tap a folder in the list to browse it. Remove one with the **✕** (asks to confirm, then releases
   its permission). The home list itself is not playable — only the folders inside it.
+- **Exit** (✕, top-left of the home list) stops playback, tears down the player service and its
+  notification, and closes the app.
 - Browse subfolders in-app; the listing is cached per folder so it stays fast.
 - **Tap a file** to select it, then press the big **Play** to start (selected track first, then the
   rest of the folder).
@@ -19,7 +21,13 @@ No equalizer, no internet, no media library — just folders and shuffle.
 - **Play** with nothing selected plays the current folder; the same paused folder resumes.
 - **Shuffle** switch (main screen, on by default, not persisted): toggles the play order live. With
   shuffle on, starting a folder begins at a random track; off starts from the top.
-- **Next** skips; the folder path of the playing track shows above its name.
+- **Next** skips to the next track. The playing track's name and its folder path show above the
+  controls.
+- **Playback bar** under the track name shows the elapsed time and the track duration at its edges;
+  tap or drag it to seek within the track.
+- The now-playing name, path, and bar stay visible while a track is playing as you browse folders;
+  navigating up away from a stopped or paused track (or returning to the home list) clears them, and
+  resuming brings them back.
 - **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **Repeat all**, **ReplayGain**,
   **Follow playing track**, and an About with version/build.
 - **Follow playing track** (Settings, on by default): on each track change the browser jumps to the
