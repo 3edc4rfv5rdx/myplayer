@@ -4,6 +4,18 @@ Newest entries on top.
 
 ## Unreleased
 
+- Playback speed (per folder): a speed button by the playback controls shows the current rate
+  (e.g. x1.0) and opens a 0.5–3.0 slider (0.05 steps) that applies live as you drag. The chosen speed
+  is remembered per folder and re-applied when that folder plays. The button is an audiobook feature:
+  it is active only while an audiobook plays, and stays disabled (grey) for plain music.
+  - Settings has a "Default speed" button (opening the same dialog) used for folders without a speed
+    of their own.
+  - The bottom controls were regrouped into vertically-centred pairs (shuffle/abook on the left,
+    next/speed on the right) so the gap inside each pair sits on the play button's mid-height; the
+    hidden checkbox/speed slots keep their size so shuffle and next don't shift.
+- Buttons are now filled (solid background) instead of outlined, so their enabled vs disabled state
+  is obvious at a glance (the theme picker and speed button included).
+
 - Audiobook mode: an "abook" checkbox under the shuffle toggle marks the open folder as a book
   (remembered per folder). A book plays sequentially with shuffle disabled and looping off, and its
   position is remembered — the current file and offset are saved as you listen (on pause, on file

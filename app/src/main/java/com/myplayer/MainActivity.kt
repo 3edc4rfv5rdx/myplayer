@@ -23,6 +23,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,12 +42,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -84,6 +86,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -102,6 +105,10 @@ private const val STATE_SCREEN = "screen"
 private const val STATE_PLAY_FOLDER = "play_folder_id"
 private const val STATE_SHUFFLE = "shuffle"
 private const val STATE_PLAYING_ABOOK = "playing_abook"
+
+// Discrete slider positions between SPEED_MIN and SPEED_MAX (endpoints excluded), one per SPEED_STEP.
+private val SPEED_SLIDER_STEPS =
+    ((Settings.SPEED_MAX - Settings.SPEED_MIN) / Settings.SPEED_STEP).roundToInt() - 1
 
 class MainActivity : ComponentActivity() {
 
@@ -133,6 +140,13 @@ class MainActivity : ComponentActivity() {
     // Whether the live queue is a book (set when a queue is installed). Gates the book progress
     // readout, which is meaningless for shuffled music.
     private val playingAbookState = mutableStateOf(false)
+
+    // Playback speed of the live queue's folder; mirrored to the controller and persisted per folder.
+    private val playbackSpeedState = mutableStateOf(Settings.SPEED_DEFAULT)
+
+    // Book key of the folder the live queue plays from; null when nothing is playing. Drives the
+    // speed button (enabled + which folder its value is saved under). Set when a queue is installed.
+    private val playingFolderKeyState = mutableStateOf<String?>(null)
 
     // documentId of the folder the current playback was started from.
     private var playingFolderId: String? = null
@@ -195,6 +209,7 @@ class MainActivity : ComponentActivity() {
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var loop by remember { mutableStateOf(Settings.isLoopEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
+                    var defaultSpeed by remember { mutableStateOf(Settings.getDefaultSpeed(this)) }
 
                     BackHandler(enabled = screen == Screen.Settings || path.isNotEmpty()) {
                         if (screen == Screen.Settings) screenState.value = Screen.Browser else goUp()
@@ -208,6 +223,7 @@ class MainActivity : ComponentActivity() {
                             replayGainEnabled = replayGain,
                             loopEnabled = loop,
                             followEnabled = follow,
+                            defaultSpeed = defaultSpeed,
                             onThemeChange = {
                                 themeState.value = it
                                 Settings.setThemeMode(this, it)
@@ -229,6 +245,10 @@ class MainActivity : ComponentActivity() {
                                 Settings.setFollowEnabled(this, it)
                                 followPlayingTrack(controllerState.value?.currentMediaItem)
                             },
+                            onDefaultSpeedChange = {
+                                defaultSpeed = it
+                                Settings.setDefaultSpeed(this, it)
+                            },
                             onRescan = {
                                 FolderCache.clear(this)
                                 rescanTickState.value++
@@ -248,6 +268,10 @@ class MainActivity : ComponentActivity() {
                                 abookState.value = currentFolderKey != null &&
                                     Settings.isAbook(this@MainActivity, currentFolderKey)
                             }
+                            // Speed drives the live queue, so it is controllable whenever something
+                            // is playing (keyed by the playing folder, not whatever the browser shows).
+                            val playbackSpeed by playbackSpeedState
+                            val playingFolderKey by playingFolderKeyState
                             PlayerScreen(
                             controller = controller,
                             roots = roots,
@@ -271,11 +295,9 @@ class MainActivity : ComponentActivity() {
                                 currentFolderKey?.let { key ->
                                     abookState.value = enabled
                                     Settings.setAbook(this, key, enabled)
-                                    // abook plays sequentially: drop shuffle on the live queue too.
-                                    if (enabled) {
-                                        shuffleState.value = false
-                                        controllerState.value?.shuffleModeEnabled = false
-                                    }
+                                    // abook plays sequentially: drop shuffle on the live queue, but
+                                    // leave the UI toggle's value intact (it's just disabled while on).
+                                    if (enabled) controllerState.value?.shuffleModeEnabled = false
                                 }
                             },
                             onEnterRoot = { enterRoot(it) },
@@ -291,7 +313,16 @@ class MainActivity : ComponentActivity() {
                             onPlayFolder = { playFolder(it) },
                             onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
-                            onPlayPause = { togglePlay() }
+                            onPlayPause = { togglePlay() },
+                            speed = playbackSpeed,
+                            speedEnabled = playingFolderKey != null,
+                            onSpeedChange = { s ->
+                                playingFolderKey?.let { key ->
+                                    Settings.setSpeed(this, key, s)
+                                    controllerState.value?.setPlaybackSpeed(s)
+                                    playbackSpeedState.value = s
+                                }
+                            }
                             )
                         }
                     }
@@ -322,6 +353,7 @@ class MainActivity : ComponentActivity() {
                         if (playbackState == Player.STATE_ENDED && c.mediaItemCount > 0) {
                             playingAbookState.value = false
                             playingFolderId = null
+                            playingFolderKeyState.value = null
                             playingDocIdState.value = null
                             clearTitleTickState.value++
                         }
@@ -336,6 +368,12 @@ class MainActivity : ComponentActivity() {
                 // shuffle off, so push the UI's value to keep the switch and engine in agreement.
                 if (c.mediaItemCount > 0) shuffleState.value = c.shuffleModeEnabled
                 else c.shuffleModeEnabled = shuffleState.value
+                // The service retains its speed across activity recreation; mirror it to the UI, and
+                // recover which folder it plays from so the speed button stays live.
+                playbackSpeedState.value = c.playbackParameters.speed
+                playingFolderKeyState.value = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
+                    playFolderIdOf(c.currentMediaItem)?.let { Settings.bookKey(t, it) }
+                }
             } catch (e: Exception) {
                 errorState.value = "Connect: ${e.message}"
             }
@@ -579,7 +617,16 @@ class MainActivity : ComponentActivity() {
         controller.setMediaItems(items, startIndex, startPositionMs)
         controller.prepare()
         controller.play()
+        playingFolderKeyState.value = bookFolderKey
+        bookFolderKey?.let { applyFolderSpeed(controller, it) }
         sendBookMode(controller, if (abook) bookFolderKey else null)
+    }
+
+    /** Applies the folder's saved (or default) playback speed to [controller] and mirrors it to the UI. */
+    private fun applyFolderSpeed(controller: MediaController, folderKey: String) {
+        val speed = Settings.getSpeed(this, folderKey)
+        controller.setPlaybackSpeed(speed)
+        playbackSpeedState.value = speed
     }
 
     /** Tells the service which book the active queue belongs to (null = plain music, no tracking). */
@@ -709,7 +756,10 @@ private fun PlayerScreen(
     onPlayFolder: (Node) -> Unit,
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
-    onPlayPause: () -> Unit
+    onPlayPause: () -> Unit,
+    speed: Float,
+    speedEnabled: Boolean,
+    onSpeedChange: (Float) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -753,7 +803,8 @@ private fun PlayerScreen(
             controller, error, clearTitleTick, treeUri == null,
             shuffleEnabled, onShuffleToggle,
             abookEnabled, abookVisible, onAbookToggle,
-            playingAbook, onPlayPause
+            playingAbook, onPlayPause,
+            speed, speedEnabled, onSpeedChange
         )
         Spacer(Modifier.height(32.dp))
     }
@@ -1091,7 +1142,10 @@ private fun NowPlaying(
     abookVisible: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     playingAbook: Boolean,
-    onPlayPause: () -> Unit
+    onPlayPause: () -> Unit,
+    speed: Float,
+    speedEnabled: Boolean,
+    onSpeedChange: (Float) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("") }
@@ -1108,6 +1162,7 @@ private fun NowPlaying(
     // Non-null while the user is dragging the bar: the scrubbed fraction (0..1) overrides the live
     // position so the bar/time follow the finger and don't jump back until the seek lands.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
 
     // Poll the controller for the playback position (Media3 has no position-changed callback);
     // a light 500 ms tick is enough for a thin progress bar and the edge timestamps.
@@ -1275,36 +1330,40 @@ private fun NowPlaying(
     }
     Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Shuffle stays vertically centered (fixed position); the abook checkbox sits below it and
-        // must not shift it, so the two are separate children rather than a growing column.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.align(Alignment.CenterStart)
+        // The small controls are paired in vertically-centered columns so the gap inside each pair
+        // (shuffle/abook on the left, next/speed on the right) lands on the play button's mid-height.
+        Column(
+            modifier = Modifier.align(Alignment.CenterStart),
+            verticalArrangement = Arrangement.Center
         ) {
-            // abook forces sequential play, so shuffle is disabled while it is on.
-            Switch(
-                checked = shuffleEnabled,
-                onCheckedChange = onShuffleToggle,
-                enabled = !abookEnabled
-            )
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                painter = painterResource(R.drawable.ic_shuffle),
-                contentDescription = stringResource(R.string.shuffle),
-                tint = if (shuffleEnabled && !abookEnabled) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (abookVisible) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .clickable { onAbookToggle(!abookEnabled) }
-            ) {
-                // The whole row toggles; the box itself stays non-interactive to avoid a double event.
-                Checkbox(checked = abookEnabled, onCheckedChange = null)
-                Text(stringResource(R.string.audiobook_mode))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // abook forces sequential play, so shuffle is disabled while it is on.
+                Switch(
+                    checked = shuffleEnabled,
+                    onCheckedChange = onShuffleToggle,
+                    enabled = !abookEnabled
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    painter = painterResource(R.drawable.ic_shuffle),
+                    contentDescription = stringResource(R.string.shuffle),
+                    tint = if (shuffleEnabled && !abookEnabled) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            // The slot keeps its height even when hidden, so shuffle never shifts as abook toggles.
+            Box(modifier = Modifier.height(48.dp), contentAlignment = Alignment.CenterStart) {
+                if (abookVisible) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onAbookToggle(!abookEnabled) }
+                    ) {
+                        // The whole row toggles; the box stays non-interactive to avoid a double event.
+                        Checkbox(checked = abookEnabled, onCheckedChange = null)
+                        Text(stringResource(R.string.audiobook_mode))
+                    }
+                }
             }
         }
         Button(
@@ -1319,18 +1378,119 @@ private fun NowPlaying(
                 modifier = Modifier.size(if (isPlaying) 48.dp else 68.dp)
             )
         }
-        Button(
-            onClick = { controller?.seekToNext() },
-            enabled = controller != null,
-            modifier = Modifier.align(Alignment.CenterEnd)
+        Column(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_skip_next),
-                contentDescription = stringResource(R.string.next)
-            )
+            Button(
+                onClick = { controller?.seekToNext() },
+                enabled = controller != null,
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                modifier = Modifier.width(76.dp).height(36.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_skip_next),
+                    contentDescription = stringResource(R.string.next)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            // Mirrors the abook slot on the left: speed shows only with an open folder, and the slot
+            // keeps its height when hidden so next never shifts.
+            Box(modifier = Modifier.height(36.dp), contentAlignment = Alignment.CenterEnd) {
+                if (abookVisible) {
+                    // Speed is an audiobook feature; for plain music the button stays disabled (grey).
+                    SpeedButton(
+                        label = formatSpeed(speed),
+                        enabled = speedEnabled && playingAbook && controller != null,
+                        onClick = { showSpeedDialog = true }
+                    )
+                }
+            }
         }
     }
+    if (showSpeedDialog) {
+        SpeedDialog(
+            initial = speed,
+            onPreview = { controller?.setPlaybackSpeed(it) }, // audible while dragging
+            onConfirm = onSpeedChange,
+            onDismiss = { showSpeedDialog = false }
+        )
+    }
 }
+
+/** Compact speed button shared by the player and settings: filled so its enabled (colored) vs
+ *  disabled (grey) state is obvious; one line, fixed width so longer values (e.g. x1.45) never wrap. */
+@Composable
+private fun SpeedButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        modifier = modifier.width(76.dp).height(36.dp)
+    ) {
+        Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
+    }
+}
+
+/** Slider dialog over the shared 0.5–3.0 speed range. [onPreview] fires live while dragging (e.g. to
+ *  apply to the live player); [onConfirm] is the value to keep, fired on confirm or on dismiss. */
+@Composable
+private fun SpeedDialog(
+    initial: Float,
+    onPreview: (Float) -> Unit,
+    onConfirm: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var sliderSpeed by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = { onConfirm(sliderSpeed); onDismiss() },
+        title = { Text(stringResource(R.string.playback_speed)) },
+        text = {
+            Column {
+                Text(
+                    formatSpeed(sliderSpeed),
+                    textAlign = TextAlign.Center,
+                    fontSize = 22.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Slider(
+                    value = sliderSpeed,
+                    onValueChange = {
+                        sliderSpeed = snapSpeed(it)
+                        onPreview(sliderSpeed)
+                    },
+                    valueRange = Settings.SPEED_MIN..Settings.SPEED_MAX,
+                    steps = SPEED_SLIDER_STEPS
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(sliderSpeed); onDismiss() }) {
+                Text(stringResource(R.string.done))
+            }
+        }
+    )
+}
+
+/** Speed as a compact "x" label: whole values keep one decimal (x1.0), finer steps show as needed. */
+private fun formatSpeed(speed: Float): String {
+    val hundredths = (speed * 100).roundToInt()
+    val text = when {
+        hundredths % 100 == 0 -> "${hundredths / 100}.0"
+        hundredths % 10 == 0 -> String.format(Locale.US, "%.1f", speed)
+        else -> String.format(Locale.US, "%.2f", speed)
+    }
+    return "x$text"
+}
+
+/** Snaps a raw slider value to the nearest [Settings.SPEED_STEP]. */
+private fun snapSpeed(raw: Float): Float =
+    (raw / Settings.SPEED_STEP).roundToInt() * Settings.SPEED_STEP
 
 @Composable
 private fun SettingsScreen(
@@ -1340,10 +1500,12 @@ private fun SettingsScreen(
     replayGainEnabled: Boolean,
     loopEnabled: Boolean,
     followEnabled: Boolean,
+    defaultSpeed: Float,
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
     onLoopChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
+    onDefaultSpeedChange: (Float) -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -1403,6 +1565,26 @@ private fun SettingsScreen(
             Switch(checked = followEnabled, onCheckedChange = onFollowChange)
         }
 
+        Spacer(Modifier.height(10.dp))
+        var showSpeedDialog by remember { mutableStateOf(false) }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.default_speed))
+            Spacer(Modifier.weight(1f))
+            SpeedButton(
+                label = formatSpeed(defaultSpeed),
+                enabled = true,
+                onClick = { showSpeedDialog = true }
+            )
+        }
+        if (showSpeedDialog) {
+            SpeedDialog(
+                initial = defaultSpeed,
+                onPreview = {},
+                onConfirm = onDefaultSpeedChange,
+                onDismiss = { showSpeedDialog = false }
+            )
+        }
+
         Spacer(Modifier.weight(1f))
         Text(stringResource(R.string.about), fontSize = 18.sp)
         Spacer(Modifier.height(4.dp))
@@ -1414,9 +1596,11 @@ private fun SettingsScreen(
 
 @Composable
 private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    if (selected) {
-        Button(onClick = onClick) { Text(label) }
-    } else {
-        OutlinedButton(onClick = onClick) { Text(label) }
-    }
+    // Both filled; selected is primary (colored), unselected is a clearly different grey fill.
+    val colors = if (selected) ButtonDefaults.buttonColors()
+    else ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Button(onClick = onClick, colors = colors) { Text(label) }
 }
