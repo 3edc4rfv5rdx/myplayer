@@ -113,6 +113,10 @@ class PlayerService : MediaSessionService() {
                     // Stop tracking this book so a later teardown (swipe-away/kill) can't re-save the
                     // end position over the cleared resume point; the next queue resends its book mode.
                     bookFolderKey = null
+                    // Drop the finished queue so the shade Play button can't resurrect it (which would
+                    // restart a book untracked from file 1). This also dismisses the notification for
+                    // music that ended with repeat off — a deliberate trade-off.
+                    player.clearMediaItems()
                 }
             }
 
