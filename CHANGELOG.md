@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: tapping a file in an unreadable folder now shows "Can't read this folder", matching the
+  folder-level Play, instead of the misleading "Nothing to play here".
+
 - Fix: deleting a subfolder while a recursive parent queue is playing now removes that subfolder's
   tracks from the queue, instead of leaving them to fail later with a cryptic file-not-found error.
 

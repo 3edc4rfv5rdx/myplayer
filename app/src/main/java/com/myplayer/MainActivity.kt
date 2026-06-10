@@ -699,9 +699,13 @@ class MainActivity : ComponentActivity() {
         val path = pathState.value
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
-            val files = withContext(Dispatchers.IO) {
-                runCatching { FolderCache.children(this@MainActivity, tree, folder).second }
-                    .getOrDefault(emptyList())
+            val files = try {
+                withContext(Dispatchers.IO) {
+                    FolderCache.children(this@MainActivity, tree, folder).second
+                }
+            } catch (e: ScanException) {
+                if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
+                return@launch
             }
             val controller = liveController() ?: return@launch
             if (index !in files.indices) {
