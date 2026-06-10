@@ -365,11 +365,16 @@ class MainActivity : ComponentActivity() {
                 followPlayingTrack(c.currentMediaItem)
                 // Reconcile the shuffle toggle with the controller. A live music queue's shuffle is
                 // authoritative; a book's shuffle is forced off (not the user's preference), so don't
-                // read it back or the next music after the book ends would silently un-shuffle.
+                // read it back or the next music would silently un-shuffle. Decide "is the live queue
+                // a book?" from the item's own folder, not the transient playingAbookState, so an
+                // already-finished but still-loaded book queue can't leak its shuffle-off either.
                 // With no live queue the fresh player defaults to shuffle off, so push the UI's value
                 // to keep the switch and engine in agreement.
+                val liveIsBook = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
+                    playFolderIdOf(c.currentMediaItem)?.let { Settings.isAbook(this, Settings.bookKey(t, it)) }
+                } ?: false
                 if (c.mediaItemCount > 0) {
-                    if (!playingAbookState.value) shuffleState.value = c.shuffleModeEnabled
+                    if (!liveIsBook) shuffleState.value = c.shuffleModeEnabled
                 } else c.shuffleModeEnabled = shuffleState.value
                 // The service retains its speed across activity recreation; mirror it to the UI, and
                 // recover which folder it plays from so the speed button stays live.
@@ -476,7 +481,20 @@ class MainActivity : ComponentActivity() {
      *  stopped or paused track lets it go; a playing track keeps its now-playing while you browse.
      *  Resuming re-populates the labels from the controller (see NowPlaying.onIsPlayingChanged). */
     private fun clearNowPlayingIfStopped() {
-        if (controllerState.value?.isPlaying != true) clearTitleTickState.value++
+        val controller = controllerState.value
+        if (controller?.isPlaying == true) return
+        // Leaving a folder while a *book* is stopped ends its live queue: book mode is over, the
+        // switch unlocks for music, and the saved resume point lets re-entering the folder pick it
+        // back up. Music keeps its paused queue (it has no saved position to fall back on).
+        if (controller != null && playingAbookState.value) {
+            controller.clearMediaItems()
+            controller.stop()
+            playingFolderId = null
+            playingAbookState.value = false
+            playingFolderKeyState.value = null
+            playingDocIdState.value = null
+        }
+        clearTitleTickState.value++
     }
 
     /** Returns to the roots list (the home screen). */
@@ -1348,9 +1366,9 @@ private fun NowPlaying(
             verticalArrangement = Arrangement.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // A book plays sequentially, so shuffle is locked while a book is the live queue —
-                // keyed to what's playing, not the browsed folder, so wandering to another folder
-                // can't re-enable shuffle and scramble the book.
+                // A book plays sequentially, so shuffle is locked while a book is the live queue.
+                // Leaving the book's folder while it's stopped ends that queue (see
+                // clearNowPlayingIfStopped), which frees the switch again for music.
                 Switch(
                     checked = shuffleEnabled,
                     onCheckedChange = onShuffleToggle,

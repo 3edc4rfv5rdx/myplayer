@@ -4,6 +4,12 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: leaving a book's folder (navigating Up/Home) while the book is stopped now ends book mode
+  instead of keeping the paused book as the live queue. The shuffle switch is freed for music again,
+  and the book's saved position still lets re-entering its folder and pressing Play resume it. Also,
+  a book that played to its end no longer leaks its forced shuffle-off into the shuffle preference
+  when the app is reopened.
+
 - Cleanup: removed two unnecessary safe calls in PlayerService (the player reference is non-null in
   that listener); no behavior change, just silences the build warnings.
 
