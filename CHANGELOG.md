@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: after the app is killed and reopened while an audiobook was playing, the shuffle switch is no
+  longer left disabled with nothing playing. The book flag is now reconciled against the actual live
+  queue on reconnect.
+
 - Fix: a failed or empty scan no longer leaves the app thinking the target folder is the live queue.
   Previously, tapping Play in a folder whose scan failed and then tapping Play again could silently
   resume a different, previously-paused folder. Now playingFolderId is set only when a queue actually

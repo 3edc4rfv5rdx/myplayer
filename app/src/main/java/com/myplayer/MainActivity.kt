@@ -379,6 +379,12 @@ class MainActivity : ComponentActivity() {
                 if (c.mediaItemCount > 0) {
                     if (!liveIsBook) shuffleState.value = c.shuffleModeEnabled
                 } else c.shuffleModeEnabled = shuffleState.value
+                // Reconcile the book flag with the live queue: a restored playingAbook=true after
+                // process death would otherwise lock the shuffle switch with nothing playing (the
+                // service died, so the queue is empty). The STATE_ENDED guard keeps a finished-but-
+                // still-loaded book queue (which saved playingAbook=false) from being re-locked.
+                playingAbookState.value =
+                    c.mediaItemCount > 0 && liveIsBook && c.playbackState != Player.STATE_ENDED
                 // The service retains its speed across activity recreation; mirror it to the UI, and
                 // recover which folder it plays from so the speed button stays live.
                 playbackSpeedState.value = c.playbackParameters.speed
