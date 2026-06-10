@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.4.20260610+101
 
 - Docs: refreshed README to cover audiobook mode (sequential play, resume position, per-folder
   speed), folder deletion, natural-order sorting, and the current settings.
