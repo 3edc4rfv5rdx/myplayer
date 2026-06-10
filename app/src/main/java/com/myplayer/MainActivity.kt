@@ -294,10 +294,10 @@ class MainActivity : ComponentActivity() {
                             onAbookToggle = { enabled ->
                                 currentFolderKey?.let { key ->
                                     abookState.value = enabled
+                                    // A pure persisted folder property: it changes how this folder
+                                    // plays on its next start (startQueue forces books sequential),
+                                    // never the live queue, which keeps the mode it started with.
                                     Settings.setAbook(this, key, enabled)
-                                    // abook plays sequentially: drop shuffle on the live queue, but
-                                    // leave the UI toggle's value intact (it's just disabled while on).
-                                    if (enabled) controllerState.value?.shuffleModeEnabled = false
                                 }
                             },
                             onEnterRoot = { enterRoot(it) },
@@ -1340,17 +1340,19 @@ private fun NowPlaying(
             verticalArrangement = Arrangement.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // abook forces sequential play, so shuffle is disabled while it is on.
+                // A book plays sequentially, so shuffle is locked while a book is the live queue —
+                // keyed to what's playing, not the browsed folder, so wandering to another folder
+                // can't re-enable shuffle and scramble the book.
                 Switch(
                     checked = shuffleEnabled,
                     onCheckedChange = onShuffleToggle,
-                    enabled = !abookEnabled
+                    enabled = !playingAbook
                 )
                 Spacer(Modifier.width(4.dp))
                 Icon(
                     painter = painterResource(R.drawable.ic_shuffle),
                     contentDescription = stringResource(R.string.shuffle),
-                    tint = if (shuffleEnabled && !abookEnabled) MaterialTheme.colorScheme.primary
+                    tint = if (shuffleEnabled && !playingAbook) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

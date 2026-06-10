@@ -4,6 +4,12 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: the shuffle toggle and the audiobook checkbox no longer act on an unrelated live queue based
+  on the folder shown in the browser. Shuffle is now locked precisely while a book is the queue
+  actually playing (so wandering to another folder can't re-enable it and scramble the book), and
+  marking a folder as a book is a pure persisted setting that takes effect on its next start instead
+  of silently dropping shuffle on whatever is currently playing.
+
 - Fix: plain music now always plays at 1.0 speed instead of inheriting the global default or the
   previously played book's speed; per-folder speed applies only in audiobook mode.
 
