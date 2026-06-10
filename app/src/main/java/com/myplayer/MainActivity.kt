@@ -515,6 +515,7 @@ class MainActivity : ComponentActivity() {
             controller.stop()
             playingFolderId = null
             playingAbookState.value = false
+            playingFolderKeyState.value = null
             playingDocIdState.value = null
             // clearMediaItems() emits no metadata event, so clear the now-playing labels ourselves.
             clearTitleTickState.value++
@@ -715,6 +716,7 @@ class MainActivity : ComponentActivity() {
         controller.stop()
         playingFolderId = null
         playingAbookState.value = false
+        playingFolderKeyState.value = null
         playingDocIdState.value = null
         clearTitleTickState.value++
     }

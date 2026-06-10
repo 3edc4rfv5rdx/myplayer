@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: stopping playback by removing the playing root folder, or by deleting the folder the playing
+  track lives in, now also clears the internal playing-folder key, so no stale per-folder speed key
+  lingers after the queue is gone.
+
 - Fix: a fully finished audiobook now correctly starts over next time. Previously, if the app was
   swiped away or killed after a book reached its end, the player re-saved the end position over the
   just-cleared resume point, so reopening the book jumped to its final seconds instead of restarting.
