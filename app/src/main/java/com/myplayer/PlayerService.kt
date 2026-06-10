@@ -101,14 +101,14 @@ class PlayerService : MediaSessionService() {
                 // Pausing/stopping is the most important moment to persist the exact position — but
                 // not when the book just ended, or we'd re-save the end position right after
                 // onPlaybackStateChanged(STATE_ENDED) cleared it (the two events race).
-                if (!isPlaying && player?.playbackState != Player.STATE_ENDED) saveBookPosition()
+                if (!isPlaying && player.playbackState != Player.STATE_ENDED) saveBookPosition()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 // Book genuinely finished (repeat is off in abook): forget the resume point so it
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
-                if (playbackState == Player.STATE_ENDED && (player?.mediaItemCount ?: 0) > 0) {
+                if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
                     bookFolderKey?.let { Settings.clearBookPos(this@PlayerService, it) }
                     // Stop tracking this book so a later teardown (swipe-away/kill) can't re-save the
                     // end position over the cleared resume point; the next queue resends its book mode.

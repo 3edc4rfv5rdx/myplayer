@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Cleanup: removed two unnecessary safe calls in PlayerService (the player reference is non-null in
+  that listener); no behavior change, just silences the build warnings.
+
 - Fix: deleting a book folder now also drops the cached listings of that folder and everything under
   it, instead of leaving stale subtree rows behind until the next full Rescan.
 
