@@ -407,31 +407,19 @@ class MainActivity : ComponentActivity() {
                 // re-toggled for another folder's benefit since, and a flipped flag must not
                 // reclassify a queue that is already playing with its original mode.
                 val liveIsBook = playIsBookOf(c.currentMediaItem)
-                // A book queue that isn't actively playing on reconnect must not linger as the live
-                // queue: a book paused/dismissed in the shade can outlive the activity (the foreground
-                // service survives), and on relaunch its leftover queue would lock the shuffle switch
-                // and show stale book progress with nothing playing. End it like navigating away from a
-                // stopped book does (clearNowPlayingIfStopped); its saved resume point lets re-entering
-                // the folder pick it back up. A still-playing book stays the live queue, shuffle locked.
-                if (liveIsBook && c.mediaItemCount > 0 && !c.playWhenReady &&
-                    c.playbackState != Player.STATE_ENDED
-                ) {
-                    c.clearMediaItems()
-                    c.stop()
-                    playingFolderId = null
-                    playingDocIdState.value = null
-                    clearTitleTickState.value++
-                }
+                // A paused book stays the live queue across activity recreation (the foreground
+                // service outlives the activity): like paused music, it resumes in place with the
+                // big Play. Shuffle stays locked while it lingers — the queue genuinely is a book.
                 // Reconcile the shuffle toggle with the controller. A live music queue's shuffle is
                 // authoritative; a book forces it off (not the user's preference), so don't read a
                 // book's value back or the next music would silently un-shuffle. With no live queue
-                // (incl. a just-cleared stale book) the fresh player defaults to shuffle off, so push
-                // the UI's value to keep the switch and engine in agreement.
+                // the fresh player defaults to shuffle off, so push the UI's value to keep the
+                // switch and engine in agreement.
                 if (c.mediaItemCount > 0) {
                     if (!liveIsBook) shuffleState.value = c.shuffleModeEnabled
                 } else c.shuffleModeEnabled = shuffleState.value
                 // Lock shuffle / show book progress only for a genuinely live book; the STATE_ENDED
-                // guard and the stale-book clear above keep a non-playing book from re-locking it.
+                // guard keeps a finished-but-still-loaded book from re-locking it.
                 playingAbookState.value =
                     c.mediaItemCount > 0 && liveIsBook && c.playbackState != Player.STATE_ENDED
                 // Recover which folder the live queue plays from (abook-checkbox lock and live
@@ -542,21 +530,10 @@ class MainActivity : ComponentActivity() {
 
     /** Drops the now-playing labels/bar when nothing is actively playing, so navigating away from a
      *  stopped or paused track lets it go; a playing track keeps its now-playing while you browse.
-     *  Resuming re-populates the labels from the controller (see NowPlaying.onIsPlayingChanged). */
+     *  The queue itself survives — a paused book behaves exactly like paused music, resumable in
+     *  place with Play. Resuming re-populates the labels (see NowPlaying.onIsPlayingChanged). */
     private fun clearNowPlayingIfStopped() {
-        val controller = controllerState.value
-        if (controller?.isPlaying == true) return
-        // Leaving a folder while a *book* is stopped ends its live queue: book mode is over, the
-        // switch unlocks for music, and the saved resume point lets re-entering the folder pick it
-        // back up. Music keeps its paused queue (it has no saved position to fall back on).
-        if (controller != null && playingAbookState.value) {
-            controller.clearMediaItems()
-            controller.stop()
-            playingFolderId = null
-            playingAbookState.value = false
-            playingFolderKeyState.value = null
-            playingDocIdState.value = null
-        }
+        if (controllerState.value?.isPlaying == true) return
         clearTitleTickState.value++
     }
 
@@ -1521,9 +1498,9 @@ private fun NowPlaying(
             verticalArrangement = Arrangement.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // A book plays sequentially, so shuffle is locked while a book is the live queue.
-                // Leaving the book's folder while it's stopped ends that queue (see
-                // clearNowPlayingIfStopped), which frees the switch again for music.
+                // A book plays sequentially, so shuffle is locked while a book is the live queue
+                // (playing or paused — a paused book is resumable in place). Starting a music
+                // folder, or the book ending, frees the switch again.
                 Switch(
                     checked = shuffleEnabled,
                     onCheckedChange = onShuffleToggle,

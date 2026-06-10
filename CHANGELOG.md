@@ -4,6 +4,14 @@ Newest entries on top.
 
 ## Unreleased
 
+- A paused book now behaves exactly like paused music: its queue survives browsing away and
+  activity relaunches, and the big Play resumes it in place (no restart, no rewind). Previously
+  pausing a book and navigating up — or pausing it in the shade and reopening the app — silently
+  killed its queue, so Play meant "resume" for music but "restart from the saved position" for
+  books. Shuffle stays locked while a paused book lingers (the queue genuinely is a book); starting
+  a music folder or finishing the book frees it. This supersedes the earlier "ghost book on
+  relaunch" workaround — the leftover queue is no longer a ghost, it is the resumable live queue.
+
 - The speed button now belongs to the book open in the browser (the same referent as the abook
   checkbox), not to whatever is playing. It is enabled whenever the browser is inside a book —
   including a book that isn't playing, so a book's speed can be set up front — and edits that
