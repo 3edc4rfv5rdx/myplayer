@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: deleting a book folder now runs the recursive storage delete (and cache cleanup) off the main
+  thread, so deleting a large book no longer freezes the UI or risks an ANR. A second confirm while a
+  delete is still running is ignored.
+
 - Settings: renamed the default-speed label to "Abook default speed" to make clear it applies to
   audiobook folders only.
 

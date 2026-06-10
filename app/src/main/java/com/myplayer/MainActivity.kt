@@ -158,6 +158,9 @@ class MainActivity : ComponentActivity() {
     // request wins (not the last scan to finish).
     private var playbackLoadJob: Job? = null
 
+    // The in-flight folder deletion; used to ignore a second confirm while a delete is still running.
+    private var deleteJob: Job? = null
+
     /** Adds a root folder. This is the only place a SAF permission is requested. */
     private val folderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -707,20 +710,34 @@ class MainActivity : ComponentActivity() {
     private fun deleteBook(folder: Node) {
         val tree = treeUriState.value ?: return
         val parent = pathState.value.lastOrNull() ?: return
+        if (deleteJob?.isActive == true) return // ignore a second confirm while a delete is in flight
+        // Touches the controller, so it must run on the main thread before the IO hop.
         stopIfPlayingUnder(folder)
         val docUri = DocumentsContract.buildDocumentUriUsingTree(tree, folder.documentId)
-        val ok = runCatching { DocumentsContract.deleteDocument(contentResolver, docUri) }
-            .getOrDefault(false)
-        if (!ok) {
-            errorState.value = getString(R.string.delete_failed)
-            return
+        deleteJob = lifecycleScope.launch {
+            // The recursive SAF delete (and the SQLite cache invalidations) can take seconds on a
+            // slow provider, so keep them off the main thread to avoid an ANR.
+            val ok = withContext(Dispatchers.IO) {
+                val deleted = runCatching {
+                    DocumentsContract.deleteDocument(contentResolver, docUri)
+                }.getOrDefault(false)
+                if (deleted) {
+                    Settings.clearBook(
+                        this@MainActivity, Settings.bookKey(tree.toString(), folder.documentId)
+                    )
+                    // Drop the deleted folder's own (and descendants') cached listings, then the
+                    // parent's so the now-missing folder disappears from it on re-scan.
+                    FolderCache.invalidateSubtree(this@MainActivity, tree, folder.documentId)
+                    FolderCache.invalidate(this@MainActivity, tree, parent.documentId)
+                }
+                deleted
+            }
+            if (!ok) {
+                errorState.value = getString(R.string.delete_failed)
+                return@launch
+            }
+            rescanTickState.value++
         }
-        Settings.clearBook(this, Settings.bookKey(tree.toString(), folder.documentId))
-        // Drop the deleted folder's own (and descendants') cached listings, then the parent's so the
-        // now-missing folder disappears from it on re-scan.
-        FolderCache.invalidateSubtree(this, tree, folder.documentId)
-        FolderCache.invalidate(this, tree, parent.documentId)
-        rescanTickState.value++
     }
 
     /** Stops and clears playback when the playing track lives inside [folder] (so deleting it can't
