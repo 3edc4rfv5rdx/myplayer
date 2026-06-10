@@ -698,6 +698,9 @@ class MainActivity : ComponentActivity() {
             return
         }
         Settings.clearBook(this, Settings.bookKey(tree.toString(), folder.documentId))
+        // Drop the deleted folder's own (and descendants') cached listings, then the parent's so the
+        // now-missing folder disappears from it on re-scan.
+        FolderCache.invalidateSubtree(this, tree, folder.documentId)
         FolderCache.invalidate(this, tree, parent.documentId)
         rescanTickState.value++
     }

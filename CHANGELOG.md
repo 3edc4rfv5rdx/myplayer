@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: deleting a book folder now also drops the cached listings of that folder and everything under
+  it, instead of leaving stale subtree rows behind until the next full Rescan.
+
 - Fix: stopping playback by removing the playing root folder, or by deleting the folder the playing
   track lives in, now also clears the internal playing-folder key, so no stale per-folder speed key
   lingers after the queue is gone.
