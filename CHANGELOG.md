@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- Removed the Repeat all setting: playback never loops now — a finished queue (music or book) just
+  ends. The behavior is hardwired behind a single compile-time flag (`Settings.REPEAT_ALL = false`),
+  with no UI. This also removes the bug where toggling Repeat while a book was playing put the live
+  book into an endless loop, breaking its resume tracking.
+
 - Fix: relaunching after a book was paused/dismissed in the shade no longer reopens onto a ghost
   book — a leftover non-playing book queue that outlived the activity (the foreground service
   survives) is now ended on reconnect, so the shuffle switch is free and the stale book progress/

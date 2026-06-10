@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Minimal Android folder player (Kotlin + Jetpack Compose + Media3/ExoPlayer). The user keeps an
 ordered list of root folders (added via the SAF picker) and browses them in an in-app folder
 browser; playing a folder plays everything under it (recursively). Music playback is shuffled by
-default (toggle on the main screen) and loops on end (Repeat toggle in Settings). Any folder can be
-flagged as an *audiobook*: it then plays sequentially (no shuffle/loop), remembers its resume
+default (toggle on the main screen) and never loops — repeat is hardwired off (the
+`Settings.REPEAT_ALL` flag). Any folder can be flagged as an *audiobook*: it then plays
+sequentially (no shuffle), remembers its resume
 position, and has its own playback speed; books can also be deleted from storage in-app. No
 equalizer, no internet, no media library — deliberately primitive.
 
@@ -34,10 +35,10 @@ Conventions:
 Single `:app` module, package `com.myplayer`. UI and playback are split across a Media3 session:
 
 - `PlayerService` (`MediaSessionService`) owns the `ExoPlayer` + `MediaSession` — this is what gives
-  background playback and shade controls. Randomization uses ExoPlayer's built-in shuffle and
-  looping its repeat mode, so the main-screen toggle reorders the live queue without rebuilding it;
-  `MainActivity` only sets the media items and the start track (random or selected-first). Shuffle
-  is a non-persisted toggle (on by default); looping is the persisted Repeat setting.
+  background playback and shade controls. Randomization uses ExoPlayer's built-in shuffle, so the
+  main-screen toggle reorders the live queue without rebuilding it; `MainActivity` only sets the
+  media items and the start track (random or selected-first). Shuffle is a non-persisted toggle (on
+  by default); repeat is always `REPEAT_MODE_OFF` (compile-time `Settings.REPEAT_ALL`, no UI).
 - `MainActivity` is UI only; it drives the service through a `MediaController` (built in `onStart`,
   released in `onStop`).
 

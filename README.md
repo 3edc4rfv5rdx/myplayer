@@ -34,7 +34,7 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - The now-playing name, path, and bar stay visible while a track is playing as you browse folders;
   navigating up away from a stopped or paused track (or returning to the home list) clears them, and
   resuming brings them back.
-- **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **Repeat all**, **ReplayGain**,
+- **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **ReplayGain**,
   **Follow playing track**, **Abook default speed** (the speed new audiobooks start at), and an About
   with version/build.
 - **Follow playing track** (Settings, on by default): on each track change the browser jumps to the
@@ -44,8 +44,7 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 
 - Open a folder and tick the **abook** checkbox to mark it as an audiobook (a per-folder, persisted
   flag). It shows as 📖 in its parent listing.
-- A book plays **sequentially** — shuffle is locked off and it doesn't loop while a book is the live
-  queue.
+- A book plays **sequentially** — shuffle is locked off while a book is the live queue.
 - It **remembers its position**: stopping and returning later (press Play in the same folder) resumes
   where you left off, rewound a few seconds for context.
 - Each book keeps its **own playback speed** (button next to the controls, with a live-preview
@@ -70,8 +69,8 @@ Release-only workflow. Requires Android SDK and JDK 17/21.
   per-folder audiobook state: mode, resume position, speed).
 - **Playback:** Media3/ExoPlayer in a `MediaSessionService` (background playback + shade controls).
   Order is controlled by Media3's shuffle mode (`shuffleModeEnabled`); when shuffle is on, starting a
-  folder picks a random initial track. **Repeat all** maps to `REPEAT_MODE_ALL`. Audiobook folders
-  play with shuffle and repeat off; the service periodically saves the current file + offset as the
-  book's resume point.
+  folder picks a random initial track. Repeat is always off (a finished queue just ends; hardwired
+  via the `Settings.REPEAT_ALL` flag, no UI). Audiobook folders also play with shuffle off; the
+  service periodically saves the current file + offset as the book's resume point.
 - **ReplayGain:** optional rough loudness leveling from `REPLAYGAIN_TRACK_GAIN` tags (only tagged
   files) — attenuation via player volume, boost via `LoudnessEnhancer`. Not exact, just even-ish.

@@ -77,7 +77,7 @@ class PlayerService : MediaSessionService() {
             .build()
 
         player.repeatMode =
-            if (Settings.isLoopEnabled(this)) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            if (Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
         player.addListener(object : Player.Listener {
             @UnstableApi
@@ -114,7 +114,7 @@ class PlayerService : MediaSessionService() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                // Book genuinely finished (repeat is off in abook): forget the resume point so it
+                // Book genuinely finished (repeat is always off): forget the resume point so it
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
@@ -124,7 +124,7 @@ class PlayerService : MediaSessionService() {
                     bookFolderKey = null
                     // Drop the finished queue so the shade Play button can't resurrect it (which would
                     // restart a book untracked from file 1). This also dismisses the notification for
-                    // music that ended with repeat off — a deliberate trade-off.
+                    // music that ended — a deliberate trade-off.
                     player.clearMediaItems()
                 }
             }

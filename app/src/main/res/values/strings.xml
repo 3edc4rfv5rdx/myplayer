@@ -35,7 +35,6 @@
     <string name="delete_book_confirm">Confirm</string>
     <string name="delete">Delete</string>
     <string name="delete_failed">Couldn\'t delete the folder</string>
-    <string name="repeat">Repeat all</string>
     <string name="replaygain">ReplayGain</string>
     <string name="follow_playing">Follow playing track</string>
     <string name="theme">Theme</string>

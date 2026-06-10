@@ -210,7 +210,6 @@ class MainActivity : ComponentActivity() {
                     val shuffle by shuffleState
                     val playingAbook by playingAbookState
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
-                    var loop by remember { mutableStateOf(Settings.isLoopEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
                     var defaultSpeed by remember { mutableStateOf(Settings.getDefaultSpeed(this)) }
 
@@ -224,7 +223,6 @@ class MainActivity : ComponentActivity() {
                             build = appVersionCode(),
                             themeMode = theme,
                             replayGainEnabled = replayGain,
-                            loopEnabled = loop,
                             followEnabled = follow,
                             defaultSpeed = defaultSpeed,
                             onThemeChange = {
@@ -235,12 +233,6 @@ class MainActivity : ComponentActivity() {
                                 replayGain = it
                                 Settings.setReplayGainEnabled(this, it)
                                 sendReplayGainChanged()
-                            },
-                            onLoopChange = {
-                                loop = it
-                                Settings.setLoopEnabled(this, it)
-                                controllerState.value?.repeatMode =
-                                    if (it) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                             },
                             onFollowChange = {
                                 follow = it
@@ -350,7 +342,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        // Queue reached its end (book finished, or a playlist with repeat off): clear
+                        // Queue reached its end (repeat is always off; see Settings.REPEAT_ALL): clear
                         // the now-playing labels, bar, and book progress so a 100%-done book doesn't
                         // linger on screen. Guard on a non-empty queue so clearing items isn't caught.
                         if (playbackState == Player.STATE_ENDED && c.mediaItemCount > 0) {
@@ -652,9 +644,9 @@ class MainActivity : ComponentActivity() {
         return controllerState.value
     }
 
-    /** Installs and starts [items] at [startIndex]. In abook mode the queue plays sequentially with
-     *  no looping and the service tracks its position under [bookFolderKey]; otherwise it follows the
-     *  live shuffle/repeat settings and position tracking is off. */
+    /** Installs and starts [items] at [startIndex]. In abook mode the queue plays sequentially and
+     *  the service tracks its position under [bookFolderKey]; otherwise it follows the live shuffle
+     *  setting and position tracking is off. Nothing ever loops (repeat is always off). */
     private fun startQueue(
         controller: MediaController,
         items: List<MediaItem>,
@@ -666,7 +658,8 @@ class MainActivity : ComponentActivity() {
         errorState.value = null
         playingAbookState.value = abook
         controller.shuffleModeEnabled = !abook && shuffleState.value
-        controller.repeatMode = if (abook) Player.REPEAT_MODE_OFF else loopRepeatMode()
+        controller.repeatMode =
+            if (!abook && Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
         controller.setMediaItems(items, startIndex, startPositionMs)
         controller.prepare()
         controller.play()
@@ -702,9 +695,6 @@ class MainActivity : ComponentActivity() {
             controller.sendCustomCommand(command, Bundle.EMPTY)
         }
     }
-
-    private fun loopRepeatMode(): Int =
-        if (Settings.isLoopEnabled(this)) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
     /** Plays the selected file first, then the rest of the folder. ExoPlayer's shuffle (toggled
      *  live) decides whether the remainder is shuffled or continues in scan order. The selection is
@@ -1598,12 +1588,10 @@ private fun SettingsScreen(
     build: Long,
     themeMode: ThemeMode,
     replayGainEnabled: Boolean,
-    loopEnabled: Boolean,
     followEnabled: Boolean,
     defaultSpeed: Float,
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
-    onLoopChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
     onDefaultSpeedChange: (Float) -> Unit,
     onRescan: () -> Unit,
@@ -1645,13 +1633,6 @@ private fun SettingsScreen(
         }
 
         Spacer(Modifier.height(20.dp))
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.repeat))
-            Spacer(Modifier.weight(1f))
-            Switch(checked = loopEnabled, onCheckedChange = onLoopChange)
-        }
-
-        Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.replaygain))
             Spacer(Modifier.weight(1f))
