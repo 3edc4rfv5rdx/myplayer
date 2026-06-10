@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Settings: renamed the default-speed label to "Abook default speed" to make clear it applies to
+  audiobook folders only.
+
 - Fix: leaving a book's folder (navigating Up/Home) while the book is stopped now ends book mode
   instead of keeping the paused book as the live queue. The shuffle switch is freed for music again,
   and the book's saved position still lets re-entering its folder and pressing Play resume it. Also,

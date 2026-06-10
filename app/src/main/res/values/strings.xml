@@ -26,7 +26,7 @@
     <string name="next">Next</string>
     <string name="shuffle">Shuffle</string>
     <string name="playback_speed">Playback speed</string>
-    <string name="default_speed">Default speed</string>
+    <string name="default_speed">Abook default speed</string>
     <string name="done">Done</string>
     <string name="audiobook_mode">abook</string>
     <string name="file_label">File</string>
