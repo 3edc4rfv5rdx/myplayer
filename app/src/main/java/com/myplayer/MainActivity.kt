@@ -587,7 +587,6 @@ class MainActivity : ComponentActivity() {
         if (controllerState.value == null) return
         val tree = treeUriState.value ?: return
         val path = pathState.value
-        playingFolderId = folder.documentId
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
             val items = try {
@@ -613,6 +612,9 @@ class MainActivity : ComponentActivity() {
             }
             val startPos =
                 if (savedIdx >= 0) (saved!!.second - 15_000).coerceAtLeast(0L) else 0L
+            // Mark this folder as playing only now that a queue is actually starting; a failed or
+            // empty scan must leave playingFolderId pointing at whatever was playing before.
+            playingFolderId = folder.documentId
             startQueue(controller, items, start, abook, key, startPos)
         }
     }
@@ -685,7 +687,6 @@ class MainActivity : ComponentActivity() {
         if (controllerState.value == null) return
         val tree = treeUriState.value ?: return
         val path = pathState.value
-        playingFolderId = folder.documentId
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
             val files = withContext(Dispatchers.IO) {
@@ -700,6 +701,8 @@ class MainActivity : ComponentActivity() {
             val items = MusicScanner.mediaItems(tree, path, files)
             val key = Settings.bookKey(tree.toString(), folder.documentId)
             val abook = Settings.isAbook(this@MainActivity, key)
+            // Set only on the success path so a failed load leaves playingFolderId untouched.
+            playingFolderId = folder.documentId
             startQueue(controller, items, index, abook, key)
             selectedIndexState.value = null
         }

@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: a failed or empty scan no longer leaves the app thinking the target folder is the live queue.
+  Previously, tapping Play in a folder whose scan failed and then tapping Play again could silently
+  resume a different, previously-paused folder. Now playingFolderId is set only when a queue actually
+  starts, so the second tap retries the folder you are standing in.
+
 - Fix: folders and files are now sorted in natural (human) order, so "Chapter 2" comes before
   "Chapter 10" and "CD2" before "CD10". Books with unpadded chapter numbers play in the right order.
   Already-cached listings keep the old order until "Rescan music" rebuilds them.
