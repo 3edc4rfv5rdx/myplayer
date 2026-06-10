@@ -570,7 +570,11 @@ class MainActivity : ComponentActivity() {
         when {
             index != null && dir != null -> playFile(dir, index)
             dir != null && dir.documentId != playingFolderId -> playFolder(dir)
-            controller.mediaItemCount > 0 -> controller.play()
+            // Treat an ended queue as no queue: resuming it would restart a finished book from file 1
+            // untracked (and with shuffle unlocked). Inside a folder we re-run playFolder, which
+            // re-installs book mode/speed/tracking; at home (no folder) there is nothing to resume.
+            controller.mediaItemCount > 0 && controller.playbackState != Player.STATE_ENDED ->
+                controller.play()
             dir != null -> playFolder(dir)
         }
     }

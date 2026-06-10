@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: the Play button no longer resurrects a finished queue. Pressing Play inside a folder whose
+  book just ended now restarts it properly (book mode, speed, and position tracking re-installed)
+  instead of replaying it untracked from the first file; at the roots home screen an ended queue's
+  Play does nothing.
+
 - Fix: after the app is killed and reopened while an audiobook was playing, the shuffle switch is no
   longer left disabled with nothing playing. The book flag is now reconciled against the actual live
   queue on reconnect.
