@@ -1057,11 +1057,22 @@ private fun FolderBrowser(
     }
     var loadFailed by remember(current.documentId) { mutableStateOf(false) }
     var retryTick by remember(current.documentId) { mutableStateOf(0) }
+    // documentIds of subfolders that are books, resolved off-thread with the listing so the rows
+    // don't each run a main-thread Settings.isAbook DB read during composition.
+    var bookIds by remember(current.documentId) { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(current.documentId, rescanTick, retryTick) {
         loadFailed = false
         contents = null
         try {
-            contents = withContext(Dispatchers.IO) { FolderCache.children(context, treeUri, current) }
+            val (loaded, books) = withContext(Dispatchers.IO) {
+                val c = FolderCache.children(context, treeUri, current)
+                val ids = c.first.filter {
+                    Settings.isAbook(context, Settings.bookKey(treeUri.toString(), it.documentId))
+                }.map { it.documentId }.toSet()
+                c to ids
+            }
+            contents = loaded
+            bookIds = books
         } catch (e: ScanException) {
             loadFailed = true
         }
@@ -1125,9 +1136,7 @@ private fun FolderBrowser(
         } else if (c != null) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
-                    val isBook = Settings.isAbook(
-                        context, Settings.bookKey(treeUri.toString(), folder.documentId)
-                    )
+                    val isBook = folder.documentId in bookIds
                     Text(
                         text = "${if (isBook) "📖" else "📁"}  ${folder.name}",
                         maxLines = 1,

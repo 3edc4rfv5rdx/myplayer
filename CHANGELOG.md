@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Perf: the browser now resolves each subfolder's book flag off the main thread together with the
+  listing, instead of issuing one DB read per row during composition — smoother first scroll in
+  folders with many subfolders.
+
 - Fix: tapping a file in an unreadable folder now shows "Can't read this folder", matching the
   folder-level Play, instead of the misleading "Nothing to play here".
 
