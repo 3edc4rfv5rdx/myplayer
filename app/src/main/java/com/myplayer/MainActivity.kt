@@ -618,7 +618,10 @@ class MainActivity : ComponentActivity() {
         controller.prepare()
         controller.play()
         playingFolderKeyState.value = bookFolderKey
-        bookFolderKey?.let { applyFolderSpeed(controller, it) }
+        // Speed is an audiobook feature: books restore their saved (or default) speed; plain music
+        // always plays at 1.0, never inheriting a previous book's speed or the global default.
+        if (abook && bookFolderKey != null) applyFolderSpeed(controller, bookFolderKey)
+        else { controller.setPlaybackSpeed(Settings.SPEED_DEFAULT); playbackSpeedState.value = Settings.SPEED_DEFAULT }
         sendBookMode(controller, if (abook) bookFolderKey else null)
     }
 

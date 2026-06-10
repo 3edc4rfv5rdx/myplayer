@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: plain music now always plays at 1.0 speed instead of inheriting the global default or the
+  previously played book's speed; per-folder speed applies only in audiobook mode.
+
 - Playback speed (per folder): a speed button by the playback controls shows the current rate
   (e.g. x1.0) and opens a 0.5–3.0 slider (0.05 steps) that applies live as you drag. The chosen speed
   is remembered per folder and re-applied when that folder plays. The button is an audiobook feature:
