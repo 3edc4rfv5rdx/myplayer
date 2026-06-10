@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Minimal Android folder player (Kotlin + Jetpack Compose + Media3/ExoPlayer). The user remembers a
-root music folder once; each session they pick a folder (the remembered root is the picker's start
-location) and the app plays everything under it (recursively). Playback is shuffled by default
-(toggle on the main screen) and loops on end (Repeat toggle in Settings). No equalizer, no
-internet, no media library — deliberately primitive.
+Minimal Android folder player (Kotlin + Jetpack Compose + Media3/ExoPlayer). The user keeps an
+ordered list of root folders (added via the SAF picker) and browses them in an in-app folder
+browser; playing a folder plays everything under it (recursively). Music playback is shuffled by
+default (toggle on the main screen) and loops on end (Repeat toggle in Settings). Any folder can be
+flagged as an *audiobook*: it then plays sequentially (no shuffle/loop), remembers its resume
+position, and has its own playback speed; books can also be deleted from storage in-app. No
+equalizer, no internet, no media library — deliberately primitive.
 
 ## Build / install (release-only workflow)
 
@@ -40,26 +42,29 @@ Single `:app` module, package `com.myplayer`. UI and playback are split across a
   released in `onStop`).
 
 Supporting files:
-- `Settings` — single source for persisted state (root folder, toggles, theme), stored in the
-  `settings` table of `AppDb` (SQLite). Don't read/write persisted state anywhere else.
-- `MusicScanner` — recursive SAF (`DocumentFile`) walk producing `MediaItem`s; mp3/flac only.
-- `ReplayGain` + `GainAudioProcessor` — optional volume normalization (see below).
+- `Settings` — single source for persisted state: ordered roots list, toggles (ReplayGain, Repeat,
+  Follow, theme), default speed, and per-folder book state (mode, resume position, speed), all in
+  the `settings` table of `AppDb` (SQLite). Don't read/write persisted state anywhere else.
+- `MusicScanner` — SAF walk via `DocumentsContract` producing `Node`s / `MediaItem`s (mp3/flac only),
+  sorted in natural order; carries each item's ancestor path in extras for follow/delete logic.
+- `FolderCache` — caches `MusicScanner` folder listings in `AppDb` so the browser and recursive
+  "play this folder" walks don't re-query the provider every time; invalidated on rescan/delete.
+- `ReplayGain` — optional volume normalization (see below).
 
 ## Folder selection
 
-Uses the system Storage Access Framework picker (`OpenDocumentTree`), launched with the remembered
-root URI as its initial location. On result the activity takes a persistable permission, plays the
-chosen folder recursively, and (first time only) saves it as the remembered root. Files are addressed
-by `content://` tree URIs, never raw filesystem paths — the only reliable way under scoped storage.
-There is intentionally no in-app folder browser; the SAF picker is the browser.
+The system Storage Access Framework picker (`OpenDocumentTree`) is used **only to add a root** to the
+list (the one place a persistable permission is taken). Day-to-day navigation is the in-app
+`FolderBrowser`, backed by `FolderCache`/`MusicScanner`. Files are addressed by `content://` tree
+URIs, never raw filesystem paths — the only reliable way under scoped storage.
 
 ## ReplayGain
 
 Optional, off by default, toggled from the UI. Reads `REPLAYGAIN_TRACK_GAIN` tags surfaced by
 ExoPlayer's `Player.Listener.onMetadata` (FLAC `VorbisComment`, MP3 ID3 `TextInformationFrame`) —
-no external tag-parsing library. `GainAudioProcessor` is a custom Media3 `AudioProcessor` inserted
-via a `DefaultAudioSink` (float output disabled to keep a 16-bit PCM path) that multiplies samples
-by the linear gain with hard-clip protection; gain `1.0` is transparent passthrough.
+no external tag-parsing library. The gain is applied in `PlayerService` without touching the render
+pipeline: attenuation (negative gain) via the player volume, boost (positive gain, capped) via an
+Android `LoudnessEnhancer` audio effect. No custom `AudioProcessor`/`AudioSink`.
 
 Key limitation: ReplayGain only affects files that already contain the tags. Untagged files play
 unchanged. Computing loudness ourselves (analysis) is intentionally out of scope.

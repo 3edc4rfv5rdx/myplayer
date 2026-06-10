@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs: updated CLAUDE.md to match the current app (multiple roots + in-app browser, audiobook mode,
+  `FolderCache`, ReplayGain via player volume + `LoudnessEnhancer` instead of a removed audio
+  processor).
+
 - Perf: the browser now resolves each subfolder's book flag off the main thread together with the
   listing, instead of issuing one DB read per row during composition — smoother first scroll in
   folders with many subfolders.
