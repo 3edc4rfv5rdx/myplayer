@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Internal: the periodic resume-point save now runs only while playback is active (started on play,
+  stopped on pause/stop) instead of waking the main looper every 10s for the life of the service.
+
 - Docs: updated CLAUDE.md to match the current app (multiple roots + in-app browser, audiobook mode,
   `FolderCache`, ReplayGain via player volume + `LoudnessEnhancer` instead of a removed audio
   processor).

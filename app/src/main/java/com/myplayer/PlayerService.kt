@@ -51,9 +51,12 @@ class PlayerService : MediaSessionService() {
     // offset are persisted as the book's resume point (see [saveBookPosition]).
     private var bookFolderKey: String? = null
     private val saveHandler = Handler(Looper.getMainLooper())
+    // Periodic resume-point save while playing. Started on play and stopped on pause/stop (see
+    // onIsPlayingChanged) so it isn't a permanent 10s heartbeat waking the looper while idle.
     private val saveTick = object : Runnable {
         override fun run() {
-            if (player?.isPlaying == true) saveBookPosition()
+            if (player?.isPlaying != true) return
+            saveBookPosition()
             saveHandler.postDelayed(this, SAVE_INTERVAL_MS)
         }
     }
@@ -98,10 +101,16 @@ class PlayerService : MediaSessionService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                // Pausing/stopping is the most important moment to persist the exact position — but
-                // not when the book just ended, or we'd re-save the end position right after
-                // onPlaybackStateChanged(STATE_ENDED) cleared it (the two events race).
-                if (!isPlaying && player.playbackState != Player.STATE_ENDED) saveBookPosition()
+                if (isPlaying) {
+                    // Run the periodic save only while actually playing.
+                    saveHandler.postDelayed(saveTick, SAVE_INTERVAL_MS)
+                } else {
+                    saveHandler.removeCallbacks(saveTick)
+                    // Pausing/stopping is the most important moment to persist the exact position —
+                    // but not when the book just ended, or we'd re-save the end position right after
+                    // onPlaybackStateChanged(STATE_ENDED) cleared it (the two events race).
+                    if (player.playbackState != Player.STATE_ENDED) saveBookPosition()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -131,7 +140,7 @@ class PlayerService : MediaSessionService() {
 
         this.player = player
         session = MediaSession.Builder(this, player).setCallback(SessionCallback()).build()
-        saveHandler.postDelayed(saveTick, SAVE_INTERVAL_MS)
+        // The periodic save starts when playback begins (onIsPlayingChanged), not here.
     }
 
     /** Persists the playing book's current file uri and offset as its resume point. No-op for plain
