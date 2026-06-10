@@ -368,8 +368,13 @@ class MainActivity : ComponentActivity() {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         // Queue reached its end (repeat is always off; see Settings.REPEAT_ALL): clear
                         // the now-playing labels, bar, and book progress so a 100%-done book doesn't
-                        // linger on screen. Guard on a non-empty queue so clearing items isn't caught.
-                        if (playbackState == Player.STATE_ENDED && c.mediaItemCount > 0) {
+                        // linger on screen. Deliberately no mediaItemCount guard: the service clears
+                        // the finished queue itself and controller events coalesce, so the clear can
+                        // already be visible when STATE_ENDED arrives — a guard would then skip this
+                        // and leave shuffle locked (and speed live) on an empty queue. Our own
+                        // queue-clearing paths can land here too; they reset this state themselves,
+                        // and re-clearing it is a no-op.
+                        if (playbackState == Player.STATE_ENDED) {
                             playingAbookState.value = false
                             playingFolderId = null
                             playingFolderKeyState.value = null

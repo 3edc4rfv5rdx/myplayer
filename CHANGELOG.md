@@ -4,6 +4,13 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: a race at queue end could leave the shuffle switch locked and the speed button live with
+  nothing playing. When a book (or playlist) finishes, the service clears the queue; the activity's
+  end-of-queue cleanup was guarded on a non-empty queue, but controller events coalesce, so the
+  clear could already be visible when STATE_ENDED arrived and the cleanup was skipped. The guard is
+  removed: the resume-point protection it duplicated lives (synchronously, reliably) in the
+  service, and the activity cleanup is idempotent.
+
 - Fix: book mode now covers the book's whole subtree. Previously only the flagged folder itself
   counted: tapping a chapter file inside a book's subfolder (CD1/CD2/…), or playing such a
   subfolder, played it as shuffled music at 1.0× with no resume tracking, and a queue started from
