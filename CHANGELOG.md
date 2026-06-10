@@ -4,6 +4,14 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: the live queue's book/music mode is now stamped on the queue when it starts and read back
+  from there on reconnect, instead of re-reading the folder's current abook flag. Toggling the
+  checkbox mid-play could reclassify the playing queue after a rotation/relaunch: shuffled music
+  got treated as a book (shuffle locked, bogus book progress — or the paused queue killed), and a
+  book with the flag unticked silently dragged its forced shuffle-off into the next music. The
+  abook checkbox is also locked (greyed) while its folder is the live queue, since the mode is
+  fixed at start anyway — so the flag can no longer contradict what is audibly playing.
+
 - Removed the Repeat all setting: playback never loops now — a finished queue (music or book) just
   ends. The behavior is hardwired behind a single compile-time flag (`Settings.REPEAT_ALL = false`),
   with no UI. This also removes the bug where toggling Repeat while a book was playing put the live

@@ -43,7 +43,8 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 ## Audiobooks
 
 - Open a folder and tick the **abook** checkbox to mark it as an audiobook (a per-folder, persisted
-  flag). It shows as 📖 in its parent listing.
+  flag). It shows as 📖 in its parent listing. The queue's mode is fixed when playback starts; while
+  the folder is the live queue its checkbox is locked, so changes always apply to the next start.
 - A book plays **sequentially** — shuffle is locked off while a book is the live queue.
 - It **remembers its position**: stopping and returning later (press Play in the same folder) resumes
   where you left off, rewound a few seconds for context.

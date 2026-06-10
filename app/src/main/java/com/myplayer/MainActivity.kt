@@ -267,6 +267,12 @@ class MainActivity : ComponentActivity() {
                             // is playing (keyed by the playing folder, not whatever the browser shows).
                             val playbackSpeed by playbackSpeedState
                             val playingFolderKey by playingFolderKeyState
+                            // The open folder is the live queue's folder: lock the checkbox (like
+                            // shuffle while a book plays). The queue keeps its start mode anyway, so
+                            // an edit here would silently apply only on the next start — confusing —
+                            // and worse, let the flag contradict what is audibly playing.
+                            val abookLocked =
+                                currentFolderKey != null && currentFolderKey == playingFolderKey
                             PlayerScreen(
                             controller = controller,
                             roots = roots,
@@ -285,13 +291,16 @@ class MainActivity : ComponentActivity() {
                             },
                             abookEnabled = abook,
                             abookVisible = currentFolderKey != null,
+                            abookLocked = abookLocked,
                             playingAbook = playingAbook,
                             onAbookToggle = { enabled ->
                                 currentFolderKey?.let { key ->
                                     abookState.value = enabled
                                     // A pure persisted folder property: it changes how this folder
                                     // plays on its next start (startQueue forces books sequential),
-                                    // never the live queue, which keeps the mode it started with.
+                                    // never the live queue, which keeps the mode stamped on it at
+                                    // start (EXTRA_IS_BOOK). While this folder *is* the live queue
+                                    // the checkbox is locked, so the flag can't contradict it.
                                     Settings.setAbook(this, key, enabled)
                                 }
                             },
@@ -358,16 +367,11 @@ class MainActivity : ComponentActivity() {
                 // live playlist was started from so Play in the same folder resumes, not restarts.
                 playingFolderId = playFolderIdOf(c.currentMediaItem)
                 followPlayingTrack(c.currentMediaItem)
-                // Reconcile the shuffle toggle with the controller. A live music queue's shuffle is
-                // authoritative; a book's shuffle is forced off (not the user's preference), so don't
-                // read it back or the next music would silently un-shuffle. Decide "is the live queue
-                // a book?" from the item's own folder, not the transient playingAbookState, so an
-                // already-finished but still-loaded book queue can't leak its shuffle-off either.
-                // With no live queue the fresh player defaults to shuffle off, so push the UI's value
-                // to keep the switch and engine in agreement.
-                val liveIsBook = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
-                    playFolderIdOf(c.currentMediaItem)?.let { Settings.isAbook(this, Settings.bookKey(t, it)) }
-                } ?: false
+                // "Is the live queue a book?" comes from the mode stamped on the queue at start
+                // (EXTRA_IS_BOOK), never the current checkbox value: the abook flag may have been
+                // re-toggled for another folder's benefit since, and a flipped flag must not
+                // reclassify a queue that is already playing with its original mode.
+                val liveIsBook = playIsBookOf(c.currentMediaItem)
                 // A book queue that isn't actively playing on reconnect must not linger as the live
                 // queue: a book paused/dismissed in the shade can outlive the activity (the foreground
                 // service survives), and on relaunch its leftover queue would lock the shuffle switch
@@ -384,8 +388,10 @@ class MainActivity : ComponentActivity() {
                     clearTitleTickState.value++
                 }
                 // Reconcile the shuffle toggle with the controller. A live music queue's shuffle is
-                // authoritative; a book forces it off, so don't read a book's value back. With no live
-                // queue (incl. a just-cleared stale book) push the UI's value so switch and engine agree.
+                // authoritative; a book forces it off (not the user's preference), so don't read a
+                // book's value back or the next music would silently un-shuffle. With no live queue
+                // (incl. a just-cleared stale book) the fresh player defaults to shuffle off, so push
+                // the UI's value to keep the switch and engine in agreement.
                 if (c.mediaItemCount > 0) {
                     if (!liveIsBook) shuffleState.value = c.shuffleModeEnabled
                 } else c.shuffleModeEnabled = shuffleState.value
@@ -474,6 +480,11 @@ class MainActivity : ComponentActivity() {
     /** The root tree URI [item] belongs to, recorded in its extras (or null). */
     private fun playFolderTreeUriOf(item: MediaItem?): String? =
         item?.mediaMetadata?.extras?.getString(MusicScanner.EXTRA_TREE_URI)
+
+    /** Whether [item]'s queue was started in book mode — the mode stamped at start (EXTRA_IS_BOOK),
+     *  deliberately independent of where the abook checkbox stands now. */
+    private fun playIsBookOf(item: MediaItem?): Boolean =
+        item?.mediaMetadata?.extras?.getBoolean(MusicScanner.EXTRA_IS_BOOK) == true
 
     /** Enters [treeUri] from the roots list, showing its top folder and marking it selected. The
      *  folder appears immediately with a cheap fallback label; the real display name is resolved off
@@ -607,8 +618,15 @@ class MainActivity : ComponentActivity() {
         val path = pathState.value
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
+            // The queue's mode is decided here, before the scan, and stamped on every item
+            // (EXTRA_IS_BOOK): the live queue keeps it for its whole life even if the checkbox is
+            // re-toggled later.
+            val key = Settings.bookKey(tree.toString(), folder.documentId)
+            val abook = Settings.isAbook(this@MainActivity, key)
             val items = try {
-                withContext(Dispatchers.IO) { MusicScanner.collectAudio(this@MainActivity, tree, path) }
+                withContext(Dispatchers.IO) {
+                    MusicScanner.collectAudio(this@MainActivity, tree, path, abook)
+                }
             } catch (e: ScanException) {
                 if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
                 return@launch
@@ -618,8 +636,6 @@ class MainActivity : ComponentActivity() {
                 errorState.value = getString(R.string.nothing_to_play)
                 return@launch
             }
-            val key = Settings.bookKey(tree.toString(), folder.documentId)
-            val abook = Settings.isAbook(this@MainActivity, key)
             // Resume an abook from its saved file + offset, rewound 15s for context; new books start at 0.
             val saved = if (abook) Settings.getBookPos(this@MainActivity, key) else null
             val savedIdx = saved?.let { (uri, _) -> items.indexOfFirst { it.mediaId == uri } } ?: -1
@@ -718,9 +734,9 @@ class MainActivity : ComponentActivity() {
                 errorState.value = getString(R.string.nothing_to_play)
                 return@launch
             }
-            val items = MusicScanner.mediaItems(tree, path, files)
             val key = Settings.bookKey(tree.toString(), folder.documentId)
             val abook = Settings.isAbook(this@MainActivity, key)
+            val items = MusicScanner.mediaItems(tree, path, files, abook)
             // Set only on the success path so a failed load leaves playingFolderId untouched.
             playingFolderId = folder.documentId
             startQueue(controller, items, index, abook, key)
@@ -823,6 +839,7 @@ private fun PlayerScreen(
     onShuffleToggle: (Boolean) -> Unit,
     abookEnabled: Boolean,
     abookVisible: Boolean,
+    abookLocked: Boolean,
     playingAbook: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     onEnterRoot: (Uri) -> Unit,
@@ -881,7 +898,7 @@ private fun PlayerScreen(
         NowPlaying(
             controller, error, clearTitleTick, treeUri == null,
             shuffleEnabled, onShuffleToggle,
-            abookEnabled, abookVisible, onAbookToggle,
+            abookEnabled, abookVisible, abookLocked, onAbookToggle,
             playingAbook, onPlayPause,
             speed, speedEnabled, onSpeedChange
         )
@@ -1228,6 +1245,7 @@ private fun NowPlaying(
     onShuffleToggle: (Boolean) -> Unit,
     abookEnabled: Boolean,
     abookVisible: Boolean,
+    abookLocked: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     playingAbook: Boolean,
     onPlayPause: () -> Unit,
@@ -1447,11 +1465,19 @@ private fun NowPlaying(
                 if (abookVisible) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onAbookToggle(!abookEnabled) }
+                        // Locked (greyed, not hidden) while this folder is the live queue: the mode
+                        // is fixed at queue start, so editing it mid-play could only mislead.
+                        modifier = Modifier.clickable(enabled = !abookLocked) {
+                            onAbookToggle(!abookEnabled)
+                        }
                     ) {
                         // The whole row toggles; the box stays non-interactive to avoid a double event.
-                        Checkbox(checked = abookEnabled, onCheckedChange = null)
-                        Text(stringResource(R.string.audiobook_mode))
+                        Checkbox(checked = abookEnabled, onCheckedChange = null, enabled = !abookLocked)
+                        Text(
+                            stringResource(R.string.audiobook_mode),
+                            color = if (abookLocked) MaterialTheme.colorScheme.onSurfaceVariant
+                            else Color.Unspecified
+                        )
                     }
                 }
             }

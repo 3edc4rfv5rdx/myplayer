@@ -27,6 +27,10 @@ object MusicScanner {
     const val EXTRA_PLAY_FOLDER_ID = "com.myplayer.PLAY_FOLDER_ID"
     const val EXTRA_PATH_IDS = "com.myplayer.PATH_IDS"
     const val EXTRA_PATH_NAMES = "com.myplayer.PATH_NAMES"
+    // The mode the queue was *started* with. The live queue keeps this mode for its whole life;
+    // the persisted abook flag may be re-toggled meanwhile, so reconnects must read this, never
+    // Settings.isAbook, or a flipped checkbox would reclassify a playing queue.
+    const val EXTRA_IS_BOOK = "com.myplayer.IS_BOOK"
 
     /** Root node of the granted [treeUri]. */
     fun rootNode(context: Context, treeUri: Uri): Node {
@@ -112,10 +116,16 @@ object MusicScanner {
 
     /** All audio under the folder at the end of [path] (root..folder), recursively, as MediaItems.
      *  [path] is recorded on each item as its ancestor chain; its last node is the play-start folder.
+     *  [isBook] is the mode this queue starts with, stamped on every item (see [EXTRA_IS_BOOK]).
      *  Iterative (explicit stack) so a deeply nested tree can't overflow the call stack.
      *  @throws ScanException if the chosen folder itself can't be read (so the caller can say
      *  "unreadable" rather than "nothing to play"); unreadable *subfolders* are skipped, not fatal. */
-    fun collectAudio(context: Context, treeUri: Uri, path: List<Node>): List<MediaItem> {
+    fun collectAudio(
+        context: Context,
+        treeUri: Uri,
+        path: List<Node>,
+        isBook: Boolean
+    ): List<MediaItem> {
         val out = ArrayList<MediaItem>()
         val playFolderId = path.last().documentId
         val stack = ArrayDeque<List<Node>>()
@@ -134,7 +144,7 @@ object MusicScanner {
                 continue
             }
             if (files.isNotEmpty()) {
-                val ctx = PathContext.of(treeUri, cur, playFolderId)
+                val ctx = PathContext.of(treeUri, cur, playFolderId, isBook)
                 for (file in files) out.add(mediaItem(treeUri, file, ctx))
             }
             // Push subfolders reversed so they pop back in sorted order (pre-order DFS).
@@ -143,9 +153,10 @@ object MusicScanner {
         return out
     }
 
-    /** MediaItems for [files] sitting directly inside the folder at the end of [path] (root..folder). */
-    fun mediaItems(treeUri: Uri, path: List<Node>, files: List<Node>): List<MediaItem> {
-        val ctx = PathContext.of(treeUri, path, path.last().documentId)
+    /** MediaItems for [files] sitting directly inside the folder at the end of [path] (root..folder).
+     *  [isBook] is the mode this queue starts with, stamped on every item (see [EXTRA_IS_BOOK]). */
+    fun mediaItems(treeUri: Uri, path: List<Node>, files: List<Node>, isBook: Boolean): List<MediaItem> {
+        val ctx = PathContext.of(treeUri, path, path.last().documentId, isBook)
         return files.map { mediaItem(treeUri, it, ctx) }
     }
 
@@ -154,18 +165,21 @@ object MusicScanner {
     private class PathContext(
         val treeUri: String,
         val playFolderId: String,
+        val isBook: Boolean,
         val pathIds: Array<String>,
         val pathNames: Array<String>,
         val subtitle: String
     ) {
         companion object {
-            fun of(treeUri: Uri, path: List<Node>, playFolderId: String): PathContext = PathContext(
-                treeUri.toString(),
-                playFolderId,
-                path.map { it.documentId }.toTypedArray(),
-                path.map { it.name }.toTypedArray(),
-                displayDir(path)
-            )
+            fun of(treeUri: Uri, path: List<Node>, playFolderId: String, isBook: Boolean) =
+                PathContext(
+                    treeUri.toString(),
+                    playFolderId,
+                    isBook,
+                    path.map { it.documentId }.toTypedArray(),
+                    path.map { it.name }.toTypedArray(),
+                    displayDir(path)
+                )
         }
     }
 
@@ -175,6 +189,7 @@ object MusicScanner {
         val extras = Bundle().apply {
             putString(EXTRA_TREE_URI, ctx.treeUri)
             putString(EXTRA_PLAY_FOLDER_ID, ctx.playFolderId)
+            putBoolean(EXTRA_IS_BOOK, ctx.isBook)
             putStringArray(EXTRA_PATH_IDS, ctx.pathIds)
             putStringArray(EXTRA_PATH_NAMES, ctx.pathNames)
         }
