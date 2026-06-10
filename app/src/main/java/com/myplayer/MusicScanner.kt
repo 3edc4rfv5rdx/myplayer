@@ -206,9 +206,11 @@ object MusicScanner {
             .build()
     }
 
-    /** Folder path for the subtitle: ancestor names below the root (empty if directly in the root). */
+    /** Folder path for the subtitle: the ancestor chain from the root down. The root name is always
+     *  included, so a track sitting directly in the root still shows where it plays from and the
+     *  path line doesn't blink in and out between tracks of one recursive queue. */
     private fun displayDir(path: List<Node>): String =
-        path.drop(1).joinToString("/") { it.name }
+        path.joinToString("/") { it.name }
 
     private fun isAudio(name: String): Boolean =
         name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS

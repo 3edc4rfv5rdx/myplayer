@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- The folder path above the playing track's name now always starts with the root folder's name.
+  Tracks sitting directly in a root used to show no path at all, so the path line blinked in and
+  out between tracks of one recursive queue (and with several roots it wasn't clear where a track
+  played from).
+
 - Fix: the contextual rewind on book resume no longer accumulates. The saved position now carries a
   timestamp, and the 15s step-back applies only after a real break (2+ minutes); reopening a book
   moments after leaving it resumes exactly. Previously each quick out-and-back re-saved the rewound
