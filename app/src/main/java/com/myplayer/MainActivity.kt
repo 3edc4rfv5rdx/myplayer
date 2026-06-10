@@ -376,13 +376,29 @@ class MainActivity : ComponentActivity() {
                 val liveIsBook = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
                     playFolderIdOf(c.currentMediaItem)?.let { Settings.isAbook(this, Settings.bookKey(t, it)) }
                 } ?: false
+                // A book queue that isn't actively playing on reconnect must not linger as the live
+                // queue: a book paused/dismissed in the shade can outlive the activity (the foreground
+                // service survives), and on relaunch its leftover queue would lock the shuffle switch
+                // and show stale book progress with nothing playing. End it like navigating away from a
+                // stopped book does (clearNowPlayingIfStopped); its saved resume point lets re-entering
+                // the folder pick it back up. A still-playing book stays the live queue, shuffle locked.
+                if (liveIsBook && c.mediaItemCount > 0 && !c.playWhenReady &&
+                    c.playbackState != Player.STATE_ENDED
+                ) {
+                    c.clearMediaItems()
+                    c.stop()
+                    playingFolderId = null
+                    playingDocIdState.value = null
+                    clearTitleTickState.value++
+                }
+                // Reconcile the shuffle toggle with the controller. A live music queue's shuffle is
+                // authoritative; a book forces it off, so don't read a book's value back. With no live
+                // queue (incl. a just-cleared stale book) push the UI's value so switch and engine agree.
                 if (c.mediaItemCount > 0) {
                     if (!liveIsBook) shuffleState.value = c.shuffleModeEnabled
                 } else c.shuffleModeEnabled = shuffleState.value
-                // Reconcile the book flag with the live queue: a restored playingAbook=true after
-                // process death would otherwise lock the shuffle switch with nothing playing (the
-                // service died, so the queue is empty). The STATE_ENDED guard keeps a finished-but-
-                // still-loaded book queue (which saved playingAbook=false) from being re-locked.
+                // Lock shuffle / show book progress only for a genuinely live book; the STATE_ENDED
+                // guard and the stale-book clear above keep a non-playing book from re-locking it.
                 playingAbookState.value =
                     c.mediaItemCount > 0 && liveIsBook && c.playbackState != Player.STATE_ENDED
                 // The service retains its speed across activity recreation; mirror it to the UI, and

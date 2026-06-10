@@ -3,6 +3,12 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Fix: relaunching after a book was paused/dismissed in the shade no longer reopens onto a ghost
+  book — a leftover non-playing book queue that outlived the activity (the foreground service
+  survives) is now ended on reconnect, so the shuffle switch is free and the stale book progress/
+  paths are gone. The book's saved resume point still lets re-entering its folder pick it back up.
+
 ## v0.4.20260610+101
 
 - Docs: refreshed README to cover audiobook mode (sequential play, resume position, per-folder
