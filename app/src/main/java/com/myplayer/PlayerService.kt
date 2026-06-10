@@ -110,6 +110,9 @@ class PlayerService : MediaSessionService() {
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && (player?.mediaItemCount ?: 0) > 0) {
                     bookFolderKey?.let { Settings.clearBookPos(this@PlayerService, it) }
+                    // Stop tracking this book so a later teardown (swipe-away/kill) can't re-save the
+                    // end position over the cleared resume point; the next queue resends its book mode.
+                    bookFolderKey = null
                 }
             }
 

@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: a fully finished audiobook now correctly starts over next time. Previously, if the app was
+  swiped away or killed after a book reached its end, the player re-saved the end position over the
+  just-cleared resume point, so reopening the book jumped to its final seconds instead of restarting.
+
 - Fix: the shuffle preference is no longer silently turned off after an activity recreation (e.g.
   screen rotation) that happens while a book plays. A book forces shuffle off internally; that value
   was being read back as the user's setting, so the next music after the book ended played unshuffled.
