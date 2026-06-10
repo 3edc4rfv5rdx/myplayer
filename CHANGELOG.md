@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: folders and files are now sorted in natural (human) order, so "Chapter 2" comes before
+  "Chapter 10" and "CD2" before "CD10". Books with unpadded chapter numbers play in the right order.
+  Already-cached listings keep the old order until "Rescan music" rebuilds them.
+
 - Fix: deleting a book folder now runs the recursive storage delete (and cache cleanup) off the main
   thread, so deleting a large book no longer freezes the UI or risks an ANR. A second confirm while a
   delete is still running is ignored.

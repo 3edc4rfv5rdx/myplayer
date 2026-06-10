@@ -74,9 +74,40 @@ object MusicScanner {
                 }
             }
         }
-        folders.sortBy { it.name.lowercase() }
-        files.sortBy { it.name.lowercase() }
+        folders.sortWith(NODE_NATURAL_ORDER)
+        files.sortWith(NODE_NATURAL_ORDER)
         return folders to files
+    }
+
+    /** Natural (human) order by name: numeric runs compare as numbers so "Chapter 2" precedes
+     *  "Chapter 10", text runs compare case-insensitively under Locale.ROOT (locale-independent). */
+    private val NODE_NATURAL_ORDER = Comparator<Node> { a, b -> naturalCompare(a.name, b.name) }
+
+    private fun naturalCompare(a: String, b: String): Int {
+        var i = 0
+        var j = 0
+        while (i < a.length && j < b.length) {
+            val ca = a[i]
+            val cb = b[j]
+            if (ca.isDigit() && cb.isDigit()) {
+                // Span each digit run and compare numerically (string-length on overflow).
+                val startA = i
+                val startB = j
+                while (i < a.length && a[i].isDigit()) i++
+                while (j < b.length && b[j].isDigit()) j++
+                val numA = a.substring(startA, i).trimStart('0')
+                val numB = b.substring(startB, j).trimStart('0')
+                val cmp = if (numA.length != numB.length) numA.length - numB.length
+                          else numA.compareTo(numB)
+                if (cmp != 0) return cmp
+            } else {
+                val cmp = ca.lowercaseChar().compareTo(cb.lowercaseChar())
+                if (cmp != 0) return cmp
+                i++
+                j++
+            }
+        }
+        return (a.length - i) - (b.length - j)
     }
 
     /** All audio under the folder at the end of [path] (root..folder), recursively, as MediaItems.
