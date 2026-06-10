@@ -4,6 +4,13 @@ Newest entries on top.
 
 ## Unreleased
 
+- The speed button now belongs to the book open in the browser (the same referent as the abook
+  checkbox), not to whatever is playing. It is enabled whenever the browser is inside a book —
+  including a book that isn't playing, so a book's speed can be set up front — and edits that
+  book's saved speed; the edit is applied (and previewed) audibly only when that book is the live
+  queue. In plain music folders the button stays disabled (music is always 1.0×), and it no longer
+  silently changed the playing book's speed while browsing an unrelated folder.
+
 - Fix: a race at queue end could leave the shuffle switch locked and the speed button live with
   nothing playing. When a book (or playlist) finishes, the service clears the queue; the activity's
   end-of-queue cleanup was guarded on a non-empty queue, but controller events coalesce, so the

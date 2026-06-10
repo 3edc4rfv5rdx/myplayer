@@ -146,11 +146,15 @@ class MainActivity : ComponentActivity() {
     // readout, which is meaningless for shuffled music.
     private val playingAbookState = mutableStateOf(false)
 
-    // Playback speed of the live queue's folder; mirrored to the controller and persisted per folder.
-    private val playbackSpeedState = mutableStateOf(Settings.SPEED_DEFAULT)
+    // The book open in the browser (own flag or inherited): its root's key and saved speed. The
+    // speed button edits *this* book — the same referent as the abook checkbox — never some other
+    // folder's live queue. Null/default in plain folders and on the home screen.
+    private val browsedBookKeyState = mutableStateOf<String?>(null)
+    private val browsedBookSpeedState = mutableStateOf(Settings.SPEED_DEFAULT)
 
-    // Book key of the folder the live queue plays from; null when nothing is playing. Drives the
-    // speed button (enabled + which folder its value is saved under). Set when a queue is installed.
+    // Book key of the folder the live queue plays from; null when nothing is playing. Locks the
+    // abook checkbox of that folder, and gates applying a speed edit to the live player (only when
+    // the browsed book *is* the live queue). Set when a queue is installed.
     private val playingFolderKeyState = mutableStateOf<String?>(null)
 
     // documentId of the folder the current playback was started from.
@@ -269,17 +273,22 @@ class MainActivity : ComponentActivity() {
                                 abookState.value = currentFolderKey != null &&
                                     Settings.isAbook(this@MainActivity, currentFolderKey)
                                 val t = treeUriState.value
-                                abookInheritedState.value = t != null &&
-                                    pathState.value.dropLast(1).any {
-                                        Settings.isAbook(
-                                            this@MainActivity,
-                                            Settings.bookKey(t.toString(), it.documentId)
-                                        )
-                                    }
+                                val p = pathState.value
+                                val bookPath =
+                                    if (t != null && p.isNotEmpty()) bookRootPath(t, p) else null
+                                // Inherited = the outermost flagged folder is a strict ancestor.
+                                abookInheritedState.value =
+                                    bookPath != null && bookPath.size < p.size
+                                val bookKey = bookPath?.let {
+                                    Settings.bookKey(t!!.toString(), it.last().documentId)
+                                }
+                                browsedBookKeyState.value = bookKey
+                                browsedBookSpeedState.value = bookKey
+                                    ?.let { Settings.getSpeed(this@MainActivity, it) }
+                                    ?: Settings.SPEED_DEFAULT
                             }
-                            // Speed drives the live queue, so it is controllable whenever something
-                            // is playing (keyed by the playing folder, not whatever the browser shows).
-                            val playbackSpeed by playbackSpeedState
+                            val browsedBookKey by browsedBookKeyState
+                            val browsedBookSpeed by browsedBookSpeedState
                             val playingFolderKey by playingFolderKeyState
                             // Locked when the mode isn't this folder's to edit: inherited from an
                             // ancestor book (editable only there), or the folder is the live
@@ -333,13 +342,19 @@ class MainActivity : ComponentActivity() {
                             onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() },
-                            speed = playbackSpeed,
-                            speedEnabled = playingFolderKey != null,
+                            speed = browsedBookSpeed,
+                            speedEnabled = browsedBookKey != null,
+                            speedLive = browsedBookKey != null &&
+                                browsedBookKey == playingFolderKey,
                             onSpeedChange = { s ->
-                                playingFolderKey?.let { key ->
+                                browsedBookKey?.let { key ->
                                     Settings.setSpeed(this, key, s)
-                                    controllerState.value?.setPlaybackSpeed(s)
-                                    playbackSpeedState.value = s
+                                    browsedBookSpeedState.value = s
+                                    // The browsed book is also the live queue: apply audibly now.
+                                    // Otherwise it's just the saved speed for its next start.
+                                    if (key == playingFolderKey) {
+                                        controllerState.value?.setPlaybackSpeed(s)
+                                    }
                                 }
                             }
                             )
@@ -419,9 +434,9 @@ class MainActivity : ComponentActivity() {
                 // guard and the stale-book clear above keep a non-playing book from re-locking it.
                 playingAbookState.value =
                     c.mediaItemCount > 0 && liveIsBook && c.playbackState != Player.STATE_ENDED
-                // The service retains its speed across activity recreation; mirror it to the UI, and
-                // recover which folder it plays from so the speed button stays live.
-                playbackSpeedState.value = c.playbackParameters.speed
+                // Recover which folder the live queue plays from (abook-checkbox lock and live
+                // speed-apply both key off it). The speed *value* shown is the browsed book's
+                // saved one, so nothing needs mirroring from the player here.
                 playingFolderKeyState.value = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
                     playFolderIdOf(c.currentMediaItem)?.let { Settings.bookKey(t, it) }
                 }
@@ -733,15 +748,13 @@ class MainActivity : ComponentActivity() {
         // Speed is an audiobook feature: books restore their saved (or default) speed; plain music
         // always plays at 1.0, never inheriting a previous book's speed or the global default.
         if (abook && bookFolderKey != null) applyFolderSpeed(controller, bookFolderKey)
-        else { controller.setPlaybackSpeed(Settings.SPEED_DEFAULT); playbackSpeedState.value = Settings.SPEED_DEFAULT }
+        else controller.setPlaybackSpeed(Settings.SPEED_DEFAULT)
         sendBookMode(controller, if (abook) bookFolderKey else null)
     }
 
-    /** Applies the folder's saved (or default) playback speed to [controller] and mirrors it to the UI. */
+    /** Applies the folder's saved (or default) playback speed to [controller]. */
     private fun applyFolderSpeed(controller: MediaController, folderKey: String) {
-        val speed = Settings.getSpeed(this, folderKey)
-        controller.setPlaybackSpeed(speed)
-        playbackSpeedState.value = speed
+        controller.setPlaybackSpeed(Settings.getSpeed(this, folderKey))
     }
 
     /** Tells the service which book the active queue belongs to (null = plain music, no tracking). */
@@ -918,6 +931,7 @@ private fun PlayerScreen(
     onPlayPause: () -> Unit,
     speed: Float,
     speedEnabled: Boolean,
+    speedLive: Boolean,
     onSpeedChange: (Float) -> Unit
 ) {
     Column(
@@ -963,7 +977,7 @@ private fun PlayerScreen(
             shuffleEnabled, onShuffleToggle,
             abookEnabled, abookVisible, abookLocked, onAbookToggle,
             playingAbook, onPlayPause,
-            speed, speedEnabled, onSpeedChange
+            speed, speedEnabled, speedLive, onSpeedChange
         )
         Spacer(Modifier.height(32.dp))
     }
@@ -1314,6 +1328,7 @@ private fun NowPlaying(
     onPlayPause: () -> Unit,
     speed: Float,
     speedEnabled: Boolean,
+    speedLive: Boolean,
     onSpeedChange: (Float) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
@@ -1577,10 +1592,12 @@ private fun NowPlaying(
             // keeps its height when hidden so next never shifts.
             Box(modifier = Modifier.height(36.dp), contentAlignment = Alignment.CenterEnd) {
                 if (abookVisible) {
-                    // Speed is an audiobook feature; for plain music the button stays disabled (grey).
+                    // Speed is an audiobook feature: enabled whenever the browser is in a book,
+                    // editing that book's saved speed (applied live only when that book is the
+                    // live queue). For plain music the button stays disabled (grey) — always 1.0.
                     SpeedButton(
                         label = formatSpeed(speed),
-                        enabled = speedEnabled && playingAbook && controller != null,
+                        enabled = speedEnabled,
                         onClick = { showSpeedDialog = true }
                     )
                 }
@@ -1590,7 +1607,9 @@ private fun NowPlaying(
     if (showSpeedDialog) {
         SpeedDialog(
             initial = speed,
-            onPreview = { controller?.setPlaybackSpeed(it) }, // audible while dragging
+            // Audible while dragging, but only when the edited book is what's actually playing;
+            // a book that isn't the live queue must not drag someone else's playback speed around.
+            onPreview = { if (speedLive) controller?.setPlaybackSpeed(it) },
             onConfirm = onSpeedChange,
             onDismiss = { showSpeedDialog = false }
         )

@@ -52,9 +52,10 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - A book plays **sequentially** — shuffle is locked off while a book is the live queue.
 - It **remembers its position**: stopping and returning later (press Play in the same folder) resumes
   where you left off, rewound a few seconds for context.
-- Each book keeps its **own playback speed** (button next to the controls, with a live-preview
-  dialog); new books start at the **Abook default speed** from Settings. Plain music always plays at
-  1.0×.
+- Each book keeps its **own playback speed**: the speed button is enabled whenever the browser is
+  inside a book (playing or not) and edits that book's saved speed, with an audible live preview
+  when that book is what's playing. New books start at the **Abook default speed** from Settings.
+  Plain music always plays at 1.0× (the button stays disabled there).
 - While a book plays, a **progress readout** shows the current file (N/M) and an approximate overall
   percent with a thin bar.
 
