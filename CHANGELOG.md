@@ -4,6 +4,15 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: book mode now covers the book's whole subtree. Previously only the flagged folder itself
+  counted: tapping a chapter file inside a book's subfolder (CD1/CD2/…), or playing such a
+  subfolder, played it as shuffled music at 1.0× with no resume tracking, and a queue started from
+  a tapped file wasn't recursive (the book ended early). Now any play action inside a book plays
+  the book: the queue is always the full book from its root, the resume position and speed stay
+  keyed to the book, tapping a file or a subfolder jumps there, the big Play anywhere in a paused
+  book's subtree resumes it, and the abook checkbox in subfolders shows the inherited state
+  (locked — the flag is editable only on the book folder itself).
+
 - Fix: the live queue's book/music mode is now stamped on the queue when it starts and read back
   from there on reconnect, instead of re-reading the folder's current abook flag. Toggling the
   checkbox mid-play could reclassify the playing queue after a rotation/relaunch: shuffled music

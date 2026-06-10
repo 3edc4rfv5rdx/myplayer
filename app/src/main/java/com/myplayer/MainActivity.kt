@@ -137,6 +137,11 @@ class MainActivity : ComponentActivity() {
     // Settings.isAbook for the open folder; kept in sync as the browser navigates.
     private val abookState = mutableStateOf(false)
 
+    // Whether the open folder sits inside a book (an ancestor is flagged abook). Book mode covers
+    // the whole subtree, so the checkbox then shows checked and is locked — the mode belongs to
+    // the ancestor and is only editable there.
+    private val abookInheritedState = mutableStateOf(false)
+
     // Whether the live queue is a book (set when a queue is installed). Gates the book progress
     // readout, which is meaningless for shuffled music.
     private val playingAbookState = mutableStateOf(false)
@@ -259,20 +264,30 @@ class MainActivity : ComponentActivity() {
                                 path.lastOrNull()?.let { Settings.bookKey(t.toString(), it.documentId) }
                             }
                             val abook by abookState
+                            val abookInherited by abookInheritedState
                             LaunchedEffect(currentFolderKey) {
                                 abookState.value = currentFolderKey != null &&
                                     Settings.isAbook(this@MainActivity, currentFolderKey)
+                                val t = treeUriState.value
+                                abookInheritedState.value = t != null &&
+                                    pathState.value.dropLast(1).any {
+                                        Settings.isAbook(
+                                            this@MainActivity,
+                                            Settings.bookKey(t.toString(), it.documentId)
+                                        )
+                                    }
                             }
                             // Speed drives the live queue, so it is controllable whenever something
                             // is playing (keyed by the playing folder, not whatever the browser shows).
                             val playbackSpeed by playbackSpeedState
                             val playingFolderKey by playingFolderKeyState
-                            // The open folder is the live queue's folder: lock the checkbox (like
-                            // shuffle while a book plays). The queue keeps its start mode anyway, so
-                            // an edit here would silently apply only on the next start — confusing —
-                            // and worse, let the flag contradict what is audibly playing.
-                            val abookLocked =
-                                currentFolderKey != null && currentFolderKey == playingFolderKey
+                            // Locked when the mode isn't this folder's to edit: inherited from an
+                            // ancestor book (editable only there), or the folder is the live
+                            // queue's folder — the queue keeps its start mode anyway, so an edit
+                            // would silently apply only on the next start — confusing — and worse,
+                            // let the flag contradict what is audibly playing.
+                            val abookLocked = abookInherited ||
+                                (currentFolderKey != null && currentFolderKey == playingFolderKey)
                             PlayerScreen(
                             controller = controller,
                             roots = roots,
@@ -289,7 +304,7 @@ class MainActivity : ComponentActivity() {
                                 shuffleState.value = it
                                 controllerState.value?.shuffleModeEnabled = it
                             },
-                            abookEnabled = abook,
+                            abookEnabled = abook || abookInherited,
                             abookVisible = currentFolderKey != null,
                             abookLocked = abookLocked,
                             playingAbook = playingAbook,
@@ -586,9 +601,14 @@ class MainActivity : ComponentActivity() {
         }
         val index = selectedIndexState.value
         val dir = pathState.value.lastOrNull()
+        // Compare against the folder a Play here would actually start — the enclosing book root
+        // when inside a book — so Play anywhere in a paused book's subtree resumes it in place.
+        val playTargetId = treeUriState.value
+            ?.let { bookRootPath(it, pathState.value)?.last()?.documentId }
+            ?: dir?.documentId
         when {
             index != null && dir != null -> playFile(dir, index)
-            dir != null && dir.documentId != playingFolderId -> playFolder(dir)
+            dir != null && playTargetId != playingFolderId -> playFolder(dir)
             // Treat an ended queue as no queue: resuming it would restart a finished book from file 1
             // untracked (and with shuffle unlocked). Inside a folder we re-run playFolder, which
             // re-installs book mode/speed/tracking; at home (no folder) there is nothing to resume.
@@ -610,22 +630,38 @@ class MainActivity : ComponentActivity() {
         finishAndRemoveTask()
     }
 
+    /** The path prefix ending at the outermost folder flagged abook, or null when nothing on
+     *  [path] is flagged. Book mode is inherited by the whole subtree: any play action inside a
+     *  book plays that book, so its queue, resume key, and speed stay the book's own. */
+    private fun bookRootPath(tree: Uri, path: List<Node>): List<Node>? {
+        for (i in path.indices) {
+            if (Settings.isAbook(this, Settings.bookKey(tree.toString(), path[i].documentId))) {
+                return path.subList(0, i + 1)
+            }
+        }
+        return null
+    }
+
     /** Plays everything under [folder] recursively. ExoPlayer's shuffle (toggled live) handles the
-     *  order; with shuffle on we start on a random track, off starts from the top. */
+     *  order; with shuffle on we start on a random track, off starts from the top. Inside a book
+     *  the queue is the whole book (recursive from the book root): the book root itself resumes
+     *  from the saved position, a subfolder is an explicit jump to that part's first track. */
     private fun playFolder(folder: Node) {
         if (controllerState.value == null) return
         val tree = treeUriState.value ?: return
         val path = pathState.value
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
-            // The queue's mode is decided here, before the scan, and stamped on every item
-            // (EXTRA_IS_BOOK): the live queue keeps it for its whole life even if the checkbox is
-            // re-toggled later.
-            val key = Settings.bookKey(tree.toString(), folder.documentId)
-            val abook = Settings.isAbook(this@MainActivity, key)
+            // The queue's root and mode are decided here, before the scan, and stamped on every
+            // item (EXTRA_IS_BOOK): the live queue keeps them for its whole life even if the
+            // checkbox is re-toggled later.
+            val bookPath = bookRootPath(tree, path)
+            val abook = bookPath != null
+            val queuePath = bookPath ?: path
+            val key = Settings.bookKey(tree.toString(), queuePath.last().documentId)
             val items = try {
                 withContext(Dispatchers.IO) {
-                    MusicScanner.collectAudio(this@MainActivity, tree, path, abook)
+                    MusicScanner.collectAudio(this@MainActivity, tree, queuePath, abook)
                 }
             } catch (e: ScanException) {
                 if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
@@ -636,10 +672,19 @@ class MainActivity : ComponentActivity() {
                 errorState.value = getString(R.string.nothing_to_play)
                 return@launch
             }
+            // Playing a folder strictly inside the book jumps to its first track (falls through to
+            // the resume logic if that subfolder turned out to hold no audio).
+            val jumpIdx = if (abook && queuePath.size < path.size) {
+                items.indexOfFirst {
+                    it.mediaMetadata.extras?.getStringArray(MusicScanner.EXTRA_PATH_IDS)
+                        ?.contains(folder.documentId) == true
+                }
+            } else -1
             // Resume an abook from its saved file + offset, rewound 15s for context; new books start at 0.
-            val saved = if (abook) Settings.getBookPos(this@MainActivity, key) else null
+            val saved = if (abook && jumpIdx < 0) Settings.getBookPos(this@MainActivity, key) else null
             val savedIdx = saved?.let { (uri, _) -> items.indexOfFirst { it.mediaId == uri } } ?: -1
             val start = when {
+                jumpIdx >= 0 -> jumpIdx
                 abook -> savedIdx.coerceAtLeast(0)
                 shuffleState.value -> items.indices.random()
                 else -> 0
@@ -648,7 +693,7 @@ class MainActivity : ComponentActivity() {
                 if (savedIdx >= 0) (saved!!.second - 15_000).coerceAtLeast(0L) else 0L
             // Mark this folder as playing only now that a queue is actually starting; a failed or
             // empty scan must leave playingFolderId pointing at whatever was playing before.
-            playingFolderId = folder.documentId
+            playingFolderId = queuePath.last().documentId
             startQueue(controller, items, start, abook, key, startPos)
         }
     }
@@ -713,7 +758,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Plays the selected file first, then the rest of the folder. ExoPlayer's shuffle (toggled
-     *  live) decides whether the remainder is shuffled or continues in scan order. The selection is
+     *  live) decides whether the remainder is shuffled or continues in scan order. Inside a book
+     *  (own flag or inherited) the tap means "jump to this chapter": the queue becomes the whole
+     *  book, recursive from the book root, positioned at the tapped file. The selection is
      *  cleared only once playback actually starts, so a failed load leaves it intact. */
     private fun playFile(folder: Node, index: Int) {
         if (controllerState.value == null) return
@@ -721,25 +768,36 @@ class MainActivity : ComponentActivity() {
         val path = pathState.value
         playbackLoadJob?.cancel()
         playbackLoadJob = lifecycleScope.launch {
-            val files = try {
+            val bookPath = bookRootPath(tree, path)
+            val loaded = try {
                 withContext(Dispatchers.IO) {
-                    FolderCache.children(this@MainActivity, tree, folder).second
+                    val files = FolderCache.children(this@MainActivity, tree, folder).second
+                    val items =
+                        if (bookPath != null)
+                            MusicScanner.collectAudio(this@MainActivity, tree, bookPath, true)
+                        else MusicScanner.mediaItems(tree, path, files, false)
+                    files to items
                 }
             } catch (e: ScanException) {
                 if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
                 return@launch
             }
+            val (files, items) = loaded
             val controller = liveController() ?: return@launch
-            if (index !in files.indices) {
+            if (index !in files.indices || items.isEmpty()) {
                 errorState.value = getString(R.string.nothing_to_play)
                 return@launch
             }
-            val key = Settings.bookKey(tree.toString(), folder.documentId)
-            val abook = Settings.isAbook(this@MainActivity, key)
-            val items = MusicScanner.mediaItems(tree, path, files, abook)
+            val queueRoot = bookPath?.last() ?: folder
+            val key = Settings.bookKey(tree.toString(), queueRoot.documentId)
+            val start = if (bookPath != null) {
+                val uri = DocumentsContract
+                    .buildDocumentUriUsingTree(tree, files[index].documentId).toString()
+                items.indexOfFirst { it.mediaId == uri }.coerceAtLeast(0)
+            } else index
             // Set only on the success path so a failed load leaves playingFolderId untouched.
-            playingFolderId = folder.documentId
-            startQueue(controller, items, index, abook, key)
+            playingFolderId = queueRoot.documentId
+            startQueue(controller, items, start, bookPath != null, key)
             selectedIndexState.value = null
         }
     }
