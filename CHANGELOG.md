@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: the contextual rewind on book resume no longer accumulates. The saved position now carries a
+  timestamp, and the 15s step-back applies only after a real break (2+ minutes); reopening a book
+  moments after leaving it resumes exactly. Previously each quick out-and-back re-saved the rewound
+  position and ate another 15s.
+
 - A paused book now behaves exactly like paused music: its queue survives browsing away and
   activity relaunches, and the big Play resumes it in place (no restart, no rewind). Previously
   pausing a book and navigating up — or pausing it in the shade and reopening the app — silently

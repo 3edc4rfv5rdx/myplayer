@@ -677,17 +677,23 @@ class MainActivity : ComponentActivity() {
                         ?.contains(folder.documentId) == true
                 }
             } else -1
-            // Resume an abook from its saved file + offset, rewound 15s for context; new books start at 0.
+            // Resume an abook from its saved file + offset; new books start at 0.
             val saved = if (abook && jumpIdx < 0) Settings.getBookPos(this@MainActivity, key) else null
-            val savedIdx = saved?.let { (uri, _) -> items.indexOfFirst { it.mediaId == uri } } ?: -1
+            val savedIdx = saved?.let { s -> items.indexOfFirst { it.mediaId == s.fileUri } } ?: -1
             val start = when {
                 jumpIdx >= 0 -> jumpIdx
                 abook -> savedIdx.coerceAtLeast(0)
                 shuffleState.value -> items.indices.random()
                 else -> 0
             }
-            val startPos =
-                if (savedIdx >= 0) (saved!!.second - 15_000).coerceAtLeast(0L) else 0L
+            // Rewind for context only after a real break; the rewound position is re-saved on the
+            // next pause, so without the age check every quick out-and-back ate another 15s.
+            val pausedFor = saved?.savedAtMs?.let { System.currentTimeMillis() - it }
+            val rewind =
+                if (pausedFor == null || pausedFor >= Settings.RESUME_REWIND_MIN_PAUSE_MS)
+                    Settings.RESUME_REWIND_MS
+                else 0L
+            val startPos = if (savedIdx >= 0) (saved!!.ms - rewind).coerceAtLeast(0L) else 0L
             // Mark this folder as playing only now that a queue is actually starting; a failed or
             // empty scan must leave playingFolderId pointing at whatever was playing before.
             playingFolderId = queuePath.last().documentId
