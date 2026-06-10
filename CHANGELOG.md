@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: deleting a subfolder while a recursive parent queue is playing now removes that subfolder's
+  tracks from the queue, instead of leaving them to fail later with a cryptic file-not-found error.
+
 - Fix: the Play button no longer resurrects a finished queue. Pressing Play inside a folder whose
   book just ended now restarts it properly (book mode, speed, and position tracking re-installed)
   instead of replaying it untracked from the first file; at the roots home screen an ended queue's

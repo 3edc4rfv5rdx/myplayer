@@ -753,15 +753,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Stops and clears playback when the playing track lives inside [folder] (so deleting it can't
-     *  leave the player on now-dangling content URIs). */
+    /** Stops and clears playback when the playing track lives inside [folder]. When only *other*
+     *  queued tracks (from a recursive parent queue) are under [folder], those items are removed
+     *  instead — so deleting it can't leave the player on now-dangling content URIs. */
     private fun stopIfPlayingUnder(folder: Node) {
         val controller = controllerState.value ?: return
-        val extras = controller.currentMediaItem?.mediaMetadata?.extras ?: return
-        val ids = extras.getStringArray(MusicScanner.EXTRA_PATH_IDS)
-        val playFolderId = extras.getString(MusicScanner.EXTRA_PLAY_FOLDER_ID)
+        val extras = controller.currentMediaItem?.mediaMetadata?.extras
+        val ids = extras?.getStringArray(MusicScanner.EXTRA_PATH_IDS)
+        val playFolderId = extras?.getString(MusicScanner.EXTRA_PLAY_FOLDER_ID)
         val under = playFolderId == folder.documentId || ids?.contains(folder.documentId) == true
-        if (!under) return
+        if (!under) {
+            // The current track is elsewhere, but a recursive queue may still hold tracks under the
+            // deleted folder. Drop them (backwards, so indices stay valid) before they go dangling.
+            for (i in controller.mediaItemCount - 1 downTo 0) {
+                val itemIds = controller.getMediaItemAt(i)
+                    .mediaMetadata.extras?.getStringArray(MusicScanner.EXTRA_PATH_IDS)
+                if (itemIds?.contains(folder.documentId) == true) controller.removeMediaItem(i)
+            }
+            return
+        }
         controller.pause()
         controller.clearMediaItems()
         controller.stop()
