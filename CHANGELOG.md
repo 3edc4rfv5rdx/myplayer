@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs: refreshed README to cover audiobook mode (sequential play, resume position, per-folder
+  speed), folder deletion, natural-order sorting, and the current settings.
+
 - Internal: the periodic resume-point save now runs only while playback is active (started on play,
   stopped on pause/stop) instead of waking the main looper every 10s for the life of the service.
 
