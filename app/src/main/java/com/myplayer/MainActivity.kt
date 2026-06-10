@@ -363,11 +363,14 @@ class MainActivity : ComponentActivity() {
                 // live playlist was started from so Play in the same folder resumes, not restarts.
                 playingFolderId = playFolderIdOf(c.currentMediaItem)
                 followPlayingTrack(c.currentMediaItem)
-                // Reconcile the shuffle toggle with the controller. A live queue (survived activity
-                // or process recreation) is authoritative; otherwise the fresh player defaults to
-                // shuffle off, so push the UI's value to keep the switch and engine in agreement.
-                if (c.mediaItemCount > 0) shuffleState.value = c.shuffleModeEnabled
-                else c.shuffleModeEnabled = shuffleState.value
+                // Reconcile the shuffle toggle with the controller. A live music queue's shuffle is
+                // authoritative; a book's shuffle is forced off (not the user's preference), so don't
+                // read it back or the next music after the book ends would silently un-shuffle.
+                // With no live queue the fresh player defaults to shuffle off, so push the UI's value
+                // to keep the switch and engine in agreement.
+                if (c.mediaItemCount > 0) {
+                    if (!playingAbookState.value) shuffleState.value = c.shuffleModeEnabled
+                } else c.shuffleModeEnabled = shuffleState.value
                 // The service retains its speed across activity recreation; mirror it to the UI, and
                 // recover which folder it plays from so the speed button stays live.
                 playbackSpeedState.value = c.playbackParameters.speed

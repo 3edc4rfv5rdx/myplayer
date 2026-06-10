@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: the shuffle preference is no longer silently turned off after an activity recreation (e.g.
+  screen rotation) that happens while a book plays. A book forces shuffle off internally; that value
+  was being read back as the user's setting, so the next music after the book ended played unshuffled.
+
 - Fix: the shuffle toggle and the audiobook checkbox no longer act on an unrelated live queue based
   on the folder shown in the browser. Shuffle is now locked precisely while a book is the queue
   actually playing (so wandering to another folder can't re-enable it and scramble the book), and
