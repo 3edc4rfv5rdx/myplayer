@@ -118,7 +118,15 @@ class PlayerService : MediaSessionService() {
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
-                    bookFolderKey?.let { Settings.clearBookPos(this@PlayerService, it) }
+                    bookFolderKey?.let {
+                        Settings.clearBookPos(this@PlayerService, it)
+                        // The finished book's cached durations go with the resume point; a
+                        // re-listen re-resolves them lazily.
+                        DurationCache.remove(
+                            this@PlayerService,
+                            List(player.mediaItemCount) { i -> player.getMediaItemAt(i).mediaId }
+                        )
+                    }
                     // Stop tracking this book so a later teardown (swipe-away/kill) can't re-save the
                     // end position over the cleared resume point; the next queue resends its book mode.
                     bookFolderKey = null

@@ -4,6 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
+- The duration cache no longer leaves stale rows behind: a book's cached durations are removed
+  when it finishes (together with its resume point) and when its folder is deleted from storage.
+  Both paths share one cleanup function (`DurationCache.remove`). Re-listening to a finished book
+  re-resolves its durations lazily on the first open.
+
 - Book progress is now measured in time, not files. A new persistent duration cache (the
   `durations` table in `app.db`) stores each file's duration, filled lazily the first time a book's
   queue needs it and cleared by Rescan music; the percent readout then weighs every chapter by its

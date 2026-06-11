@@ -11,8 +11,9 @@ import kotlinx.coroutines.ensureActive
 /** Persistent per-file duration cache in the `durations` table of [AppDb], filled lazily with
  *  MediaMetadataRetriever the first time a book queue needs it (time-based book progress). Keyed
  *  by the file's document uri. A file whose duration can't be read is stored as 0, so a broken
- *  file never blocks the whole book's data from completing; Rescan drops the table along with the
- *  listing cache (see [FolderCache.clear]). */
+ *  file never blocks the whole book's data from completing. Cleanup: Rescan drops the whole table
+ *  with the listing cache ([FolderCache.clear]); a finished book's rows and a deleted folder's
+ *  rows are removed via [remove]. */
 object DurationCache {
 
     /** Durations (ms) for [uris] in the same order, resolving and caching the missing ones.
@@ -34,6 +35,18 @@ object DurationCache {
                 coroutineContext.ensureActive()
                 resolve(context, uris[i]).also { store(db, uris[i], it) }
             }
+        }
+    }
+
+    /** Drops the cached durations of [uris] — the shared cleanup for the cases where the rows
+     *  would only sit as dirt: the book finished (PlayerService) or its files were deleted from
+     *  storage (FolderCache.invalidateSubtree). A re-listen just re-resolves lazily. */
+    fun remove(context: Context, uris: List<String>) {
+        val db = AppDb.db(context)
+        // SQLite caps bound parameters; delete in chunks.
+        for (chunk in uris.chunked(500)) {
+            val placeholders = chunk.joinToString(",") { "?" }
+            db.delete("durations", "uri IN ($placeholders)", chunk.toTypedArray())
         }
     }
 
