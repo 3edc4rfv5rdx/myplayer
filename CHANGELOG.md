@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Settings.kt is plain text again: the literal NUL byte in the book-key separator is now the
+  `\u0000` escape (same key bytes, no migration).
+
 - Clearing audiobook state now deletes the settings rows instead of leaving empty ones behind.
 
 ## v0.4.20260611+116
