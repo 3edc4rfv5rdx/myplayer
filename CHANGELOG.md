@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Removing a root folder now also forgets its audiobook flags, positions, speeds, and cached
+  durations, so re-adding it starts clean.
+
 - Settings.kt is plain text again: the literal NUL byte in the book-key separator is now the
   `\u0000` escape (same key bytes, no migration).
 

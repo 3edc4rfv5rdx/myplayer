@@ -209,4 +209,24 @@ object Settings {
         remove(context, KEY_POS_PREFIX + folderKey)
         remove(context, KEY_SPEED_PREFIX + folderKey)
     }
+
+    /** Forgets every per-folder book state row under [treeUri] (modes, positions, speeds).
+     *  Removing a root forgets its books too; re-adding the same tree later starts clean. */
+    fun clearRootState(context: Context, treeUri: String) {
+        // bookKey is "<treeUri>\u0000<docId>", so the per-tree prefix ends at the separator.
+        val keyPrefixes =
+            listOf(KEY_MODE_PREFIX, KEY_POS_PREFIX, KEY_SPEED_PREFIX).map { it + treeUri + '\u0000' }
+        synchronized(lock) {
+            for (key in cache.keys) {
+                if (keyPrefixes.any { key.startsWith(it) }) cache[key] = null
+            }
+        }
+        val app = context.applicationContext
+        writer.execute {
+            val db = AppDb.db(app)
+            for (prefix in keyPrefixes) {
+                db.delete("settings", "key LIKE ? ESCAPE '\\'", arrayOf(AppDb.likePrefix(prefix)))
+            }
+        }
+    }
 }

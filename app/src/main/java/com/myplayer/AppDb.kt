@@ -15,6 +15,11 @@ object AppDb {
         return h.writableDatabase
     }
 
+    /** [prefix] as a SQL `LIKE ? ESCAPE '\'` prefix pattern: wildcard and escape characters in the
+     *  literal text escaped (content uris contain `%`), trailing `%` appended. */
+    fun likePrefix(prefix: String): String =
+        prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
     private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 3) {
         override fun onCreate(db: SQLiteDatabase) {
             createCacheTables(db)

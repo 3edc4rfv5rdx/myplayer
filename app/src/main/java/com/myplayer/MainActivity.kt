@@ -622,6 +622,9 @@ class MainActivity : ComponentActivity() {
         }
         if (selectedRootState.value == treeUri) selectedRootState.value = null
         rootsState.value = Settings.removeRoot(this, treeUri.toString()).map(Uri::parse)
+        // Removing a root forgets it entirely: book flags/positions/speeds go with the listings,
+        // so re-adding the same tree later starts clean.
+        Settings.clearRootState(this, treeUri.toString())
         FolderCache.clearRoot(this, treeUri)
     }
 
