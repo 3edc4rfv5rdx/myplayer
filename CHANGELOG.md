@@ -4,77 +4,35 @@ Newest entries on top.
 
 ## Unreleased
 
-- The duration cache no longer leaves stale rows behind: a book's cached durations are removed
-  when it finishes (together with its resume point) and when its folder is deleted from storage.
-  Both paths share one cleanup function (`DurationCache.remove`). Re-listening to a finished book
-  re-resolves its durations lazily on the first open.
+- A book's cached durations are removed when it finishes or its folder is deleted from storage.
 
-- Book progress is now measured in time, not files. A new persistent duration cache (the
-  `durations` table in `app.db`) stores each file's duration, filled lazily the first time a book's
-  queue needs it and cleared by Rescan music; the percent readout then weighs every chapter by its
-  real length instead of assuming equal files. While a cold book's durations are still resolving
-  (the first open is slow over SAF) the readout temporarily falls back to the old file-count
-  approximation. Editing the live queue (e.g. deleting a subfolder mid-book) re-resolves against
-  the new queue.
+- Book progress is now measured in time (per-file durations, cached persistently), not by file
+  count.
 
 - The folder path above the playing track's name now always starts with the root folder's name.
-  Tracks sitting directly in a root used to show no path at all, so the path line blinked in and
-  out between tracks of one recursive queue (and with several roots it wasn't clear where a track
-  played from).
 
-- Fix: the contextual rewind on book resume no longer accumulates. The saved position now carries a
-  timestamp, and the 15s step-back applies only after a real break (2+ minutes); reopening a book
-  moments after leaving it resumes exactly. Previously each quick out-and-back re-saved the rewound
-  position and ate another 15s.
+- Fix: the contextual rewind on book resume no longer accumulates — the 15s step-back applies only
+  after a 2+ minute break.
 
 - A paused book now behaves exactly like paused music: its queue survives browsing away and
-  activity relaunches, and the big Play resumes it in place (no restart, no rewind). Previously
-  pausing a book and navigating up — or pausing it in the shade and reopening the app — silently
-  killed its queue, so Play meant "resume" for music but "restart from the saved position" for
-  books. Shuffle stays locked while a paused book lingers (the queue genuinely is a book); starting
-  a music folder or finishing the book frees it. This supersedes the earlier "ghost book on
-  relaunch" workaround — the leftover queue is no longer a ghost, it is the resumable live queue.
+  relaunches, and Play resumes it in place.
 
-- The speed button now belongs to the book open in the browser (the same referent as the abook
-  checkbox), not to whatever is playing. It is enabled whenever the browser is inside a book —
-  including a book that isn't playing, so a book's speed can be set up front — and edits that
-  book's saved speed; the edit is applied (and previewed) audibly only when that book is the live
-  queue. In plain music folders the button stays disabled (music is always 1.0×), and it no longer
-  silently changed the playing book's speed while browsing an unrelated folder.
+- The speed button now edits the book open in the browser (enabled anywhere inside a book), not
+  whatever is playing.
 
 - Fix: a race at queue end could leave the shuffle switch locked and the speed button live with
-  nothing playing. When a book (or playlist) finishes, the service clears the queue; the activity's
-  end-of-queue cleanup was guarded on a non-empty queue, but controller events coalesce, so the
-  clear could already be visible when STATE_ENDED arrived and the cleanup was skipped. The guard is
-  removed: the resume-point protection it duplicated lives (synchronously, reliably) in the
-  service, and the activity cleanup is idempotent.
+  nothing playing.
 
-- Fix: book mode now covers the book's whole subtree. Previously only the flagged folder itself
-  counted: tapping a chapter file inside a book's subfolder (CD1/CD2/…), or playing such a
-  subfolder, played it as shuffled music at 1.0× with no resume tracking, and a queue started from
-  a tapped file wasn't recursive (the book ended early). Now any play action inside a book plays
-  the book: the queue is always the full book from its root, the resume position and speed stay
-  keyed to the book, tapping a file or a subfolder jumps there, the big Play anywhere in a paused
-  book's subtree resumes it, and the abook checkbox in subfolders shows the inherited state
-  (locked — the flag is editable only on the book folder itself).
+- Fix: book mode now covers the book's whole subtree — any play action inside a book plays the
+  full book from its root, with its resume position and speed.
 
-- Fix: the live queue's book/music mode is now stamped on the queue when it starts and read back
-  from there on reconnect, instead of re-reading the folder's current abook flag. Toggling the
-  checkbox mid-play could reclassify the playing queue after a rotation/relaunch: shuffled music
-  got treated as a book (shuffle locked, bogus book progress — or the paused queue killed), and a
-  book with the flag unticked silently dragged its forced shuffle-off into the next music. The
-  abook checkbox is also locked (greyed) while its folder is the live queue, since the mode is
-  fixed at start anyway — so the flag can no longer contradict what is audibly playing.
+- Fix: the live queue's book/music mode is stamped at start, so re-toggling the abook checkbox
+  mid-play can no longer reclassify the playing queue.
 
-- Removed the Repeat all setting: playback never loops now — a finished queue (music or book) just
-  ends. The behavior is hardwired behind a single compile-time flag (`Settings.REPEAT_ALL = false`),
-  with no UI. This also removes the bug where toggling Repeat while a book was playing put the live
-  book into an endless loop, breaking its resume tracking.
+- Removed the Repeat all setting: playback never loops now.
 
 - Fix: relaunching after a book was paused/dismissed in the shade no longer reopens onto a ghost
-  book — a leftover non-playing book queue that outlived the activity (the foreground service
-  survives) is now ended on reconnect, so the shuffle switch is free and the stale book progress/
-  paths are gone. The book's saved resume point still lets re-entering its folder pick it back up.
+  book queue.
 
 ## v0.4.20260610+101
 
