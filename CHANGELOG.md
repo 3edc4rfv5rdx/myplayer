@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Navigating up from a paused track now stops it and clears the queue (music and book alike); a
+  paused book still resumes from its saved position via Play in its folder.
+
 - Fix: a shuffled folder now always plays all its files — playback could end after a random
   subset, with Next dead.
 
@@ -17,8 +20,7 @@ Newest entries on top.
 - Fix: the contextual rewind on book resume no longer accumulates — the 15s step-back applies only
   after a 2+ minute break.
 
-- A paused book now behaves exactly like paused music: its queue survives browsing away and
-  relaunches, and Play resumes it in place.
+- A paused book now behaves exactly like paused music.
 
 - The speed button now edits the book open in the browser (enabled anywhere inside a book), not
   whatever is playing.

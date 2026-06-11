@@ -529,13 +529,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Drops the now-playing labels/bar when nothing is actively playing, so navigating away from a
-     *  stopped or paused track lets it go; a playing track keeps its now-playing while you browse.
-     *  The queue itself survives — a paused book behaves exactly like paused music, resumable in
-     *  place with Play. Resuming re-populates the labels (see NowPlaying.onIsPlayingChanged). */
+    /** Stops playback, drops the queue, and clears all now-playing UI state (labels, bar, browser
+     *  highlight). pause() first so onIsPlayingChanged(false) reaches the UI (and saves a book's
+     *  resume point) before the queue goes. */
+    private fun stopAndClearQueue() {
+        val controller = controllerState.value ?: return
+        controller.pause()
+        controller.clearMediaItems()
+        controller.stop()
+        playingFolderId = null
+        playingAbookState.value = false
+        playingFolderKeyState.value = null
+        playingDocIdState.value = null
+        // clearMediaItems() emits no metadata event, so clear the now-playing labels ourselves.
+        clearTitleTickState.value++
+    }
+
+    /** Navigating away from a stopped/paused track ends it: the queue and all now-playing UI are
+     *  dropped (music and book alike); a playing track keeps everything while you browse. A paused
+     *  book's resume point is already saved, so Play in its folder picks it back up. */
     private fun clearNowPlayingIfStopped() {
         if (controllerState.value?.isPlaying == true) return
-        clearTitleTickState.value++
+        stopAndClearQueue()
     }
 
     /** Returns to the roots list (the home screen). */
@@ -566,19 +581,7 @@ class MainActivity : ComponentActivity() {
         val playingThisRoot =
             controller != null &&
                 playFolderTreeUriOf(controller.currentMediaItem) == treeUri.toString()
-        if (playingThisRoot) {
-            // pause() first so onIsPlayingChanged(false) reaches the UI and the button leaves its
-            // "pause" icon; then drop the queue and reset playback state.
-            controller.pause()
-            controller.clearMediaItems()
-            controller.stop()
-            playingFolderId = null
-            playingAbookState.value = false
-            playingFolderKeyState.value = null
-            playingDocIdState.value = null
-            // clearMediaItems() emits no metadata event, so clear the now-playing labels ourselves.
-            clearTitleTickState.value++
-        }
+        if (playingThisRoot) stopAndClearQueue()
         runCatching {
             contentResolver.releasePersistableUriPermission(
                 treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -858,14 +861,7 @@ class MainActivity : ComponentActivity() {
             }
             return
         }
-        controller.pause()
-        controller.clearMediaItems()
-        controller.stop()
-        playingFolderId = null
-        playingAbookState.value = false
-        playingFolderKeyState.value = null
-        playingDocIdState.value = null
-        clearTitleTickState.value++
+        stopAndClearQueue()
     }
 
     private fun requestNotificationPermission() {
