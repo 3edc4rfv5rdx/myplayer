@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs: audit #7 findings recorded in DOC/tofix7.md; all five are fixed.
+
 - A cold book's time-based progress now appears right away and refines batch by batch, instead of
   waiting for every file's duration to resolve.
 
