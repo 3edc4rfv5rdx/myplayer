@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.4.20260611+116
 
 - Fix: starting shuffled music froze the app (ANR) — the shuffle-order reseed fed back into
   itself.
