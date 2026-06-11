@@ -861,6 +861,9 @@ class MainActivity : ComponentActivity() {
         // Touches the controller, so it must run on the main thread before the IO hop.
         stopIfPlayingUnder(folder)
         val docUri = DocumentsContract.buildDocumentUriUsingTree(tree, folder.documentId)
+        // The book (if any) the deleted folder belongs to — its resume point may live inside.
+        val enclosingBookKey = bookRootPath(tree, pathState.value)
+            ?.let { Settings.bookKey(tree.toString(), it.last().documentId) }
         deleteJob = lifecycleScope.launch {
             // The recursive SAF delete (and the SQLite cache invalidations) can take seconds on a
             // slow provider, so keep them off the main thread to avoid an ANR.
@@ -874,8 +877,17 @@ class MainActivity : ComponentActivity() {
                     )
                     // Drop the deleted folder's own (and descendants') cached listings, then the
                     // parent's so the now-missing folder disappears from it on re-scan.
-                    FolderCache.invalidateSubtree(this@MainActivity, tree, folder.documentId)
+                    val removedUris =
+                        FolderCache.invalidateSubtree(this@MainActivity, tree, folder.documentId)
                     FolderCache.invalidate(this@MainActivity, tree, parent.documentId)
+                    // The enclosing book's resume point died with the subtree: forget it, so the
+                    // row doesn't sit stale forever (the next start falls back to file 1 anyway).
+                    if (enclosingBookKey != null) {
+                        val saved = Settings.getBookPos(this@MainActivity, enclosingBookKey)
+                        if (saved != null && saved.fileUri in removedUris) {
+                            Settings.clearBookPos(this@MainActivity, enclosingBookKey)
+                        }
+                    }
                 }
                 deleted
             }

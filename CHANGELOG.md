@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Deleting a folder inside a book now also forgets the book's resume point when it pointed into
+  the deleted subtree.
+
 - Fix: the service's book key is now detached before a queue swap and attached right after it, so
   a save during the swap can't write one queue's track under another book's resume point.
 

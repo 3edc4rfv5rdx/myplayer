@@ -89,8 +89,9 @@ object FolderCache {
 
     /** Drops the cached listings of [folderId] and every folder beneath it, walking the cached tree
      *  to find descendants (used after a folder is deleted from storage, so no stale rows linger).
-     *  The subtree files' cached durations go with them — the files no longer exist. */
-    fun invalidateSubtree(context: Context, treeUri: Uri, folderId: String) {
+     *  The subtree files' cached durations go with them — the files no longer exist. Returns the
+     *  subtree's file uris (as far as cached) so callers can clear other state keyed by them. */
+    fun invalidateSubtree(context: Context, treeUri: Uri, folderId: String): List<String> {
         rw.writeLock().lock()
         try {
             val db = AppDb.db(context)
@@ -118,6 +119,7 @@ object FolderCache {
                 db.delete("scanned", "tree_uri=? AND parent_id=?", args)
             }
             DurationCache.remove(context, fileUris)
+            return fileUris
         } finally {
             rw.writeLock().unlock()
         }
