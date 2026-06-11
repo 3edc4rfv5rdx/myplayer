@@ -10,8 +10,10 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Metadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
@@ -138,6 +140,16 @@ class PlayerService : MediaSessionService() {
             }
 
             @UnstableApi
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                if (shuffleModeEnabled) reseedShuffleOrder()
+            }
+
+            @UnstableApi
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) reseedShuffleOrder()
+            }
+
+            @UnstableApi
             override fun onMetadata(metadata: Metadata) {
                 ReplayGain.parseTrackGainDb(metadata)?.let {
                     currentTrackGainDb = it
@@ -149,6 +161,21 @@ class PlayerService : MediaSessionService() {
         this.player = player
         session = MediaSession.Builder(this, player).setCallback(SessionCallback()).build()
         // The periodic save starts when playback begins (onIsPlayingChanged), not here.
+    }
+
+    /** Re-seeds the shuffle order with the current track first, so a shuffled queue always plays
+     *  every remaining item. ExoPlayer's default order is a random permutation played from the
+     *  start track's position in it to its end — with repeat off, a queue started on a random
+     *  track ended after a random number of items instead of all of them. Run when a new playlist
+     *  arrives and when shuffle is switched on mid-play; no-op for sequential (book) queues. */
+    @UnstableApi
+    private fun reseedShuffleOrder() {
+        val p = player ?: return
+        if (!p.shuffleModeEnabled || p.mediaItemCount == 0) return
+        val current = p.currentMediaItemIndex
+        val rest = (0 until p.mediaItemCount).filter { it != current }.shuffled()
+        val order = (listOf(current) + rest).toIntArray()
+        p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order, System.currentTimeMillis()))
     }
 
     /** Persists the playing book's current file uri and offset as its resume point. No-op for plain

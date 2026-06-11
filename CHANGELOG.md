@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: a shuffled folder now always plays all its files — playback could end after a random
+  subset, with Next dead.
+
 - A book's cached durations are removed when it finishes or its folder is deleted from storage.
 
 - Book progress is now measured in time (per-file durations, cached persistently), not by file
