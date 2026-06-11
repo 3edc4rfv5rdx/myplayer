@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- The home screen list is titled "Folders" (was "Music folders" — roots hold books too).
+
+- The speed button slot shows a previous-track button outside of books (music, home screen).
+
 - Navigating up from a paused track now stops it and clears the queue (music and book alike); a
   paused book still resumes from its saved position via Play in its folder.
 

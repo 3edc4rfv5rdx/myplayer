@@ -1017,7 +1017,7 @@ private fun RootsList(
                 )
             }
             Text(
-                text = stringResource(R.string.music_folders),
+                text = stringResource(R.string.folders),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -1601,18 +1601,29 @@ private fun NowPlaying(
                 )
             }
             Spacer(Modifier.height(12.dp))
-            // Mirrors the abook slot on the left: speed shows only with an open folder, and the slot
-            // keeps its height when hidden so next never shifts.
+            // Mirrors the abook slot on the left; the slot keeps its height so next never shifts.
+            // Inside a book the slot is the speed button (an audiobook feature: edits that book's
+            // saved speed, applied live only when it is the live queue); elsewhere speed is
+            // meaningless (music is always 1.0), so the slot is a previous-track button instead.
             Box(modifier = Modifier.height(36.dp), contentAlignment = Alignment.CenterEnd) {
-                if (abookVisible) {
-                    // Speed is an audiobook feature: enabled whenever the browser is in a book,
-                    // editing that book's saved speed (applied live only when that book is the
-                    // live queue). For plain music the button stays disabled (grey) — always 1.0.
+                if (abookVisible && speedEnabled) {
                     SpeedButton(
                         label = formatSpeed(speed),
-                        enabled = speedEnabled,
+                        enabled = true,
                         onClick = { showSpeedDialog = true }
                     )
+                } else {
+                    Button(
+                        onClick = { controller?.seekToPrevious() },
+                        enabled = controller != null,
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        modifier = Modifier.width(76.dp).height(36.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_skip_previous),
+                            contentDescription = stringResource(R.string.previous)
+                        )
+                    }
                 }
             }
         }
