@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: the service's book key is now detached before a queue swap and attached right after it, so
+  a save during the swap can't write one queue's track under another book's resume point.
+
 - Removing a root folder now also forgets its audiobook flags, positions, speeds, and cached
   durations, so re-adding it starts clean.
 

@@ -219,7 +219,12 @@ class PlayerService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_BOOK_MODE) {
-                bookFolderKey = args.getString(KEY_BOOK_FOLDER)?.takeIf { it.isNotEmpty() }
+                val newKey = args.getString(KEY_BOOK_FOLDER)?.takeIf { it.isNotEmpty() }
+                // A key change is the outgoing book's last chance to persist its exact position:
+                // the activity detaches (empty key) before mutating the queue, so the current
+                // item still belongs to the old book here. No-op when no book was tracked.
+                if (newKey != bookFolderKey) saveBookPosition()
+                bookFolderKey = newKey
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             return super.onCustomCommand(session, controller, customCommand, args)

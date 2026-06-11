@@ -566,6 +566,10 @@ class MainActivity : ComponentActivity() {
         controller.pause()
         controller.clearMediaItems()
         controller.stop()
+        // The cleared queue belongs to no book: drop the service's key now rather than leaving it
+        // stale until the next startQueue. Sent after the clear, so the pause-save above (still
+        // under the old key, with the old queue current) is not skipped.
+        sendBookMode(controller, null)
         playingFolderId = null
         playingAbookState.value = false
         playingFolderKeyState.value = null
@@ -761,10 +765,16 @@ class MainActivity : ComponentActivity() {
     ) {
         errorState.value = null
         playingAbookState.value = abook
+        // Detach the previous book key before any player mutation (the service persists the
+        // outgoing book's position on detach, while its queue is still current) and attach the
+        // new key right after the new queue is installed — the key is never wrong for the live
+        // queue, so no stray save can write one queue's uri under another book's resume point.
+        sendBookMode(controller, null)
         controller.shuffleModeEnabled = !abook && shuffleState.value
         controller.repeatMode =
             if (!abook && Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
         controller.setMediaItems(items, startIndex, startPositionMs)
+        sendBookMode(controller, if (abook) bookFolderKey else null)
         controller.prepare()
         controller.play()
         playingFolderKeyState.value = bookFolderKey
@@ -772,7 +782,6 @@ class MainActivity : ComponentActivity() {
         // always plays at 1.0, never inheriting a previous book's speed or the global default.
         if (abook && bookFolderKey != null) applyFolderSpeed(controller, bookFolderKey)
         else controller.setPlaybackSpeed(Settings.SPEED_DEFAULT)
-        sendBookMode(controller, if (abook) bookFolderKey else null)
     }
 
     /** Applies the folder's saved (or default) playback speed to [controller]. */
