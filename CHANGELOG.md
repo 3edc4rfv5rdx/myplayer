@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- The folder you were in is now highlighted at every browser level (entering a folder marks the
+  path; playback moves the mark; entering a root clears it), and the mark survives relaunches.
+
 - The home screen list is titled "Folders" (was "Music folders" — roots hold books too).
 
 - The speed button slot shows a previous-track button outside of books (music, home screen).

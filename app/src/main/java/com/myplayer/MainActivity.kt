@@ -106,6 +106,8 @@ private const val STATE_SCREEN = "screen"
 private const val STATE_PLAY_FOLDER = "play_folder_id"
 private const val STATE_SHUFFLE = "shuffle"
 private const val STATE_PLAYING_ABOOK = "playing_abook"
+private const val STATE_PLAYING_DOC_ID = "playing_doc_id"
+private const val STATE_VISITED_PATH_IDS = "visited_path_ids"
 
 // Discrete slider positions between SPEED_MIN and SPEED_MAX (endpoints excluded), one per SPEED_STEP.
 private val SPEED_SLIDER_STEPS =
@@ -126,6 +128,10 @@ class MainActivity : ComponentActivity() {
     private val selectedIndexState = mutableStateOf<Int?>(null)
     // documentId of the currently playing track; highlighted and followed in the browser.
     private val playingDocIdState = mutableStateOf<String?>(null)
+    // documentIds of the last visited path's folders — set by entering a folder and by playback
+    // (the playing track's ancestors) — the highlight shown on folder rows at every level, so
+    // coming back up still shows where you were. Cleared by entering a root.
+    private val visitedPathIdsState = mutableStateOf<Set<String>>(emptySet())
     private val screenState = mutableStateOf(Screen.Browser)
     private val rescanTickState = mutableStateOf(0)
     private val clearTitleTickState = mutableStateOf(0)
@@ -214,6 +220,7 @@ class MainActivity : ComponentActivity() {
                     val error by errorState
                     val selectedIndex by selectedIndexState
                     val playingDocId by playingDocIdState
+                    val visitedPathIds by visitedPathIdsState
                     val screen by screenState
                     val rescanTick by rescanTickState
                     val clearTitleTick by clearTitleTickState
@@ -307,6 +314,7 @@ class MainActivity : ComponentActivity() {
                             error = error,
                             selectedIndex = selectedIndex,
                             playingDocId = playingDocId,
+                            visitedPathIds = visitedPathIds,
                             rescanTick = rescanTick,
                             clearTitleTick = clearTitleTick,
                             shuffleEnabled = shuffle,
@@ -337,6 +345,10 @@ class MainActivity : ComponentActivity() {
                             onDescend = {
                                 pathState.value = path + it
                                 selectedIndexState.value = null
+                                // Entering a folder marks it (and its ancestors) as the visited
+                                // path, highlighted on the way back up.
+                                visitedPathIdsState.value =
+                                    (path + it).map { n -> n.documentId }.toSet()
                             },
                             onUp = { goUp() },
                             onPlayFolder = { playFolder(it) },
@@ -394,7 +406,7 @@ class MainActivity : ComponentActivity() {
                             playingAbookState.value = false
                             playingFolderId = null
                             playingFolderKeyState.value = null
-                            playingDocIdState.value = null
+                            // The browser highlight survives as a "where I stopped" mark.
                             clearTitleTickState.value++
                         }
                     }
@@ -455,6 +467,10 @@ class MainActivity : ComponentActivity() {
         outState.putString(STATE_PLAY_FOLDER, playingFolderId)
         outState.putBoolean(STATE_SHUFFLE, shuffleState.value)
         outState.putBoolean(STATE_PLAYING_ABOOK, playingAbookState.value)
+        // The "where I stopped" highlight must survive recreation: with the queue cleared on
+        // navigate-away there may be no live item to re-derive it from on reconnect.
+        outState.putString(STATE_PLAYING_DOC_ID, playingDocIdState.value)
+        outState.putStringArray(STATE_VISITED_PATH_IDS, visitedPathIdsState.value.toTypedArray())
         selectedIndexState.value?.let { outState.putInt(STATE_SELECTED, it) }
     }
 
@@ -472,6 +488,9 @@ class MainActivity : ComponentActivity() {
         playingFolderId = state.getString(STATE_PLAY_FOLDER)
         shuffleState.value = state.getBoolean(STATE_SHUFFLE, true)
         playingAbookState.value = state.getBoolean(STATE_PLAYING_ABOOK, false)
+        playingDocIdState.value = state.getString(STATE_PLAYING_DOC_ID)
+        visitedPathIdsState.value =
+            state.getStringArray(STATE_VISITED_PATH_IDS)?.toSet() ?: emptySet()
     }
 
     /** Always highlights the playing track wherever it is visible. When Follow is enabled it also
@@ -480,11 +499,17 @@ class MainActivity : ComponentActivity() {
      *  documentId string-splitting); if they are missing or the root is no longer held, the track is
      *  only highlighted where found and navigation is skipped. */
     private fun followPlayingTrack(item: MediaItem?) {
-        val fileDocId = item?.mediaId
-            ?.let { runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull() }
+        // A transition to "no item" (queue cleared or ended) keeps the last highlight as a "where
+        // I stopped" mark; it is dropped explicitly only when the content itself goes
+        // (stopAndClearQueue(clearHighlight = true): root removed, files deleted).
+        if (item == null) return
+        val fileDocId = item.mediaId
+            .let { runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull() }
         playingDocIdState.value = fileDocId
+        item.mediaMetadata.extras?.getStringArray(MusicScanner.EXTRA_PATH_IDS)
+            ?.let { visitedPathIdsState.value = it.toSet() }
         if (!followEnabled) return
-        if (treeUriState.value == null || item == null) return
+        if (treeUriState.value == null) return
         val extras = item.mediaMetadata.extras ?: return
         val owner = extras.getString(MusicScanner.EXTRA_TREE_URI)?.let(Uri::parse) ?: return
         val ids = extras.getStringArray(MusicScanner.EXTRA_PATH_IDS) ?: return
@@ -519,6 +544,8 @@ class MainActivity : ComponentActivity() {
         val docId = DocumentsContract.getTreeDocumentId(treeUri)
         pathState.value = listOf(Node(docId, fallbackRootLabel(treeUri), true))
         selectedIndexState.value = null
+        // Entering a root starts a fresh walk: the previous visited-path mark is dropped.
+        visitedPathIdsState.value = emptySet()
         lifecycleScope.launch {
             val node = withContext(Dispatchers.IO) { MusicScanner.rootNode(this@MainActivity, treeUri) }
             // Apply only if still sitting at this root's top folder (user hasn't navigated away).
@@ -529,10 +556,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Stops playback, drops the queue, and clears all now-playing UI state (labels, bar, browser
-     *  highlight). pause() first so onIsPlayingChanged(false) reaches the UI (and saves a book's
-     *  resume point) before the queue goes. */
-    private fun stopAndClearQueue() {
+    /** Stops playback, drops the queue, and clears the now-playing UI state (labels, bar).
+     *  [clearHighlight] also drops the browser's playing-track highlight — wanted when the content
+     *  is gone (root removed, files deleted), not when merely navigating away, where the highlight
+     *  stays as a "where I stopped" mark. pause() first so onIsPlayingChanged(false) reaches the
+     *  UI (and saves a book's resume point) before the queue goes. */
+    private fun stopAndClearQueue(clearHighlight: Boolean = true) {
         val controller = controllerState.value ?: return
         controller.pause()
         controller.clearMediaItems()
@@ -540,17 +569,21 @@ class MainActivity : ComponentActivity() {
         playingFolderId = null
         playingAbookState.value = false
         playingFolderKeyState.value = null
-        playingDocIdState.value = null
+        if (clearHighlight) {
+            playingDocIdState.value = null
+            visitedPathIdsState.value = emptySet()
+        }
         // clearMediaItems() emits no metadata event, so clear the now-playing labels ourselves.
         clearTitleTickState.value++
     }
 
-    /** Navigating away from a stopped/paused track ends it: the queue and all now-playing UI are
-     *  dropped (music and book alike); a playing track keeps everything while you browse. A paused
-     *  book's resume point is already saved, so Play in its folder picks it back up. */
+    /** Navigating away from a stopped/paused track ends it: the queue and the now-playing UI are
+     *  dropped (music and book alike), but the track stays highlighted in the browser; a playing
+     *  track keeps everything while you browse. A paused book's resume point is already saved, so
+     *  Play in its folder picks it back up. */
     private fun clearNowPlayingIfStopped() {
         if (controllerState.value?.isPlaying == true) return
-        stopAndClearQueue()
+        stopAndClearQueue(clearHighlight = false)
     }
 
     /** Returns to the roots list (the home screen). */
@@ -889,6 +922,7 @@ private fun PlayerScreen(
     error: String?,
     selectedIndex: Int?,
     playingDocId: String?,
+    visitedPathIds: Set<String>,
     rescanTick: Int,
     clearTitleTick: Int,
     shuffleEnabled: Boolean,
@@ -939,6 +973,7 @@ private fun PlayerScreen(
                     canGoUp = true,
                     selectedIndex = selectedIndex,
                     playingDocId = playingDocId,
+                    visitedPathIds = visitedPathIds,
                     rescanTick = rescanTick,
                     onUp = onUp,
                     onDescend = onDescend,
@@ -1120,6 +1155,7 @@ private fun FolderBrowser(
     canGoUp: Boolean,
     selectedIndex: Int?,
     playingDocId: String?,
+    visitedPathIds: Set<String>,
     rescanTick: Int,
     onUp: () -> Unit,
     onDescend: (Node) -> Unit,
@@ -1217,13 +1253,23 @@ private fun FolderBrowser(
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
                     val isBook = folder.documentId in bookIds
+                    // The visited path (last entered folder or the playing track's ancestors) is
+                    // highlighted like the track's own file row, visible from any level.
+                    val highlighted = folder.documentId in visitedPathIds
+                    val background =
+                        if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent
+                    val foreground =
+                        if (highlighted) MaterialTheme.colorScheme.onPrimary else Color.Unspecified
                     Text(
                         text = "${if (isBook) "📖" else "📁"}  ${folder.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 22.sp,
+                        color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(background)
                             .combinedClickable(
                                 onClick = { onDescend(folder) },
                                 onLongClick = { pendingDelete = folder }
