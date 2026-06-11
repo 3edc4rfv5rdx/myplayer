@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix: starting shuffled music froze the app (ANR) — the shuffle-order reseed fed back into
+  itself.
+
 - The folder you were in is now highlighted at every browser level (entering a folder marks the
   path; playback moves the mark; entering a root clears it), and the mark survives relaunches.
 

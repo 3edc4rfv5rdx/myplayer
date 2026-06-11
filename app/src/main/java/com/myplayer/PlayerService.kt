@@ -173,6 +173,10 @@ class PlayerService : MediaSessionService() {
         val p = player ?: return
         if (!p.shuffleModeEnabled || p.mediaItemCount == 0) return
         val current = p.currentMediaItemIndex
+        // Already current-first: nothing to do. Crucially this also breaks the feedback loop —
+        // setShuffleOrder itself emits onTimelineChanged(PLAYLIST_CHANGED), which lands back here
+        // and would otherwise reseed (and re-emit) forever, freezing the main thread.
+        if (p.currentTimeline.getFirstWindowIndex(/* shuffleModeEnabled = */ true) == current) return
         val rest = (0 until p.mediaItemCount).filter { it != current }.shuffled()
         val order = (listOf(current) + rest).toIntArray()
         p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order, System.currentTimeMillis()))
