@@ -15,15 +15,22 @@ object AppDb {
         return h.writableDatabase
     }
 
-    private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 2) {
+    private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 3) {
         override fun onCreate(db: SQLiteDatabase) {
             createCacheTables(db)
+            createDurationsTable(db)
             createSettingsTable(db)
         }
 
         /** Settings holds roots/toggles/theme; create-if-missing so it can never be dropped. */
         private fun createSettingsTable(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+        }
+
+        /** Per-file durations (see [DurationCache]); create-if-missing — expensive to refill, so
+         *  unlike the listing cache it is never dropped on upgrade. */
+        private fun createDurationsTable(db: SQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS durations(uri TEXT PRIMARY KEY, ms INTEGER)")
         }
 
         /** The cache key is (tree_uri, parent_id): documentId alone can collide across roots/providers. */
@@ -37,11 +44,13 @@ object AppDb {
             )
         }
 
-        // Only the cache tables are versioned data; `settings` (roots/toggles/theme) must survive.
+        // Only the listing-cache tables are versioned data; `settings` (roots/toggles/theme) and
+        // `durations` must survive.
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
             db.execSQL("DROP TABLE IF EXISTS children")
             db.execSQL("DROP TABLE IF EXISTS scanned")
             createCacheTables(db)
+            createDurationsTable(db)
             createSettingsTable(db)
         }
 

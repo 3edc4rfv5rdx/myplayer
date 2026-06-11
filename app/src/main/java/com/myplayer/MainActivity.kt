@@ -80,6 +80,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
@@ -1330,6 +1331,12 @@ private fun NowPlaying(
     // position so the bar/time follow the finger and don't jump back until the seek lands.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    // Per-file durations of the live book queue (DurationCache), for the time-based book progress;
+    // null until resolved. queueTick bumps on timeline changes so a new or edited queue (e.g. a
+    // subfolder deleted mid-book) re-resolves against the current items.
+    var bookDurations by remember { mutableStateOf<LongArray?>(null) }
+    var queueTick by remember { mutableStateOf(0) }
+    val context = LocalContext.current
 
     // Poll the controller for the playback position (Media3 has no position-changed callback);
     // a light 500 ms tick is enough for a thin progress bar and the edge timestamps.
@@ -1366,6 +1373,10 @@ private fun NowPlaying(
                 playerError = null
             }
 
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                queueTick++
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 playerError = "${error.errorCodeName}: ${error.message}"
             }
@@ -1375,6 +1386,19 @@ private fun NowPlaying(
         path = c.mediaMetadata.subtitle?.toString().orEmpty()
         isPlaying = c.isPlaying
         onDispose { c.removeListener(listener) }
+    }
+
+    // Resolve the live book queue's durations for the time-based progress readout. A cold book's
+    // first resolve is slow over SAF; until it lands the readout below falls back to the file-count
+    // approximation. Cancelling on key change lets a superseded queue abandon its walk (the
+    // per-file ensureActive in DurationCache).
+    LaunchedEffect(controller, playingAbook, queueTick) {
+        bookDurations = null
+        val c = controller
+        if (c == null || !playingAbook || c.mediaItemCount == 0) return@LaunchedEffect
+        // mediaId is the file's document uri (see MusicScanner), the duration cache key.
+        val uris = List(c.mediaItemCount) { c.getMediaItemAt(it).mediaId }
+        bookDurations = withContext(Dispatchers.IO) { DurationCache.durations(context, uris) }
     }
 
     // Clear the labels and bar on request: navigating away from a stopped/paused track, or removing
@@ -1475,11 +1499,21 @@ private fun NowPlaying(
             }
         }
     }
-    // Book progress: which file of the book plus an approximate overall percent (files vary in
-    // length), with a thin bar. Only shown while a book is the live queue.
+    // Book progress: which file of the book plus the overall percent, with a thin bar. Time-based
+    // once the queue's durations are resolved; until then (or if every file failed to read)
+    // approximated by file count. Only shown while a book is the live queue.
     if (playingAbook && !atHome && !cleared && mediaCount > 0) {
-        val fileFrac = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-        val bookFraction = ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
+        // Guard against a stale array while a queue edit's re-resolve is still in flight.
+        val durations = bookDurations?.takeIf { it.size == mediaCount }
+        val totalMs = durations?.sum() ?: 0L
+        val bookFraction = if (durations != null && totalMs > 0L) {
+            val playedMs = (0 until mediaIndex).sumOf { durations[it] } + positionMs
+            (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
+        } else {
+            val fileFrac =
+                if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+            ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
+        }
         val percent = String.format(Locale.US, "%.1f", bookFraction * 100)
         Spacer(Modifier.height(8.dp))
         Row(

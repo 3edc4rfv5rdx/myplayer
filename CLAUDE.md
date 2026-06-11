@@ -50,6 +50,8 @@ Supporting files:
   sorted in natural order; carries each item's ancestor path in extras for follow/delete logic.
 - `FolderCache` — caches `MusicScanner` folder listings in `AppDb` so the browser and recursive
   "play this folder" walks don't re-query the provider every time; invalidated on rescan/delete.
+- `DurationCache` — per-file durations in `AppDb` (lazy `MediaMetadataRetriever` fill), feeding the
+  time-based book progress readout; cleared by Rescan.
 - `ReplayGain` — optional volume normalization (see below).
 
 ## Folder selection

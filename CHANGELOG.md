@@ -4,6 +4,14 @@ Newest entries on top.
 
 ## Unreleased
 
+- Book progress is now measured in time, not files. A new persistent duration cache (the
+  `durations` table in `app.db`) stores each file's duration, filled lazily the first time a book's
+  queue needs it and cleared by Rescan music; the percent readout then weighs every chapter by its
+  real length instead of assuming equal files. While a cold book's durations are still resolving
+  (the first open is slow over SAF) the readout temporarily falls back to the old file-count
+  approximation. Editing the live queue (e.g. deleting a subfolder mid-book) re-resolves against
+  the new queue.
+
 - The folder path above the playing track's name now always starts with the root folder's name.
   Tracks sitting directly in a root used to show no path at all, so the path line blinked in and
   out between tracks of one recursive queue (and with several roots it wasn't clear where a track
