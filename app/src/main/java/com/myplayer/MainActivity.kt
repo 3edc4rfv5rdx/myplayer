@@ -1454,17 +1454,20 @@ private fun NowPlaying(
         onDispose { c.removeListener(listener) }
     }
 
-    // Resolve the live book queue's durations for the time-based progress readout. A cold book's
-    // first resolve is slow over SAF; until it lands the readout below falls back to the file-count
-    // approximation. Cancelling on key change lets a superseded queue abandon its walk (the
-    // per-file ensureActive in DurationCache).
+    // Resolve the live book queue's durations for the time-based progress readout. Cached values
+    // land in one snapshot right away; a cold book's missing files then refine it batch by batch
+    // (slow over SAF), so the readout below improves incrementally instead of all at once.
+    // Cancelling on key change lets a superseded queue abandon its walk (the per-file ensureActive
+    // in DurationCache).
     LaunchedEffect(controller, playingAbook, queueTick) {
         bookDurations = null
         val c = controller
         if (c == null || !playingAbook || c.mediaItemCount == 0) return@LaunchedEffect
         // mediaId is the file's document uri (see MusicScanner), the duration cache key.
         val uris = List(c.mediaItemCount) { c.getMediaItemAt(it).mediaId }
-        bookDurations = withContext(Dispatchers.IO) { DurationCache.durations(context, uris) }
+        withContext(Dispatchers.IO) {
+            DurationCache.durations(context, uris) { snapshot -> bookDurations = snapshot }
+        }
     }
 
     // Clear the labels and bar on request: navigating away from a stopped/paused track, or removing
@@ -1566,14 +1569,19 @@ private fun NowPlaying(
         }
     }
     // Book progress: which file of the book plus the overall percent, with a thin bar. Time-based
-    // once the queue's durations are resolved; until then (or if every file failed to read)
-    // approximated by file count. Only shown while a book is the live queue.
+    // as soon as some durations are known — still-resolving files are estimated at the known
+    // average, so a cold book's percent refines smoothly batch by batch; until anything is known
+    // (or if every file failed to read) approximated by file count. Only shown while a book is
+    // the live queue.
     if (playingAbook && !atHome && !cleared && mediaCount > 0) {
         // Guard against a stale array while a queue edit's re-resolve is still in flight.
         val durations = bookDurations?.takeIf { it.size == mediaCount }
-        val totalMs = durations?.sum() ?: 0L
-        val bookFraction = if (durations != null && totalMs > 0L) {
-            val playedMs = (0 until mediaIndex).sumOf { durations[it] } + positionMs
+        val bookFraction = if (durations != null && durations.any { it > 0L }) {
+            val known = durations.filter { it != DurationCache.UNKNOWN_MS }
+            val avgMs = known.sum() / known.size // known is non-empty: something is > 0
+            fun ms(i: Int) = if (durations[i] == DurationCache.UNKNOWN_MS) avgMs else durations[i]
+            val totalMs = (0 until mediaCount).sumOf { ms(it) }
+            val playedMs = (0 until mediaIndex).sumOf { ms(it) } + positionMs
             (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
         } else {
             val fileFrac =

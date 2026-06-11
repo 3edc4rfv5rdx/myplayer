@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- A cold book's time-based progress now appears right away and refines batch by batch, instead of
+  waiting for every file's duration to resolve.
+
 - Deleting a folder inside a book now also forgets the book's resume point when it pointed into
   the deleted subtree.
 

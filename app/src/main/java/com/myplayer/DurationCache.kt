@@ -16,10 +16,20 @@ import kotlinx.coroutines.ensureActive
  *  rows are removed via [remove]. */
 object DurationCache {
 
+    /** Marks a duration not resolved yet in the snapshots passed to [durations]' onUpdate. A file
+     *  whose duration genuinely can't be read is 0, never UNKNOWN_MS. */
+    const val UNKNOWN_MS = -1L
+
+    // Cold files resolve one MediaMetadataRetriever each over SAF (slow); snapshot per small batch
+    // so a large cold book's progress readout refines every few files, not after the whole walk.
+    private const val RESOLVE_BATCH = 10
+
     /** Durations (ms) for [uris] in the same order, resolving and caching the missing ones.
-     *  Suspend: resolving cold files over SAF is slow, and the per-file cancellation check lets a
-     *  superseded queue abandon its walk early. */
-    suspend fun durations(context: Context, uris: List<String>): LongArray {
+     *  Incremental: [onUpdate] gets a snapshot with everything already cached right away (missing
+     *  entries are [UNKNOWN_MS]), then a fresh one after each resolved batch. Suspend: resolving
+     *  cold files over SAF is slow, and the per-file cancellation check lets a superseded queue
+     *  abandon its walk early. */
+    suspend fun durations(context: Context, uris: List<String>, onUpdate: (LongArray) -> Unit) {
         val db = AppDb.db(context)
         val cached = HashMap<String, Long>(uris.size)
         // SQLite caps bound parameters; read the cache in chunks.
@@ -30,11 +40,15 @@ object DurationCache {
                 chunk.toTypedArray()
             ).use { c -> while (c.moveToNext()) cached[c.getString(0)] = c.getLong(1) }
         }
-        return LongArray(uris.size) { i ->
-            cached[uris[i]] ?: run {
+        val result = LongArray(uris.size) { i -> cached[uris[i]] ?: UNKNOWN_MS }
+        onUpdate(result.copyOf())
+        val missing = uris.indices.filter { result[it] == UNKNOWN_MS }
+        for (batch in missing.chunked(RESOLVE_BATCH)) {
+            for (i in batch) {
                 coroutineContext.ensureActive()
-                resolve(context, uris[i]).also { store(db, uris[i], it) }
+                result[i] = resolve(context, uris[i]).also { store(db, uris[i], it) }
             }
+            onUpdate(result.copyOf())
         }
     }
 
