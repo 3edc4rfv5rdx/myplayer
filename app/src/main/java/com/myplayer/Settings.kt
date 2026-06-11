@@ -170,7 +170,7 @@ object Settings {
     // ---- Audiobook mode (per folder) -------------------------------------------------------------
 
     /** Builds the stable per-folder key. A documentId alone can collide across trees, so include both. */
-    fun bookKey(treeUri: String, docId: String): String = "$treeUri\u0000$docId"
+    fun bookKey(treeUri: String, docId: String): String = "$treeUri|$docId"
 
     /** Audiobook mode for the folder: play sequentially and remember position (default off). */
     fun isAbook(context: Context, folderKey: String): Boolean =
@@ -213,9 +213,9 @@ object Settings {
     /** Forgets every per-folder book state row under [treeUri] (modes, positions, speeds).
      *  Removing a root forgets its books too; re-adding the same tree later starts clean. */
     fun clearRootState(context: Context, treeUri: String) {
-        // bookKey is "<treeUri>\u0000<docId>", so the per-tree prefix ends at the separator.
+        // bookKey is "<treeUri>|<docId>", so the per-tree prefix ends at the separator.
         val keyPrefixes =
-            listOf(KEY_MODE_PREFIX, KEY_POS_PREFIX, KEY_SPEED_PREFIX).map { it + treeUri + '\u0000' }
+            listOf(KEY_MODE_PREFIX, KEY_POS_PREFIX, KEY_SPEED_PREFIX).map { it + treeUri + '|' }
         synchronized(lock) {
             for (key in cache.keys) {
                 if (keyPrefixes.any { key.startsWith(it) }) cache[key] = null

@@ -7,8 +7,8 @@ Newest entries on top.
 - Removing a root folder now also forgets its audiobook flags, positions, speeds, and cached
   durations, so re-adding it starts clean.
 
-- Settings.kt and FolderCache.kt are plain text again: literal NUL bytes in key separators are
-  now the `\u0000` escape (same key bytes, no migration).
+- Composite keys (book state, folder locks) now use a plain `|` separator instead of a NUL byte;
+  no migration - old NUL-keyed rows are simply ignored.
 
 - Clearing audiobook state now deletes the settings rows instead of leaving empty ones behind.
 

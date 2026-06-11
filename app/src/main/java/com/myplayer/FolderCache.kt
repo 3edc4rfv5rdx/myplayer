@@ -19,7 +19,7 @@ object FolderCache {
     private val keyLocks = ConcurrentHashMap<String, Any>()
 
     private fun keyLock(root: String, parentId: String): Any =
-        keyLocks.getOrPut("$root\u0000$parentId") { Any() }
+        keyLocks.getOrPut("$root|$parentId") { Any() }
 
     /** Cached children of [parent] within [treeUri], scanning and persisting on a miss. */
     fun children(context: Context, treeUri: Uri, parent: Node): Pair<List<Node>, List<Node>> {
