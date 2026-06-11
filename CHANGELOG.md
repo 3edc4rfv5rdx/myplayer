@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.4.20260611+117
 
 - Docs: audit #7 findings recorded in DOC/tofix7.md; all five are fixed.
 
