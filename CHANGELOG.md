@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Clearing audiobook state now deletes the settings rows instead of leaving empty ones behind.
+
 ## v0.4.20260611+116
 
 - Fix: starting shuffled music froze the app (ANR) — the shuffle-order reseed fed back into
