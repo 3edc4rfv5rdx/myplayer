@@ -3,6 +3,11 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Book progress row now shows the percent plus elapsed and remaining/total book time on the right.
+
+- New "Remaining time" setting toggles the rightmost time readout (file and book) between remaining and total.
+
 ## v0.4.20260611+117
 
 - Docs: audit #7 findings recorded in DOC/tofix7.md; all five are fixed.

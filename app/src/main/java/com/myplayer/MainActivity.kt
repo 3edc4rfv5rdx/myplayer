@@ -228,6 +228,7 @@ class MainActivity : ComponentActivity() {
                     val playingAbook by playingAbookState
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
+                    var remaining by remember { mutableStateOf(Settings.isRemainingTime(this)) }
                     var defaultSpeed by remember { mutableStateOf(Settings.getDefaultSpeed(this)) }
 
                     BackHandler(enabled = screen == Screen.Settings || path.isNotEmpty()) {
@@ -241,6 +242,7 @@ class MainActivity : ComponentActivity() {
                             themeMode = theme,
                             replayGainEnabled = replayGain,
                             followEnabled = follow,
+                            remainingEnabled = remaining,
                             defaultSpeed = defaultSpeed,
                             onThemeChange = {
                                 themeState.value = it
@@ -256,6 +258,10 @@ class MainActivity : ComponentActivity() {
                                 followEnabled = it
                                 Settings.setFollowEnabled(this, it)
                                 followPlayingTrack(controllerState.value?.currentMediaItem)
+                            },
+                            onRemainingChange = {
+                                remaining = it
+                                Settings.setRemainingTime(this, it)
                             },
                             onDefaultSpeedChange = {
                                 defaultSpeed = it
@@ -326,6 +332,7 @@ class MainActivity : ComponentActivity() {
                             abookVisible = currentFolderKey != null,
                             abookLocked = abookLocked,
                             playingAbook = playingAbook,
+                            remainingTime = remaining,
                             onAbookToggle = { enabled ->
                                 currentFolderKey?.let { key ->
                                     abookState.value = enabled
@@ -955,6 +962,7 @@ private fun PlayerScreen(
     abookVisible: Boolean,
     abookLocked: Boolean,
     playingAbook: Boolean,
+    remainingTime: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     onEnterRoot: (Uri) -> Unit,
     onAddRoot: () -> Unit,
@@ -1015,7 +1023,7 @@ private fun PlayerScreen(
             controller, error, clearTitleTick, treeUri == null,
             shuffleEnabled, onShuffleToggle,
             abookEnabled, abookVisible, abookLocked, onAbookToggle,
-            playingAbook, onPlayPause,
+            playingAbook, remainingTime, onPlayPause,
             speed, speedEnabled, speedLive, onSpeedChange
         )
         Spacer(Modifier.height(32.dp))
@@ -1375,6 +1383,7 @@ private fun NowPlaying(
     abookLocked: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     playingAbook: Boolean,
+    remainingTime: Boolean,
     onPlayPause: () -> Unit,
     speed: Float,
     speedEnabled: Boolean,
@@ -1563,7 +1572,12 @@ private fun NowPlaying(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(formatTime(leftMs), fontSize = 14.sp)
-                    Text(formatTime(durationMs), fontSize = 14.sp)
+                    // Rightmost: remaining (-mm:ss) or total, per the setting.
+                    Text(
+                        if (remainingTime) "-${formatTime(durationMs - leftMs)}"
+                        else formatTime(durationMs),
+                        fontSize = 14.sp
+                    )
                 }
             }
         }
@@ -1576,26 +1590,43 @@ private fun NowPlaying(
     if (playingAbook && !atHome && !cleared && mediaCount > 0) {
         // Guard against a stale array while a queue edit's re-resolve is still in flight.
         val durations = bookDurations?.takeIf { it.size == mediaCount }
-        val bookFraction = if (durations != null && durations.any { it > 0L }) {
-            val known = durations.filter { it != DurationCache.UNKNOWN_MS }
+        // Elapsed/total of the whole book, once any duration is known; null while cold.
+        val timed = durations?.takeIf { d -> d.any { it > 0L } }?.let { d ->
+            val known = d.filter { it != DurationCache.UNKNOWN_MS }
             val avgMs = known.sum() / known.size // known is non-empty: something is > 0
-            fun ms(i: Int) = if (durations[i] == DurationCache.UNKNOWN_MS) avgMs else durations[i]
+            fun ms(i: Int) = if (d[i] == DurationCache.UNKNOWN_MS) avgMs else d[i]
             val totalMs = (0 until mediaCount).sumOf { ms(it) }
-            val playedMs = (0 until mediaIndex).sumOf { ms(it) } + positionMs
-            (playedMs.toFloat() / totalMs).coerceIn(0f, 1f)
+            val playedMs = ((0 until mediaIndex).sumOf { ms(it) } + positionMs).coerceIn(0L, totalMs)
+            playedMs to totalMs
+        }
+        val bookFraction = if (timed != null) {
+            (timed.first.toFloat() / timed.second).coerceIn(0f, 1f)
         } else {
             val fileFrac =
                 if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
             ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
         }
         val percent = String.format(Locale.US, "%.1f", bookFraction * 100)
+        // Elapsed plus rightmost remaining (-mm:ss) or total, per the setting; empty until
+        // durations resolve.
+        val timeText = timed?.let { (played, total) ->
+            val right = if (remainingTime) "-${formatTime(total - played)}" else formatTime(total)
+            "${formatTime(played)}/$right"
+        } ?: ""
+        // File label left-aligned; "XX.X%     elapsed/-remaining" grouped at the right edge.
         Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount", fontSize = 14.sp)
-            Text("$percent%", fontSize = 14.sp)
+            Text(
+                "${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount",
+                fontSize = 14.sp
+            )
+            Text(
+                "$percent%${if (timeText.isEmpty()) "" else "     $timeText"}",
+                fontSize = 14.sp, textAlign = TextAlign.End
+            )
         }
         Spacer(Modifier.height(2.dp))
         LinearProgressIndicator(
@@ -1799,10 +1830,12 @@ private fun SettingsScreen(
     themeMode: ThemeMode,
     replayGainEnabled: Boolean,
     followEnabled: Boolean,
+    remainingEnabled: Boolean,
     defaultSpeed: Float,
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
+    onRemainingChange: (Boolean) -> Unit,
     onDefaultSpeedChange: (Float) -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
@@ -1854,6 +1887,13 @@ private fun SettingsScreen(
             Text(stringResource(R.string.follow_playing))
             Spacer(Modifier.weight(1f))
             Switch(checked = followEnabled, onCheckedChange = onFollowChange)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.remaining_time))
+            Spacer(Modifier.weight(1f))
+            Switch(checked = remainingEnabled, onCheckedChange = onRemainingChange)
         }
 
         Spacer(Modifier.height(10.dp))

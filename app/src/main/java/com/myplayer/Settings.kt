@@ -22,6 +22,7 @@ object Settings {
     private const val KEY_REPLAYGAIN = "replaygain"
     private const val KEY_THEME = "theme"
     private const val KEY_FOLLOW = "follow"
+    private const val KEY_REMAINING = "remaining"
     private const val KEY_DEFAULT_SPEED = "default_speed"
     // Per-folder book state lives under these prefixes, keyed by a stable (treeUri, docId) folder key.
     private const val KEY_MODE_PREFIX = "mode:"
@@ -160,6 +161,11 @@ object Settings {
     fun isFollowEnabled(context: Context): Boolean = get(context, KEY_FOLLOW) != "false"
     fun setFollowEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_FOLLOW, enabled.toString())
+
+    /** Rightmost time readout: remaining (-mm:ss) when on, total when off (default on). */
+    fun isRemainingTime(context: Context): Boolean = get(context, KEY_REMAINING) != "false"
+    fun setRemainingTime(context: Context, enabled: Boolean) =
+        set(context, KEY_REMAINING, enabled.toString())
 
     /** Default playback speed applied to folders without a saved speed of their own. */
     fun getDefaultSpeed(context: Context): Float =
