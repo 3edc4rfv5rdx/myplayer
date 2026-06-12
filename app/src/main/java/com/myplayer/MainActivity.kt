@@ -36,7 +36,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -52,6 +51,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +72,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -112,6 +114,16 @@ private const val STATE_VISITED_PATH_IDS = "visited_path_ids"
 // Discrete slider positions between SPEED_MIN and SPEED_MAX (endpoints excluded), one per SPEED_STEP.
 private val SPEED_SLIDER_STEPS =
     ((Settings.SPEED_MAX - Settings.SPEED_MIN) / Settings.SPEED_STEP).roundToInt() - 1
+
+// Fixed jump for the rewind/fast-forward buttons.
+private const val SEEK_STEP_MS = 30_000L
+
+// Shared geometry for the control grid: every button is the same width/height, the play rectangle
+// is exactly two buttons plus the gap tall, and rows/stacks are spaced by half a button.
+private val CONTROL_BTN_WIDTH = 88.dp
+private val CONTROL_BTN_HEIGHT = 36.dp
+private val CONTROL_GAP = 18.dp
+private val PLAY_HEIGHT = CONTROL_BTN_HEIGHT * 2 + CONTROL_GAP
 
 class MainActivity : ComponentActivity() {
 
@@ -1299,7 +1311,7 @@ private fun FolderBrowser(
                         text = "${if (isBook) "📖" else "📁"}  ${folder.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 22.sp,
+                        fontSize = 19.sp,
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1322,7 +1334,7 @@ private fun FolderBrowser(
                         text = "🎵  ${file.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 22.sp,
+                        fontSize = 19.sp,
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1617,7 +1629,7 @@ private fun NowPlaying(
             "${formatTime(played)}/$right"
         } ?: ""
         // File label left-aligned; "XX.X%     elapsed/-remaining" grouped at the right edge.
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -1637,107 +1649,153 @@ private fun NowPlaying(
             modifier = Modifier.fillMaxWidth().height(5.dp)
         )
     }
-    Spacer(Modifier.height(8.dp))
-    Box(modifier = Modifier.fillMaxWidth()) {
-        // The small controls are paired in vertically-centered columns so the gap inside each pair
-        // (shuffle/abook on the left, next/speed on the right) lands on the play button's mid-height.
+    Spacer(Modifier.height(16.dp))
+    // Single control block: three equal-height columns. The side stacks (abook / prev / −30s and
+    // speed / next / +30s) are spaced half a button apart and define the block height; the centre
+    // column fills the same height with play pinned to the top and shuffle to the bottom, so the
+    // tops (abook / speed / play) and the bottoms (−30s / shuffle / +30s) all line up.
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column(
-            modifier = Modifier.align(Alignment.CenterStart),
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(CONTROL_GAP)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // A book plays sequentially, so shuffle is locked while a book is the live queue
-                // (playing or paused — a paused book is resumable in place). Starting a music
-                // folder, or the book ending, frees the switch again.
-                Switch(
-                    checked = shuffleEnabled,
-                    onCheckedChange = onShuffleToggle,
-                    enabled = !playingAbook
-                )
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    painter = painterResource(R.drawable.ic_shuffle),
-                    contentDescription = stringResource(R.string.shuffle),
-                    tint = if (shuffleEnabled && !playingAbook) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            // The slot keeps its height even when hidden, so shuffle never shifts as abook toggles.
-            Box(modifier = Modifier.height(48.dp), contentAlignment = Alignment.CenterStart) {
+            // Audiobook flag styled as a filled pill to match the buttons (checkbox + label, natural
+            // width). Reserve the slot height so the stack doesn't shift when it's hidden off a folder.
+            Box(modifier = Modifier.height(CONTROL_BTN_HEIGHT), contentAlignment = Alignment.Center) {
                 if (abookVisible) {
+                    val onPill = MaterialTheme.colorScheme.onPrimary
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        // Locked (greyed, not hidden) while this folder is the live queue: the mode
+                        // Locked (dimmed, not hidden) while this folder is the live queue: the mode
                         // is fixed at queue start, so editing it mid-play could only mislead.
-                        modifier = Modifier.clickable(enabled = !abookLocked) {
-                            onAbookToggle(!abookEnabled)
-                        }
+                        modifier = Modifier
+                            .height(CONTROL_BTN_HEIGHT)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                MaterialTheme.colorScheme.primary
+                                    .copy(alpha = if (abookLocked) 0.4f else 1f)
+                            )
+                            .clickable(enabled = !abookLocked) { onAbookToggle(!abookEnabled) }
+                            .padding(start = 8.dp, end = 14.dp)
                     ) {
                         // The whole row toggles; the box stays non-interactive to avoid a double event.
-                        Checkbox(checked = abookEnabled, onCheckedChange = null, enabled = !abookLocked)
-                        Text(
-                            stringResource(R.string.audiobook_mode),
-                            color = if (abookLocked) MaterialTheme.colorScheme.onSurfaceVariant
-                            else Color.Unspecified
+                        // Scaled down a touch so the square keeps a margin from the pill's edges.
+                        Checkbox(
+                            checked = abookEnabled,
+                            onCheckedChange = null,
+                            enabled = !abookLocked,
+                            modifier = Modifier.scale(0.8f),
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = onPill,
+                                checkmarkColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = onPill,
+                                disabledUncheckedColor = onPill,
+                                disabledCheckedColor = onPill
+                            )
                         )
+                        Text(stringResource(R.string.audiobook_mode), color = onPill)
                     }
                 }
             }
-        }
-        Button(
-            onClick = onPlayPause,
-            enabled = controller != null,
-            shape = CircleShape,
-            modifier = Modifier.align(Alignment.Center).size(120.dp)
-        ) {
-            Icon(
-                painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
-                modifier = Modifier.size(if (isPlaying) 48.dp else 68.dp)
-            )
+            Button(
+                onClick = { controller?.seekToPrevious() },
+                enabled = controller != null,
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_skip_previous),
+                    contentDescription = stringResource(R.string.previous)
+                )
+            }
+            // Rewind by a fixed step. Always available (no-op without a track).
+            Button(
+                onClick = {
+                    val target = (positionMs - SEEK_STEP_MS).coerceAtLeast(0L)
+                    controller?.seekTo(target)
+                    positionMs = target
+                },
+                enabled = controller != null,
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
+            ) { Text(stringResource(R.string.rewind_30)) }
         }
         Column(
-            modifier = Modifier.align(Alignment.CenterEnd),
-            verticalArrangement = Arrangement.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(CONTROL_GAP)
         ) {
+            Button(
+                onClick = onPlayPause,
+                enabled = controller != null,
+                shape = RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.width(CONTROL_BTN_WIDTH).height(PLAY_HEIGHT)
+            ) {
+                Icon(
+                    painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                    contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+                    modifier = Modifier.size(if (isPlaying) 40.dp else 56.dp)
+                )
+            }
+            // Shuffle in a button-height slot so it lines up with the ±30s row, not above it.
+            // A book plays sequentially, so shuffle is locked while a book is the live queue
+            // (playing or paused — a paused book is resumable in place). Starting a music
+            // folder, or the book ending, frees the switch again.
+            Box(modifier = Modifier.height(CONTROL_BTN_HEIGHT), contentAlignment = Alignment.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = shuffleEnabled,
+                        onCheckedChange = onShuffleToggle,
+                        enabled = !playingAbook
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_shuffle),
+                        contentDescription = stringResource(R.string.shuffle),
+                        tint = if (shuffleEnabled && !playingAbook) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(CONTROL_GAP)
+        ) {
+            // Speed is an audiobook feature: in a book it edits that book's saved speed (applied live
+            // only when it is the live queue); in music it shows x1.0 disabled, since music plays at 1.0.
+            Box(modifier = Modifier.height(CONTROL_BTN_HEIGHT), contentAlignment = Alignment.Center) {
+                SpeedButton(
+                    label = formatSpeed(if (speedEnabled) speed else Settings.SPEED_DEFAULT),
+                    enabled = speedEnabled,
+                    width = CONTROL_BTN_WIDTH,
+                    onClick = { showSpeedDialog = true }
+                )
+            }
             Button(
                 onClick = { controller?.seekToNext() },
                 enabled = controller != null,
                 contentPadding = PaddingValues(horizontal = 12.dp),
-                modifier = Modifier.width(76.dp).height(36.dp)
+                modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_skip_next),
                     contentDescription = stringResource(R.string.next)
                 )
             }
-            Spacer(Modifier.height(12.dp))
-            // Mirrors the abook slot on the left; the slot keeps its height so next never shifts.
-            // Inside a book the slot is the speed button (an audiobook feature: edits that book's
-            // saved speed, applied live only when it is the live queue); elsewhere speed is
-            // meaningless (music is always 1.0), so the slot is a previous-track button instead.
-            Box(modifier = Modifier.height(36.dp), contentAlignment = Alignment.CenterEnd) {
-                if (abookVisible && speedEnabled) {
-                    SpeedButton(
-                        label = formatSpeed(speed),
-                        enabled = true,
-                        onClick = { showSpeedDialog = true }
-                    )
-                } else {
-                    Button(
-                        onClick = { controller?.seekToPrevious() },
-                        enabled = controller != null,
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        modifier = Modifier.width(76.dp).height(36.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_skip_previous),
-                            contentDescription = stringResource(R.string.previous)
-                        )
-                    }
-                }
-            }
+            // Fast-forward by a fixed step. Always available (no-op without a track).
+            Button(
+                onClick = {
+                    val target = (positionMs + SEEK_STEP_MS).coerceAtMost(durationMs)
+                    controller?.seekTo(target)
+                    positionMs = target
+                },
+                enabled = controller != null,
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
+            ) { Text(stringResource(R.string.forward_30)) }
         }
     }
     if (showSpeedDialog) {
@@ -1759,13 +1817,14 @@ private fun SpeedButton(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
+    width: Dp = 76.dp,
     modifier: Modifier = Modifier
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
         contentPadding = PaddingValues(horizontal = 12.dp),
-        modifier = modifier.width(76.dp).height(36.dp)
+        modifier = modifier.width(width).height(36.dp)
     ) {
         Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
     }

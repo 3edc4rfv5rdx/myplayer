@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Player controls rebuilt as one aligned block: ±30s rewind/forward buttons, rounded-rectangle play, speed always shown (disabled in music), and the audiobook flag as a filled pill.
+
 - Speed dialog gains − and + buttons beside the slider for single-step adjustments.
 
 - Fix: flagging a folder as a book now swaps the prev button for the speed button right away, without re-entering it.

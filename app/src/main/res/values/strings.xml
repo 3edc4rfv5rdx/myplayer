@@ -26,6 +26,8 @@
     <string name="next">Next</string>
     <string name="previous">Previous</string>
     <string name="shuffle">Shuffle</string>
+    <string name="rewind_30">−30s</string>
+    <string name="forward_30">+30s</string>
     <string name="playback_speed">Playback speed</string>
     <string name="default_speed">Abook default speed</string>
     <string name="done">Done</string>
