@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.4.20260612+134
 
 - The shuffle icon now dims along with its switch while a book locks shuffle off.
 
