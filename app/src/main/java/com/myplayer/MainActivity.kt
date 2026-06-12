@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,7 +65,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -1667,9 +1667,12 @@ private fun NowPlaying(
                     val onPill = MaterialTheme.colorScheme.onPrimary
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        // Locked (dimmed, not hidden) while this folder is the live queue: the mode
-                        // is fixed at queue start, so editing it mid-play could only mislead.
+                        horizontalArrangement = Arrangement.Center,
+                        // Same width as the buttons. Locked (dimmed, not hidden) while this folder is
+                        // the live queue: the mode is fixed at queue start, so editing it mid-play
+                        // could only mislead.
                         modifier = Modifier
+                            .width(CONTROL_BTN_WIDTH)
                             .height(CONTROL_BTN_HEIGHT)
                             .clip(RoundedCornerShape(50))
                             .background(
@@ -1677,15 +1680,15 @@ private fun NowPlaying(
                                     .copy(alpha = if (abookLocked) 0.4f else 1f)
                             )
                             .clickable(enabled = !abookLocked) { onAbookToggle(!abookEnabled) }
-                            .padding(start = 8.dp, end = 14.dp)
                     ) {
                         // The whole row toggles; the box stays non-interactive to avoid a double event.
-                        // Scaled down a touch so the square keeps a margin from the pill's edges.
+                        // requiredSize pins the box to a small square (no 48dp touch-target padding),
+                        // so it keeps a margin from the pill edges and the label fits the button width.
                         Checkbox(
                             checked = abookEnabled,
                             onCheckedChange = null,
                             enabled = !abookLocked,
-                            modifier = Modifier.scale(0.8f),
+                            modifier = Modifier.requiredSize(20.dp),
                             colors = CheckboxDefaults.colors(
                                 checkedColor = onPill,
                                 checkmarkColor = MaterialTheme.colorScheme.primary,
@@ -1694,6 +1697,7 @@ private fun NowPlaying(
                                 disabledCheckedColor = onPill
                             )
                         )
+                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.audiobook_mode), color = onPill)
                     }
                 }
