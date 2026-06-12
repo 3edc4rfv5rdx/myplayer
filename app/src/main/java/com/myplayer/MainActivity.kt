@@ -1792,15 +1792,36 @@ private fun SpeedDialog(
                     fontSize = 22.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Slider(
-                    value = sliderSpeed,
-                    onValueChange = {
-                        sliderSpeed = snapSpeed(it)
-                        onPreview(sliderSpeed)
-                    },
-                    valueRange = Settings.SPEED_MIN..Settings.SPEED_MAX,
-                    steps = SPEED_SLIDER_STEPS
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = {
+                            sliderSpeed = snapSpeed(sliderSpeed - Settings.SPEED_STEP)
+                                .coerceAtLeast(Settings.SPEED_MIN)
+                            onPreview(sliderSpeed)
+                        },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.size(40.dp)
+                    ) { Text("−", fontSize = 20.sp) }
+                    Slider(
+                        value = sliderSpeed,
+                        onValueChange = {
+                            sliderSpeed = snapSpeed(it)
+                            onPreview(sliderSpeed)
+                        },
+                        valueRange = Settings.SPEED_MIN..Settings.SPEED_MAX,
+                        steps = SPEED_SLIDER_STEPS,
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                    )
+                    Button(
+                        onClick = {
+                            sliderSpeed = snapSpeed(sliderSpeed + Settings.SPEED_STEP)
+                                .coerceAtMost(Settings.SPEED_MAX)
+                            onPreview(sliderSpeed)
+                        },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.size(40.dp)
+                    ) { Text("+", fontSize = 20.sp) }
+                }
             }
         },
         confirmButton = {

@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed dialog gains − and + buttons beside the slider for single-step adjustments.
+
 - Fix: flagging a folder as a book now swaps the prev button for the speed button right away, without re-entering it.
 
 - New "Track time" setting toggles the rightmost time readout (file and book) between total (default) and remaining.
