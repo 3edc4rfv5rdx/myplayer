@@ -1757,8 +1757,12 @@ private fun NowPlaying(
                     Icon(
                         painter = painterResource(R.drawable.ic_shuffle),
                         contentDescription = stringResource(R.string.shuffle),
-                        tint = if (shuffleEnabled && !playingAbook) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        // Dimmed like the disabled switch while a book locks shuffle off.
+                        tint = when {
+                            playingAbook -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            shuffleEnabled -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
             }

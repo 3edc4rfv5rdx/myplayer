@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The shuffle icon now dims along with its switch while a book locks shuffle off.
+
 - The audiobook pill now matches the control buttons' width and spacing exactly.
 
 - Player controls rebuilt as one aligned block: ±30s rewind/forward buttons, rounded-rectangle play, speed always shown (disabled in music), and the audiobook flag as a filled pill.
