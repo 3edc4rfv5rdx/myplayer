@@ -79,3 +79,4 @@ unchanged. Computing loudness ourselves (analysis) is intentionally out of scope
 - Every commit must update `CHANGELOG.md` in the same commit. Newest entries go on top
   (prepend to `## Unreleased`), not appended at the bottom.
 - Keep shared values/functions centralized (e.g. `Settings`); no duplication across files.
+- Buttons must have a filled background — no low-contrast "grey on grey"; use a solid `Button`, not outlined.

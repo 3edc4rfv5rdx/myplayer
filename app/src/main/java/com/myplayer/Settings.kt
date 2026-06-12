@@ -162,8 +162,8 @@ object Settings {
     fun setFollowEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_FOLLOW, enabled.toString())
 
-    /** Rightmost time readout: remaining (-mm:ss) when on, total when off (default on). */
-    fun isRemainingTime(context: Context): Boolean = get(context, KEY_REMAINING) != "false"
+    /** Rightmost time readout: remaining (-mm:ss) when on, total when off (default off). */
+    fun isRemainingTime(context: Context): Boolean = get(context, KEY_REMAINING) == "true"
     fun setRemainingTime(context: Context, enabled: Boolean) =
         set(context, KEY_REMAINING, enabled.toString())
 

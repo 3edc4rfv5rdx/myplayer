@@ -283,7 +283,10 @@ class MainActivity : ComponentActivity() {
                             }
                             val abook by abookState
                             val abookInherited by abookInheritedState
-                            LaunchedEffect(currentFolderKey) {
+                            // Re-keyed on `abook` too so toggling this folder's checkbox (which
+                            // doesn't change currentFolderKey) immediately re-resolves the book key
+                            // and speed — otherwise the speed button only appears after re-entering.
+                            LaunchedEffect(currentFolderKey, abook) {
                                 abookState.value = currentFolderKey != null &&
                                     Settings.isAbook(this@MainActivity, currentFolderKey)
                                 val t = treeUriState.value
@@ -1891,7 +1894,16 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.remaining_time))
+            Column {
+                Text(stringResource(R.string.track_time))
+                Text(
+                    stringResource(
+                        if (remainingEnabled) R.string.remaining_time else R.string.total_time
+                    ),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Spacer(Modifier.weight(1f))
             Switch(checked = remainingEnabled, onCheckedChange = onRemainingChange)
         }

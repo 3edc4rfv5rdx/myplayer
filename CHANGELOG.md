@@ -4,9 +4,11 @@ Newest entries on top.
 
 ## Unreleased
 
-- Book progress row now shows the percent plus elapsed and remaining/total book time on the right.
+- Fix: flagging a folder as a book now swaps the prev button for the speed button right away, without re-entering it.
 
-- New "Remaining time" setting toggles the rightmost time readout (file and book) between remaining and total.
+- New "Track time" setting toggles the rightmost time readout (file and book) between total (default) and remaining.
+
+- Book progress row now shows the percent plus elapsed and remaining/total book time on the right.
 
 ## v0.4.20260611+117
 
