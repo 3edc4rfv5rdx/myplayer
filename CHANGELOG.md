@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Audiobook tracks now show a page glyph in the browser instead of the music note.
+
 - Internal: document clearRootState's no-concurrent-reads assumption.
 
 - Add commercial-readiness gaps doc (non-feature).

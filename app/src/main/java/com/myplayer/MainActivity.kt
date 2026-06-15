@@ -1083,6 +1083,7 @@ private fun PlayerScreen(
                     title = stringResource(
                         if (abookEnabled) R.string.mode_audiobook else R.string.mode_music
                     ),
+                    filesAreBook = abookEnabled,
                     selectedIndex = selectedIndex,
                     playingDocId = playingDocId,
                     visitedPathIds = visitedPathIds,
@@ -1375,6 +1376,7 @@ private fun FolderBrowser(
     treeUri: Uri,
     current: Node,
     title: String,
+    filesAreBook: Boolean,
     selectedIndex: Int?,
     playingDocId: String?,
     visitedPathIds: Set<String>,
@@ -1499,7 +1501,9 @@ private fun FolderBrowser(
                     val foreground =
                         if (highlighted) MaterialTheme.colorScheme.onPrimary else Color.Unspecified
                     Text(
-                        text = "🎵  ${file.name}",
+                        // Inside an audiobook the tracks are its pages, so mark them with a page
+                        // glyph instead of the music note used for plain music files.
+                        text = "${if (filesAreBook) "📄" else "🎵"}  ${file.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = FONT_LIST,
