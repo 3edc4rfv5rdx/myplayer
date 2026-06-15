@@ -50,6 +50,12 @@ object Settings {
     const val SPEED_STEP = 0.05f
     const val SPEED_DEFAULT = 1.0f
 
+    // Sleep-timer slider bounds and granularity (minutes), shared by the player and its dialog.
+    const val SLEEP_MIN = 10f
+    const val SLEEP_MAX = 60f
+    const val SLEEP_STEP = 5f
+    const val SLEEP_DEFAULT = 20f
+
     // How many recently played folders the history dialog keeps.
     const val HISTORY_MAX = 5
 

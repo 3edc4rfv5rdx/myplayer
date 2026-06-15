@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Internal: sleep-timer support in the player service (fires with the screen off).
+
 - Docs: refresh README for history, shared top bar, ±30s, Track time, time-based book progress, and Auto backup.
 
 - Added an opt-in Auto backup setting (off by default) that backs up settings and book progress to the user's Google account; the listing cache is excluded.

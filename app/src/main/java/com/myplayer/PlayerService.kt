@@ -4,6 +4,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -37,6 +38,16 @@ class PlayerService : MediaSessionService() {
         const val CMD_BOOK_MODE = "com.myplayer.BOOK_MODE"
         const val KEY_BOOK_FOLDER = "book_folder"
 
+        /** Custom session command: arm/cancel/query the sleep timer. The timer lives here (not the
+         *  activity) so it fires with the screen off and the app backgrounded. */
+        const val CMD_SLEEP_TIMER = "com.myplayer.SLEEP_TIMER"
+        // Request args.
+        const val KEY_SLEEP_ACTION = "sleep_action"   // "minutes" | "chapter" | "off" | "query"
+        const val KEY_SLEEP_MINUTES = "sleep_minutes" // int, for the "minutes" action
+        // Reply args (current state).
+        const val KEY_SLEEP_MODE = "sleep_mode"        // 0 = off, 1 = minutes, 2 = end of chapter
+        const val KEY_SLEEP_DEADLINE = "sleep_deadline" // elapsedRealtime ms for mode 1, else -1
+
         // How often the playing book's position is persisted, so a process kill loses at most this.
         private const val SAVE_INTERVAL_MS = 10_000L
     }
@@ -62,6 +73,13 @@ class PlayerService : MediaSessionService() {
             saveHandler.postDelayed(this, SAVE_INTERVAL_MS)
         }
     }
+
+    // Sleep timer (not persisted; lives only while the service does). For a fixed duration,
+    // [sleepDeadlineMs] is the elapsedRealtime to pause at and [sleepRunnable] is posted to it;
+    // for "end of chapter", [sleepEndOfChapter] makes the next auto track-transition pause instead.
+    private var sleepDeadlineMs = 0L
+    private var sleepEndOfChapter = false
+    private val sleepRunnable = Runnable { fireSleep() }
 
     override fun onCreate() {
         super.onCreate()
@@ -97,6 +115,11 @@ class PlayerService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 currentTrackGainDb = null
                 applyGain()
+                // "Until end of chapter" fires when the current track finishes on its own: the queue
+                // auto-advances to the next file (position ~0), so pausing here leaves the resume
+                // point cleanly at the start of the next chapter.
+                if (sleepEndOfChapter &&
+                    reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) fireSleep()
                 // A real move to another file (auto-advance or skip) makes it the book's new resume
                 // point; the initial setMediaItems (PLAYLIST_CHANGED) must not overwrite the restore.
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) saveBookPosition()
@@ -120,6 +143,8 @@ class PlayerService : MediaSessionService() {
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
+                    // The queue is over; a pending sleep timer has nothing left to pause.
+                    cancelSleep()
                     bookFolderKey?.let {
                         Settings.clearBookPos(this@PlayerService, it)
                         // The finished book's cached durations go with the resume point; a
@@ -191,6 +216,48 @@ class PlayerService : MediaSessionService() {
         Settings.setBookPos(this, key, uri, p.currentPosition.coerceAtLeast(0L))
     }
 
+    /** Arms a fixed-duration sleep timer that pauses playback after [minutes] (replaces any pending
+     *  timer; a non-positive value just cancels). */
+    private fun armSleepMinutes(minutes: Int) {
+        cancelSleep()
+        if (minutes <= 0) return
+        val delay = minutes * 60_000L
+        sleepDeadlineMs = SystemClock.elapsedRealtime() + delay
+        saveHandler.postDelayed(sleepRunnable, delay)
+    }
+
+    /** Arms an "until end of chapter" timer: the next auto track-transition pauses playback. */
+    private fun armSleepChapter() {
+        cancelSleep()
+        sleepEndOfChapter = true
+    }
+
+    /** Cancels any pending sleep timer. */
+    private fun cancelSleep() {
+        saveHandler.removeCallbacks(sleepRunnable)
+        sleepDeadlineMs = 0L
+        sleepEndOfChapter = false
+    }
+
+    /** Pauses playback and disarms — the one-shot effect of a fired timer. */
+    private fun fireSleep() {
+        cancelSleep()
+        player?.pause()
+    }
+
+    /** Current sleep-timer state for the controller (mode + deadline). */
+    private fun sleepStateBundle(): Bundle {
+        val mode = when {
+            sleepEndOfChapter -> 2
+            sleepDeadlineMs > 0L -> 1
+            else -> 0
+        }
+        return Bundle().apply {
+            putInt(KEY_SLEEP_MODE, mode)
+            putLong(KEY_SLEEP_DEADLINE, if (mode == 1) sleepDeadlineMs else -1L)
+        }
+    }
+
     /** Grants the ReplayGain command to controllers and applies the toggle live on request. */
     private inner class SessionCallback : MediaSession.Callback {
         @UnstableApi
@@ -201,6 +268,7 @@ class PlayerService : MediaSessionService() {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(CMD_REPLAYGAIN, Bundle.EMPTY))
                 .add(SessionCommand(CMD_BOOK_MODE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_SLEEP_TIMER, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -226,6 +294,17 @@ class PlayerService : MediaSessionService() {
                 if (newKey != bookFolderKey) saveBookPosition()
                 bookFolderKey = newKey
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == CMD_SLEEP_TIMER) {
+                when (args.getString(KEY_SLEEP_ACTION)) {
+                    "minutes" -> armSleepMinutes(args.getInt(KEY_SLEEP_MINUTES))
+                    "chapter" -> armSleepChapter()
+                    "off" -> cancelSleep()
+                    // "query" only reads the state returned below.
+                }
+                return Futures.immediateFuture(
+                    SessionResult(SessionResult.RESULT_SUCCESS, sleepStateBundle())
+                )
             }
             return super.onCustomCommand(session, controller, customCommand, args)
         }
@@ -261,6 +340,7 @@ class PlayerService : MediaSessionService() {
     override fun onDestroy() {
         saveBookPosition()
         saveHandler.removeCallbacks(saveTick)
+        saveHandler.removeCallbacks(sleepRunnable)
         Settings.flush() // make sure the final position write reaches disk before the process can die
         enhancer?.release()
         enhancer = null
