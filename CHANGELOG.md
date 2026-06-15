@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Add commercial-readiness gaps doc (non-feature).
+
 - Fixed the +30s button jumping to the start of a track before its duration was known.
 
 - Fixed the remaining-time readout briefly showing a malformed negative value at the end of a track.
