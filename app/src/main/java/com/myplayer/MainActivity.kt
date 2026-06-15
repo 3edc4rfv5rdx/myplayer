@@ -1528,6 +1528,27 @@ private fun FolderBrowser(
         }
     }
 
+    // Duration of the highlighted (playing/selected) file, appended to its scrolling name. Resolved
+    // lazily for just that one file via the same cache the book progress uses; cached after. Only the
+    // highlighted row marquees, so showing the time only there keeps the rest of the list clean.
+    var rowDurations by remember(current.documentId) { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    LaunchedEffect(contents, playingDocId, selectedIndex) {
+        val files = contents?.second ?: return@LaunchedEffect
+        val ids = buildSet {
+            playingDocId?.let { pd -> if (files.any { it.documentId == pd }) add(pd) }
+            selectedIndex?.let { if (it in files.indices) add(files[it].documentId) }
+        }
+        if (ids.isEmpty()) return@LaunchedEffect
+        val idList = ids.toList()
+        val uris = idList.map { DocumentsContract.buildDocumentUriUsingTree(treeUri, it).toString() }
+        withContext(Dispatchers.IO) {
+            DurationCache.durations(context, uris) { snap ->
+                rowDurations = rowDurations +
+                    idList.indices.filter { snap[it] > 0L }.associate { idList[it] to snap[it] }
+            }
+        }
+    }
+
     Column(modifier = modifier) {
         TopBar(
             leadingIcon = painterResource(R.drawable.ic_arrow_back),
@@ -1596,10 +1617,13 @@ private fun FolderBrowser(
                         if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent
                     val foreground =
                         if (highlighted) MaterialTheme.colorScheme.onPrimary else Color.Unspecified
+                    // The highlighted (scrolling) row appends its track duration after the name.
+                    val durationSuffix = rowDurations[file.documentId]
+                        ?.takeIf { highlighted }?.let { "  ${formatTime(it)}" } ?: ""
                     Text(
                         // Inside an audiobook the tracks are its pages, so mark them with a page
                         // glyph instead of the music note used for plain music files.
-                        text = "${if (filesAreBook) "📄" else "🎵"}  ${file.name}",
+                        text = "${if (filesAreBook) "📄" else "🎵"}  ${file.name}$durationSuffix",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = FONT_LIST,

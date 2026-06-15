@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The highlighted file row now shows the track duration after its name in the scrolling line.
+
 - Docs: document the sleep timer in the README and trim the overloaded sections.
 
 - Added one-line descriptions under the ReplayGain and Follow playing track settings.
