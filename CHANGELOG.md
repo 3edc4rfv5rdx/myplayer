@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Split the rebuildable folder-listing cache into its own cache.db, separate from app.db.
+
 - Audiobook tracks now show a page glyph in the browser instead of the music note.
 
 - Internal: document clearRootState's no-concurrent-reads assumption.

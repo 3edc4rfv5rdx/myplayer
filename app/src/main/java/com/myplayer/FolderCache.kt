@@ -27,7 +27,7 @@ object FolderCache {
         rw.readLock().lock()
         try {
             synchronized(keyLock(root, parent.documentId)) {
-                val db = AppDb.db(context)
+                val db = CacheDb.db(context)
                 if (isScanned(db, root, parent.documentId)) {
                     return read(db, root, parent.documentId)
                 }
@@ -45,10 +45,11 @@ object FolderCache {
     fun clear(context: Context) {
         rw.writeLock().lock()
         try {
-            val db = AppDb.db(context)
-            db.delete("children", null, null)
-            db.delete("scanned", null, null)
-            db.delete("durations", null, null)
+            CacheDb.db(context).run {
+                delete("children", null, null)
+                delete("scanned", null, null)
+            }
+            AppDb.db(context).delete("durations", null, null)
         } finally {
             rw.writeLock().unlock()
         }
@@ -59,12 +60,13 @@ object FolderCache {
     fun clearRoot(context: Context, treeUri: Uri) {
         rw.writeLock().lock()
         try {
-            val db = AppDb.db(context)
             val root = arrayOf(treeUri.toString())
-            db.delete("children", "tree_uri=?", root)
-            db.delete("scanned", "tree_uri=?", root)
+            CacheDb.db(context).run {
+                delete("children", "tree_uri=?", root)
+                delete("scanned", "tree_uri=?", root)
+            }
             // Duration rows are keyed by document uri, which embeds the tree uri as its prefix.
-            db.delete(
+            AppDb.db(context).delete(
                 "durations", "uri LIKE ? ESCAPE '\\'",
                 arrayOf(AppDb.likePrefix(treeUri.toString() + "/document/"))
             )
@@ -78,7 +80,7 @@ object FolderCache {
     fun invalidate(context: Context, treeUri: Uri, parentId: String) {
         rw.writeLock().lock()
         try {
-            val db = AppDb.db(context)
+            val db = CacheDb.db(context)
             val args = arrayOf(treeUri.toString(), parentId)
             db.delete("children", "tree_uri=? AND parent_id=?", args)
             db.delete("scanned", "tree_uri=? AND parent_id=?", args)
@@ -94,7 +96,7 @@ object FolderCache {
     fun invalidateSubtree(context: Context, treeUri: Uri, folderId: String): List<String> {
         rw.writeLock().lock()
         try {
-            val db = AppDb.db(context)
+            val db = CacheDb.db(context)
             val root = treeUri.toString()
             val fileUris = ArrayList<String>()
             val pending = ArrayDeque<String>()

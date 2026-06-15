@@ -4,7 +4,10 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-/** Single SQLite database for both the folder-listing cache and app settings. */
+/** Database for the data worth keeping across reinstalls: app settings (SAF roots, toggles, theme,
+ *  per-folder audiobook flags/positions/speeds) and the per-file duration cache. This file is
+ *  included in Android Auto Backup. The rebuildable folder-listing cache lives in a separate
+ *  [CacheDb] file so it can be excluded from backup. */
 object AppDb {
 
     private var helper: Helper? = null
@@ -20,9 +23,8 @@ object AppDb {
     fun likePrefix(prefix: String): String =
         prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
-    private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 3) {
+    private class Helper(context: Context) : SQLiteOpenHelper(context, "app.db", null, 4) {
         override fun onCreate(db: SQLiteDatabase) {
-            createCacheTables(db)
             createDurationsTable(db)
             createSettingsTable(db)
         }
@@ -33,34 +35,23 @@ object AppDb {
         }
 
         /** Per-file durations (see [DurationCache]); create-if-missing — expensive to refill, so
-         *  unlike the listing cache it is never dropped on upgrade. */
+         *  it is kept across versions and backed up. */
         private fun createDurationsTable(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS durations(uri TEXT PRIMARY KEY, ms INTEGER)")
         }
 
-        /** The cache key is (tree_uri, parent_id): documentId alone can collide across roots/providers. */
-        private fun createCacheTables(db: SQLiteDatabase) {
-            db.execSQL(
-                "CREATE TABLE children(tree_uri TEXT, parent_id TEXT, doc_id TEXT, name TEXT, is_dir INTEGER)"
-            )
-            db.execSQL("CREATE INDEX idx_parent ON children(tree_uri, parent_id)")
-            db.execSQL(
-                "CREATE TABLE scanned(tree_uri TEXT, parent_id TEXT, PRIMARY KEY(tree_uri, parent_id))"
-            )
-        }
-
-        // Only the listing-cache tables are versioned data; `settings` (roots/toggles/theme) and
-        // `durations` must survive.
+        // `settings` and `durations` survive every version change. The listing-cache tables used to
+        // live here too (v<=3); they now have their own CacheDb file, so drop the old copies when
+        // migrating from the single-DB layout.
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
             db.execSQL("DROP TABLE IF EXISTS children")
             db.execSQL("DROP TABLE IF EXISTS scanned")
-            createCacheTables(db)
             createDurationsTable(db)
             createSettingsTable(db)
         }
 
         // A downgrade (older APK sideloaded over a newer one) would otherwise throw and crash on
-        // first DB access. The cache is rebuildable, so reset it the same way and keep `settings`.
+        // first DB access; keep `settings`/`durations` and reconcile the schema the same way.
         override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) =
             onUpgrade(db, oldVersion, newVersion)
     }
