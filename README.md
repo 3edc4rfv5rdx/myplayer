@@ -17,7 +17,11 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
   notification, and closes the app.
 - Browse subfolders in-app; the listing is cached per folder so it stays fast. Folders and files are
   shown in natural order (so `Chapter 2` comes before `Chapter 10`). 📁 marks a plain folder, 📖 a
-  folder flagged as an audiobook, 🎵 a file.
+  folder flagged as an audiobook, 🎵 a music file, and 📄 a track inside an audiobook. The top bar of
+  each screen shares one layout (back/close, an optional title, add on the home list, settings); the
+  browser title reads **Music** or **AudioBook** for the current folder's play mode.
+- **History**: the home list has a **History** button listing the last few folders you played (📖 for
+  books, 🎵 for music); tapping one jumps the browser straight back to that folder.
 - **Delete a folder**: long-press it in the listing and confirm — this permanently removes the folder
   and all its files from storage (and forgets any audiobook state). If it (or a track queued from it)
   is playing, playback is adjusted first.
@@ -27,18 +31,22 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - **Play** with nothing selected plays the current folder; the same paused folder resumes.
 - **Shuffle** switch (main screen, on by default, not persisted): toggles the play order live. With
   shuffle on, starting a folder begins at a random track; off starts from the top.
-- **Next** skips to the next track. The playing track's name and its folder path show above the
-  controls.
-- **Playback bar** under the track name shows the elapsed time and the track duration at its edges;
-  tap or drag it to seek within the track.
+- **Previous / Next** skip tracks, and **−30s / +30s** buttons step within the current track.
+- **Playback bar** shows the elapsed time and, at the right edge, the track duration (or the
+  remaining time, per the Track-time setting); tap or drag it to seek within the track.
 - The now-playing name, path, and bar stay visible while a track is playing as you browse folders;
   navigating up away from a stopped or paused track (or returning to the home list) clears them, and
   resuming brings them back.
 - **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **ReplayGain**,
-  **Follow playing track**, **Abook default speed** (the speed new audiobooks start at), and an About
-  with version/build.
+  **Follow playing track**, **Track time** (rightmost readout shows total or remaining time),
+  **Auto backup**, **Abook default speed** (the speed new audiobooks start at), and an About dialog
+  (ℹ️ in the top bar) with version/build.
 - **Follow playing track** (Settings, on by default): on each track change the browser jumps to the
   playing file's folder and scrolls it into the middle of the list, highlighting it.
+- **Auto backup** (Settings, off by default): when on, app settings and audiobook progress are
+  included in Android Auto Backup (your Google account); off keeps the current behavior where
+  uninstalling wipes everything. The rebuildable folder-listing cache is never backed up, and SAF
+  folder permissions are not — after a restore the roots reappear but must be re-granted.
 
 ## Audiobooks
 
@@ -55,11 +63,13 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
   re-entering the folder and pressing Play resumes where you left off, rewound a few seconds for
   context.
 - Each book keeps its **own playback speed**: the speed button is enabled whenever the browser is
-  inside a book (playing or not) and edits that book's saved speed, with an audible live preview
-  when that book is what's playing. New books start at the **Abook default speed** from Settings.
-  Plain music always plays at 1.0× (the button stays disabled there).
-- While a book plays, a **progress readout** shows the current file (N/M) and an approximate overall
-  percent with a thin bar.
+  inside a book (playing or not) and edits that book's saved speed (a slider with −/+ step buttons),
+  with an audible live preview when that book is what's playing. New books start at the **Abook
+  default speed** from Settings. Plain music always plays at 1.0× (the button stays disabled there).
+- While a book plays, a **progress readout** shows the current file (N/M) and the overall percent
+  with a thin bar. It is **time-based** (elapsed / total or remaining of the whole book) using a
+  per-file duration cache that fills in the background, refining the percent as it resolves; until
+  any duration is known it falls back to a file-count estimate.
 
 ## Build
 
@@ -72,9 +82,11 @@ Release-only workflow. Requires Android SDK and JDK 17/21.
 
 - **Folder access:** Storage Access Framework (`OpenDocumentTree`) with a persistable permission per
   root; folders are read via `DocumentsContract` and files addressed by `content://` tree URIs.
-- **Cache & settings:** one SQLite database (`app.db`) — folder listings keyed by (root tree URI,
-  parent) and cleared by Rescan, plus app settings (root list, theme, toggles, default speed, and
-  per-folder audiobook state: mode, resume position, speed).
+- **Cache & settings:** two SQLite databases. `app.db` holds app settings (root list, theme,
+  toggles, default speed, per-folder audiobook state: mode, resume position, speed) plus the per-file
+  duration cache — the data worth keeping, so it is what Auto Backup uploads when enabled. `cache.db`
+  holds the rebuildable folder listings keyed by (root tree URI, parent), cleared by Rescan and
+  excluded from backup.
 - **Playback:** Media3/ExoPlayer in a `MediaSessionService` (background playback + shade controls).
   Order is controlled by Media3's shuffle mode (`shuffleModeEnabled`); when shuffle is on, starting a
   folder picks a random initial track. Repeat is always off (a finished queue just ends; hardwired
