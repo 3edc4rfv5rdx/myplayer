@@ -39,8 +39,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1068,6 +1067,9 @@ private fun PlayerScreen(
                 FolderBrowser(
                     treeUri = treeUri,
                     current = current,
+                    title = stringResource(
+                        if (abookEnabled) R.string.mode_audiobook else R.string.mode_music
+                    ),
                     selectedIndex = selectedIndex,
                     playingDocId = playingDocId,
                     visitedPathIds = visitedPathIds,
@@ -1083,13 +1085,17 @@ private fun PlayerScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        NowPlaying(
-            controller, clearTitleTick, treeUri == null,
-            shuffleEnabled, onShuffleToggle,
-            abookEnabled, abookVisible, abookLocked, onAbookToggle,
-            playingAbook, remainingTime, onPlayPause,
-            speed, speedEnabled, speedLive, onSpeedChange
-        )
+        // On the home screen the controls are secondary (usually nothing is playing): dim the whole
+        // block, but keep it interactive so background playback can still be paused from here.
+        Column(modifier = Modifier.alpha(if (treeUri == null) 0.45f else 1f)) {
+            NowPlaying(
+                controller, clearTitleTick, treeUri == null,
+                shuffleEnabled, onShuffleToggle,
+                abookEnabled, abookVisible, abookLocked, onAbookToggle,
+                playingAbook, remainingTime, onPlayPause,
+                speed, speedEnabled, speedLive, onSpeedChange
+            )
+        }
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -1119,9 +1125,17 @@ private fun TopBar(
     onLeading: () -> Unit,
     title: String?,
     onAdd: (() -> Unit)?,
-    onSettings: () -> Unit,
+    onSettings: (() -> Unit)?,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        // A neutral grey toolbar strip so the bar reads as a panel, distinct from the content;
+        // the icons keep their own look and tint.
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+    ) {
         IconButton(onClick = onLeading) {
             Icon(painter = leadingIcon, contentDescription = leadingDesc)
         }
@@ -1144,11 +1158,13 @@ private fun TopBar(
                 )
             }
         }
-        IconButton(onClick = onSettings) {
-            Icon(
-                painter = painterResource(R.drawable.ic_settings),
-                contentDescription = stringResource(R.string.settings)
-            )
+        if (onSettings != null) {
+            IconButton(onClick = onSettings) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings),
+                    contentDescription = stringResource(R.string.settings)
+                )
+            }
         }
     }
 }
@@ -1324,6 +1340,7 @@ private fun RootsList(
 private fun FolderBrowser(
     treeUri: Uri,
     current: Node,
+    title: String,
     selectedIndex: Int?,
     playingDocId: String?,
     visitedPathIds: Set<String>,
@@ -1386,7 +1403,7 @@ private fun FolderBrowser(
             leadingIcon = painterResource(R.drawable.ic_arrow_back),
             leadingDesc = stringResource(R.string.back),
             onLeading = onUp,
-            title = null,
+            title = title,
             onAdd = null,
             onSettings = onOpenSettings,
         )
@@ -2011,13 +2028,14 @@ private fun SettingsScreen(
             .fillMaxSize()
             .padding(start = 16.dp, top = 40.dp, end = 16.dp, bottom = 16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.settings), fontSize = 22.sp)
-        }
+        TopBar(
+            leadingIcon = painterResource(R.drawable.ic_arrow_back),
+            leadingDesc = stringResource(R.string.back),
+            onLeading = onBack,
+            title = stringResource(R.string.settings),
+            onAdd = null,
+            onSettings = null,
+        )
 
         Spacer(Modifier.height(24.dp))
         Button(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {

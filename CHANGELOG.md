@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- The player top bar shows "Music" or "AudioBook" for the current folder's play mode.
+
+- Top bar now sits on a neutral grey strip; player controls are dimmed on the home screen (still interactive). The settings screen uses the same shared top bar.
+
 - Reserved the book-progress slot on the player screen so the browser's bottom edge sits ~6 mm higher and stays fixed whether or not a book is playing.
 
 - Removed the now-playing track name/path under the browser (the folder name and the highlighted row already show it), freeing space so the list stretches down.

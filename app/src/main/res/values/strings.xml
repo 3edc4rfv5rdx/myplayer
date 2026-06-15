@@ -34,6 +34,8 @@
     <string name="default_speed">Abook default speed</string>
     <string name="done">Done</string>
     <string name="audiobook_mode">abook</string>
+    <string name="mode_music">Music</string>
+    <string name="mode_audiobook">AudioBook</string>
     <string name="file_label">File</string>
     <string name="delete_book">Delete book</string>
     <string name="delete_book_message">Permanently delete %1$s and all its files from storage</string>
