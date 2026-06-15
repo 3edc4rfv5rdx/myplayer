@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Enlarged the settings option labels for readability, and moved About into a dialog opened from a new top-bar info button.
+
 - Unified font sizes into a shared type scale (caption/title/list/display) so same-purpose text matches across all screens.
 
 - Top-bar back/close and settings icons share one slightly larger size; the add (+) icon is larger still to stand out.

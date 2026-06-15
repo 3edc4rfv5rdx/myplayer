@@ -130,7 +130,7 @@ private val PLAY_HEIGHT = CONTROL_BTN_HEIGHT * 2 + CONTROL_GAP
 // (settings rows, version lines) keeps the Material default ~16sp and is left unstyled. Priority maps
 // to size: emphasised value > tappable list content > headings > captions.
 private val FONT_CAPTION = 14.sp   // secondary lines: track/book times, sub-labels
-private val FONT_TITLE = 18.sp     // headings: top-bar title, current folder, "About"
+private val FONT_TITLE = 18.sp     // headings (top-bar title, current folder) + settings option labels
 private val FONT_LIST = 20.sp      // tappable list rows + compact control glyphs (speed −/+)
 private val FONT_DISPLAY = 24.sp   // single emphasised value (speed dialog)
 
@@ -1130,7 +1130,8 @@ private fun formatTime(ms: Long): String {
 }
 
 /** Shared top bar for the home and browser screens: a leading icon button (close on home, back in
- *  the browser), an optional title, an optional add button (home only), and settings. */
+ *  the browser), an optional title, an optional add button (home only), an optional about button
+ *  (settings only), and settings. */
 @Composable
 private fun TopBar(
     leadingIcon: Painter,
@@ -1139,6 +1140,7 @@ private fun TopBar(
     title: String?,
     onAdd: (() -> Unit)?,
     onSettings: (() -> Unit)?,
+    onAbout: (() -> Unit)? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1173,6 +1175,15 @@ private fun TopBar(
                     painter = painterResource(R.drawable.ic_add_circle),
                     contentDescription = stringResource(R.string.add_folder),
                     modifier = Modifier.size(TOP_BAR_ADD_ICON)
+                )
+            }
+        }
+        if (onAbout != null) {
+            IconButton(onClick = onAbout) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_info),
+                    contentDescription = stringResource(R.string.about),
+                    modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
         }
@@ -2042,6 +2053,7 @@ private fun SettingsScreen(
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
+    var showAbout by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2054,15 +2066,16 @@ private fun SettingsScreen(
             title = stringResource(R.string.settings),
             onAdd = null,
             onSettings = null,
+            onAbout = { showAbout = true },
         )
 
         Spacer(Modifier.height(24.dp))
         Button(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.rescan))
+            Text(stringResource(R.string.rescan), fontSize = FONT_TITLE)
         }
 
         Spacer(Modifier.height(20.dp))
-        Text(stringResource(R.string.theme))
+        Text(stringResource(R.string.theme), fontSize = FONT_TITLE)
         Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             ThemeOption(stringResource(R.string.theme_system), themeMode == ThemeMode.System) {
@@ -2080,14 +2093,14 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.replaygain))
+            Text(stringResource(R.string.replaygain), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             Switch(checked = replayGainEnabled, onCheckedChange = onReplayGainChange)
         }
 
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.follow_playing))
+            Text(stringResource(R.string.follow_playing), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             Switch(checked = followEnabled, onCheckedChange = onFollowChange)
         }
@@ -2095,7 +2108,7 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column {
-                Text(stringResource(R.string.track_time))
+                Text(stringResource(R.string.track_time), fontSize = FONT_TITLE)
                 Text(
                     stringResource(
                         if (remainingEnabled) R.string.remaining_time else R.string.total_time
@@ -2111,7 +2124,7 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         var showSpeedDialog by remember { mutableStateOf(false) }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.default_speed))
+            Text(stringResource(R.string.default_speed), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             SpeedButton(
                 label = formatSpeed(defaultSpeed),
@@ -2127,13 +2140,25 @@ private fun SettingsScreen(
                 onDismiss = { showSpeedDialog = false }
             )
         }
+    }
 
-        Spacer(Modifier.weight(1f))
-        Text(stringResource(R.string.about), fontSize = FONT_TITLE)
-        Spacer(Modifier.height(4.dp))
-        Text(stringResource(R.string.app_name))
-        Text("${stringResource(R.string.version)} $version")
-        Text("${stringResource(R.string.build)} $build")
+    if (showAbout) {
+        AlertDialog(
+            onDismissRequest = { showAbout = false },
+            title = { Text(stringResource(R.string.about)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.app_name))
+                    Text("${stringResource(R.string.version)} $version")
+                    Text("${stringResource(R.string.build)} $build")
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showAbout = false }) {
+                    Text(stringResource(R.string.done))
+                }
+            }
+        )
     }
 }
 
@@ -2145,5 +2170,5 @@ private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Button(onClick = onClick, colors = colors) { Text(label) }
+    Button(onClick = onClick, colors = colors) { Text(label, fontSize = FONT_TITLE) }
 }
