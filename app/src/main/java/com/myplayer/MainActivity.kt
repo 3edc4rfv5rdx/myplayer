@@ -1672,7 +1672,7 @@ private fun FolderBrowser(
 /** Sleep-timer dialog: a stepped minutes slider (Start), an "until end of chapter" option, and a
  *  Stop (active only while a timer runs). The running remaining time shows next to the title — a
  *  countdown for a fixed timer, the current track's remaining for an end-of-chapter timer. Arming is
- *  disabled while nothing is playing. */
+ *  allowed any time; a fresh Start just re-arms. */
 @Composable
 private fun SleepTimerDialog(
     controller: MediaController?,
@@ -1688,13 +1688,11 @@ private fun SleepTimerDialog(
     var now by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
-    var playing by remember { mutableStateOf(controller?.isPlaying == true) }
     LaunchedEffect(controller) {
         while (true) {
             now = SystemClock.elapsedRealtime()
             positionMs = controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
             durationMs = controller?.duration?.takeIf { it > 0L } ?: 0L
-            playing = controller?.isPlaying == true
             delay(500)
         }
     }
@@ -1713,11 +1711,8 @@ private fun SleepTimerDialog(
                 Text(stringResource(R.string.sleep_timer))
                 if (remaining != null) {
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        remaining,
-                        fontSize = FONT_CAPTION,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    // The running remaining reads as large as the title so it's the focal value.
+                    Text(remaining, fontSize = FONT_DISPLAY)
                 }
             }
         },
@@ -1738,10 +1733,9 @@ private fun SleepTimerDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 Button(
-                    enabled = playing,
                     onClick = { onChapter(); onDismiss() },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.sleep_until_chapter)) }
+                ) { Text(stringResource(R.string.sleep_until_track)) }
             }
         },
         confirmButton = {
@@ -1751,7 +1745,6 @@ private fun SleepTimerDialog(
                 }
                 Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                 Button(
-                    enabled = playing,
                     onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() }
                 ) { Text(stringResource(R.string.sleep_start)) }
             }
