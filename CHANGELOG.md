@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs: document the sleep timer in the README and trim the overloaded sections.
+
 - Added one-line descriptions under the ReplayGain and Follow playing track settings.
 
 - Sleep timer: renamed the option to "Until end of track", allowed arming any time (Start re-arms), and show the running remaining large by the dialog title.

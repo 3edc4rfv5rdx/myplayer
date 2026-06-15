@@ -15,16 +15,13 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
   its permission). The home list itself is not playable — only the folders inside it.
 - **Exit** (✕, top-left of the home list) stops playback, tears down the player service and its
   notification, and closes the app.
-- Browse subfolders in-app; the listing is cached per folder so it stays fast. Folders and files are
-  shown in natural order (so `Chapter 2` comes before `Chapter 10`). 📁 marks a plain folder, 📖 a
-  folder flagged as an audiobook, 🎵 a music file, and 📄 a track inside an audiobook. The top bar of
-  each screen shares one layout (back/close, an optional title, add on the home list, settings); the
-  browser title reads **Music** or **AudioBook** for the current folder's play mode.
+- Browse subfolders in-app; listings are cached per folder. Folders and files are in natural order
+  (`Chapter 2` before `Chapter 10`). 📁 folder, 📖 audiobook, 🎵 music file, 📄 track inside a book.
+  The browser title reads **Music** or **AudioBook** for the folder's mode.
 - **History**: the home list has a **History** button listing the last few folders you played (📖 for
   books, 🎵 for music); tapping one jumps the browser straight back to that folder.
-- **Delete a folder**: long-press it in the listing and confirm — this permanently removes the folder
-  and all its files from storage (and forgets any audiobook state). If it (or a track queued from it)
-  is playing, playback is adjusted first.
+- **Delete a folder**: long-press and confirm — permanently removes it and its files from storage
+  (and forgets its audiobook state); playback is adjusted first if affected.
 - **Tap a file** to select it, then press the big **Play** to start (selected track first, then the
   rest of the folder).
 - **Play this folder** plays everything under the current folder (recursively).
@@ -34,42 +31,35 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - **Previous / Next** skip tracks, and **−30s / +30s** buttons step within the current track.
 - **Playback bar** shows the elapsed time and, at the right edge, the track duration (or the
   remaining time, per the Track-time setting); tap or drag it to seek within the track.
-- The now-playing name, path, and bar stay visible while a track is playing as you browse folders;
-  navigating up away from a stopped or paused track (or returning to the home list) clears them, and
-  resuming brings them back.
+- **Sleep timer** (⏳ in the top bar): minutes slider (10–60) or **Until end of track**; pauses
+  playback (a book keeps its resume point), works with the screen off, not persisted.
+- The now-playing name, path, and bar stay visible while playing as you browse; leaving a stopped or
+  paused track (or going home) clears them, and resuming brings them back.
 - **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **ReplayGain**,
   **Follow playing track**, **Track time** (rightmost readout shows total or remaining time),
   **Auto backup**, **Abook default speed** (the speed new audiobooks start at), and an About dialog
   (ℹ️ in the top bar) with version/build.
-- **Follow playing track** (Settings, on by default): on each track change the browser jumps to the
-  playing file's folder and scrolls it into the middle of the list, highlighting it.
-- **Auto backup** (Settings, off by default): when on, app settings and audiobook progress are
-  included in Android Auto Backup (your Google account); off keeps the current behavior where
-  uninstalling wipes everything. The rebuildable folder-listing cache is never backed up, and SAF
-  folder permissions are not — after a restore the roots reappear but must be re-granted.
+- **Follow playing track** (on by default): on each track change the browser jumps to the playing
+  file's folder and centers it.
+- **Auto backup** (off by default): includes settings and book progress in Android Auto Backup; the
+  listing cache isn't backed up, and SAF permissions don't survive a restore (re-grant the roots).
 
 ## Audiobooks
 
-- Open a folder and tick the **abook** checkbox to mark it as an audiobook (a per-folder, persisted
-  flag). It shows as 📖 in its parent listing. The queue's mode is fixed when playback starts; while
-  the folder is the live queue its checkbox is locked, so changes always apply to the next start.
-- Book mode covers the **whole subtree**: anything played inside the book (a subfolder like CD2, or
-  a tapped chapter file) plays the full book from its root — sequential, tracked, at the book's
-  speed — jumping to that part. Subfolders show the inherited checkbox state, locked; the flag is
-  edited on the book folder itself.
-- A book plays **sequentially** — shuffle is locked off while a book is the live queue.
-- A paused book is just paused: Play resumes it in place, same as paused music. It also
-  **remembers its position** persistently: when the queue is gone (app restarted, book switched),
-  re-entering the folder and pressing Play resumes where you left off, rewound a few seconds for
-  context.
-- Each book keeps its **own playback speed**: the speed button is enabled whenever the browser is
-  inside a book (playing or not) and edits that book's saved speed (a slider with −/+ step buttons),
-  with an audible live preview when that book is what's playing. New books start at the **Abook
-  default speed** from Settings. Plain music always plays at 1.0× (the button stays disabled there).
-- While a book plays, a **progress readout** shows the current file (N/M) and the overall percent
-  with a thin bar. It is **time-based** (elapsed / total or remaining of the whole book) using a
-  per-file duration cache that fills in the background, refining the percent as it resolves; until
-  any duration is known it falls back to a file-count estimate.
+- Open a folder and tick **abook** to mark it an audiobook (per-folder, persisted; shows as 📖). The
+  mode is fixed at queue start, so while it's the live queue the checkbox is locked.
+- Book mode covers the **whole subtree**: playing anything inside (a subfolder, a tapped chapter)
+  plays the full book from its root — sequential, tracked, at the book's speed — jumping to that part.
+  Subfolders show the inherited state, locked; the flag is edited on the book folder.
+- A book plays **sequentially** (shuffle locked off while it's the live queue).
+- A paused book resumes in place with Play, and **remembers its position**: even after the queue is
+  gone (restart, switched book), re-entering and Play resumes where you left off, rewound a few sec.
+- Each book keeps its **own playback speed**: editable whenever the browser is inside the book (slider
+  with −/+), applied live when that book is playing. New books use the **Abook default speed**; plain
+  music always plays at 1.0×.
+- While a book plays, a **progress readout** shows the current file (N/M) and a **time-based** percent
+  (elapsed / total or remaining), backed by a per-file duration cache that refines it in the
+  background; until any duration is known it estimates by file count.
 
 ## Build
 
@@ -92,5 +82,7 @@ Release-only workflow. Requires Android SDK and JDK 17/21.
   folder picks a random initial track. Repeat is always off (a finished queue just ends; hardwired
   via the `Settings.REPEAT_ALL` flag, no UI). Audiobook folders also play with shuffle off; the
   service periodically saves the current file + offset as the book's resume point.
+- **Sleep timer:** lives in the service (fires with the screen off), driven by a custom session
+  command; pauses at a deadline or on the next auto track transition. Not persisted.
 - **ReplayGain:** optional rough loudness leveling from `REPLAYGAIN_TRACK_GAIN` tags (only tagged
   files) — attenuation via player volume, boost via `LoudnessEnhancer`. Not exact, just even-ish.
