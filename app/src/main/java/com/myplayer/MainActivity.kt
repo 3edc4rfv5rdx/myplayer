@@ -1250,7 +1250,7 @@ private fun RootsList(
             if (labeled.isEmpty()) {
                 Text(
                     text = stringResource(R.string.no_folders),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.align(Alignment.Center).padding(16.dp)
                 )
             } else {

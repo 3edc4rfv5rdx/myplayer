@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed the low-contrast "no folders" placeholder text on the home list background.
+
 - Dialogs (history, confirmations, speed, About) now share the home root-list background colour, with full-contrast body text and an "OK" confirm button.
 
 - Enlarged the settings option labels for readability, and moved About into a dialog opened from a new top-bar info button.
