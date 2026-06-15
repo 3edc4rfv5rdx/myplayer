@@ -1924,9 +1924,12 @@ private fun NowPlaying(
             // Fast-forward by a fixed step. Always available (no-op without a track).
             Button(
                 onClick = {
-                    val target = (positionMs + SEEK_STEP_MS).coerceAtMost(durationMs)
-                    controller?.seekTo(target)
-                    positionMs = target
+                    // No-op until the duration is known, so it can't clamp to 0 and jump to the start.
+                    if (durationMs > 0L) {
+                        val target = (positionMs + SEEK_STEP_MS).coerceAtMost(durationMs)
+                        controller?.seekTo(target)
+                        positionMs = target
+                    }
                 },
                 enabled = controller != null,
                 contentPadding = PaddingValues(horizontal = 12.dp),

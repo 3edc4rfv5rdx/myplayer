@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed the +30s button jumping to the start of a track before its duration was known.
+
 - Fixed the remaining-time readout briefly showing a malformed negative value at the end of a track.
 
 - Add code & logic audit #8 findings doc.
