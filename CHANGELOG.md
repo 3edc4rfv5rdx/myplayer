@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed the remaining-time readout briefly showing a malformed negative value at the end of a track.
+
 - Add code & logic audit #8 findings doc.
 
 ## v0.5.20260615+159

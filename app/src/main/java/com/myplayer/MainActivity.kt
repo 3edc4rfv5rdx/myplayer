@@ -1122,7 +1122,7 @@ private fun fallbackRootLabel(uri: Uri): String {
 
 /** Formats a millisecond position as m:ss (or h:mm:ss for tracks an hour or longer). */
 private fun formatTime(ms: Long): String {
-    val totalSec = ms / 1000
+    val totalSec = ms.coerceAtLeast(0L) / 1000
     val s = totalSec % 60
     val m = (totalSec / 60) % 60
     val h = totalSec / 3600
@@ -1712,7 +1712,7 @@ private fun NowPlaying(
                     Text(formatTime(leftMs), fontSize = FONT_CAPTION)
                     // Rightmost: remaining (-mm:ss) or total, per the setting.
                     Text(
-                        if (remainingTime) "-${formatTime(durationMs - leftMs)}"
+                        if (remainingTime) "-${formatTime((durationMs - leftMs).coerceAtLeast(0L))}"
                         else formatTime(durationMs),
                         fontSize = FONT_CAPTION
                     )
