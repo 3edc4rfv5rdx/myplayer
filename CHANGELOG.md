@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.5.20260615+159
 
 - Fixed the low-contrast "no folders" placeholder text on the home list background.
 
