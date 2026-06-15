@@ -7,6 +7,8 @@
     <string name="remove_folder_message">Remove %1$s from the list</string>
     <string name="remove">Remove</string>
     <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="error">Error</string>
     <string name="no_folders">No folders yet</string>
     <string name="history">History</string>
     <string name="no_history">No history yet</string>
@@ -17,7 +19,6 @@
     <string name="back">Back</string>
     <string name="version">Version</string>
     <string name="build">Build</string>
-    <string name="play_this_folder">Play this folder</string>
     <string name="empty_folder">Empty folder</string>
     <string name="nothing_to_play">Nothing to play here</string>
     <string name="folder_unreadable">Can\'t read this folder. The storage may be unavailable or its permission was revoked</string>

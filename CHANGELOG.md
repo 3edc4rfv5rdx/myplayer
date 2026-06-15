@@ -4,6 +4,22 @@ Newest entries on top.
 
 ## Unreleased
 
+- Reserved the book-progress slot on the player screen so the browser's bottom edge sits ~6 mm higher and stays fixed whether or not a book is playing.
+
+- Removed the now-playing track name/path under the browser (the folder name and the highlighted row already show it), freeing space so the list stretches down.
+
+- Errors (connect, unreadable folder, nothing to play, delete, playback) now show in a single dialog on the app's primary colour, instead of being crammed into the now-playing area.
+
+- The browser folder-name field is fixed at two lines, and the highlighted (playing/selected) row scrolls its full name as a marquee.
+
+- Book progress bar thickness matched to the seek bar (6dp).
+
+- Home screen collapses the empty now-playing slots so the roots list (and the History button under it) drops to the bottom, just above the controls.
+
+- More spacing between folder/file rows in the browser; tighter rows in the home roots list. Wider History button.
+
+- Removed the redundant "Play this folder" button — the main play button already starts the current folder; folder name font reduced.
+
 - Browser now has a real back arrow in the top-left corner (replacing the up button), the folder name sits on its own row below it (up to 2 lines), and "Play this folder" spans the full width.
 - Home screen roots list stretches taller with tighter rows; shared top bar between home and browser.
 

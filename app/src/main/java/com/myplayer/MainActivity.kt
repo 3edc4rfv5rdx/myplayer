@@ -13,6 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -333,7 +334,6 @@ class MainActivity : ComponentActivity() {
                             selectedRoot = selectedRoot,
                             treeUri = treeUri,
                             path = path,
-                            error = error,
                             selectedIndex = selectedIndex,
                             playingDocId = playingDocId,
                             visitedPathIds = visitedPathIds,
@@ -375,7 +375,6 @@ class MainActivity : ComponentActivity() {
                                     (path + it).map { n -> n.documentId }.toSet()
                             },
                             onUp = { goUp() },
-                            onPlayFolder = { playFolder(it) },
                             onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() },
@@ -397,6 +396,28 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+
+                    // Errors (connect, unreadable folder, nothing to play, delete, playback) all land
+                    // in errorState and surface here as a single dialog, on the app's primary colour.
+                    error?.let { msg ->
+                        AlertDialog(
+                            onDismissRequest = { errorState.value = null },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            textContentColor = MaterialTheme.colorScheme.onPrimary,
+                            title = { Text(stringResource(R.string.error)) },
+                            text = { Text(msg) },
+                            confirmButton = {
+                                Button(
+                                    onClick = { errorState.value = null },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.onPrimary,
+                                        contentColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) { Text(stringResource(R.string.ok)) }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -415,6 +436,10 @@ class MainActivity : ComponentActivity() {
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                         playingFolderId = playFolderIdOf(mediaItem) ?: playingFolderId
                         followPlayingTrack(mediaItem)
+                    }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        errorState.value = "${error.errorCodeName}: ${error.message}"
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
@@ -991,7 +1016,6 @@ private fun PlayerScreen(
     selectedRoot: Uri?,
     treeUri: Uri?,
     path: List<Node>,
-    error: String?,
     selectedIndex: Int?,
     playingDocId: String?,
     visitedPathIds: Set<String>,
@@ -1013,7 +1037,6 @@ private fun PlayerScreen(
     onOpenSettings: () -> Unit,
     onDescend: (Node) -> Unit,
     onUp: () -> Unit,
-    onPlayFolder: (Node) -> Unit,
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onPlayPause: () -> Unit,
@@ -1051,7 +1074,6 @@ private fun PlayerScreen(
                     rescanTick = rescanTick,
                     onUp = onUp,
                     onDescend = onDescend,
-                    onPlayFolder = onPlayFolder,
                     onDeleteBook = onDeleteBook,
                     onSelectFile = onSelectFile,
                     onOpenSettings = onOpenSettings,
@@ -1062,7 +1084,7 @@ private fun PlayerScreen(
 
         Spacer(Modifier.height(12.dp))
         NowPlaying(
-            controller, error, clearTitleTick, treeUri == null,
+            controller, clearTitleTick, treeUri == null,
             shuffleEnabled, onShuffleToggle,
             abookEnabled, abookVisible, abookLocked, onAbookToggle,
             playingAbook, remainingTime, onPlayPause,
@@ -1202,7 +1224,7 @@ private fun RootsList(
                                     else Color.Transparent
                                 )
                                 .clickable { onEnterRoot(uri) }
-                                .padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
+                                .padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
                         ) {
                             Text(
                                 text = "📁  $name",
@@ -1226,7 +1248,12 @@ private fun RootsList(
         }
 
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { showHistory = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+        Button(
+            onClick = { showHistory = true },
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            // ~5 mm extra on each side on top of the Button's default 24dp horizontal padding.
+            contentPadding = PaddingValues(horizontal = 56.dp, vertical = 8.dp)
+        ) {
             Text(stringResource(R.string.history))
         }
 
@@ -1303,7 +1330,6 @@ private fun FolderBrowser(
     rescanTick: Int,
     onUp: () -> Unit,
     onDescend: (Node) -> Unit,
-    onPlayFolder: (Node) -> Unit,
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onOpenSettings: () -> Unit,
@@ -1368,16 +1394,14 @@ private fun FolderBrowser(
         Spacer(Modifier.height(8.dp))
         Text(
             text = current.name,
+            // Always two lines tall so navigating between short- and long-named folders doesn't
+            // resize this field and shift the list below.
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 20.sp,
+            fontSize = 17.sp,
             modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { onPlayFolder(current) }, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.play_this_folder))
-        }
         Spacer(Modifier.height(8.dp))
 
         val c = contents
@@ -1412,7 +1436,9 @@ private fun FolderBrowser(
                                 onClick = { onDescend(folder) },
                                 onLongClick = { pendingDelete = folder }
                             )
-                            .padding(horizontal = 8.dp, vertical = 10.dp)
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            // The highlighted row scrolls its full name into view instead of clipping.
+                            .then(if (highlighted) Modifier.basicMarquee() else Modifier)
                     )
                 }
                 itemsIndexed(c.second, key = { _, file -> file.documentId }) { index, file ->
@@ -1432,7 +1458,9 @@ private fun FolderBrowser(
                             .clip(RoundedCornerShape(8.dp))
                             .background(background)
                             .clickable { onSelectFile(index) }
-                            .padding(horizontal = 8.dp, vertical = 10.dp)
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            // The highlighted (playing/selected) row scrolls its full name into view.
+                            .then(if (highlighted) Modifier.basicMarquee() else Modifier)
                     )
                 }
             }
@@ -1479,7 +1507,6 @@ private fun FolderBrowser(
 @Composable
 private fun NowPlaying(
     controller: MediaController?,
-    connectError: String?,
     clearTitleTick: Int,
     atHome: Boolean,
     shuffleEnabled: Boolean,
@@ -1496,10 +1523,7 @@ private fun NowPlaying(
     speedLive: Boolean,
     onSpeedChange: (Float) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
-    var playerError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
     // Current track index and queue size, for the book progress readout.
@@ -1535,36 +1559,20 @@ private fun NowPlaying(
         val c = controller ?: return@DisposableEffect onDispose {}
         val listener = object : Player.Listener {
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
-                title = mediaMetadata.title?.toString().orEmpty()
-                path = mediaMetadata.subtitle?.toString().orEmpty()
                 cleared = false
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
-                // Resuming re-shows the now-playing even if it was cleared while stopped/browsing.
-                if (playing) {
-                    title = c.mediaMetadata.title?.toString().orEmpty()
-                    path = c.mediaMetadata.subtitle?.toString().orEmpty()
-                    cleared = false
-                }
-            }
-
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                playerError = null
+                // Resuming re-shows the bar/progress even if it was cleared while stopped/browsing.
+                if (playing) cleared = false
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 queueTick++
             }
-
-            override fun onPlayerError(error: PlaybackException) {
-                playerError = "${error.errorCodeName}: ${error.message}"
-            }
         }
         c.addListener(listener)
-        title = c.mediaMetadata.title?.toString().orEmpty()
-        path = c.mediaMetadata.subtitle?.toString().orEmpty()
         isPlaying = c.isPlaying
         onDispose { c.removeListener(listener) }
     }
@@ -1585,52 +1593,23 @@ private fun NowPlaying(
         }
     }
 
-    // Clear the labels and bar on request: navigating away from a stopped/paused track, or removing
-    // the playing root. A playing track keeps its now-playing while browsing (no tick is sent then).
+    // Clear the bar on request: navigating away from a stopped/paused track, or removing the
+    // playing root. A playing track keeps its bar while browsing (no tick is sent then).
     LaunchedEffect(clearTitleTick) {
         if (clearTitleTick > 0) {
-            title = ""
-            path = ""
             cleared = true
         }
     }
 
-    // Separate fixed-height slots: path (1 line) and title (room for 2). Fixed so a wrapping
-    // title or a missing path never reflows the list above. Empty when nothing is playing.
-    // On the roots (home) screen the track name/path are hidden, even while playback continues.
-    val display = if (atHome) "" else connectError ?: playerError ?: title
-    val showPath = !atHome && connectError == null && playerError == null && path.isNotEmpty()
-    Spacer(Modifier.height(10.dp))
-    Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
-        if (showPath) {
-            Text(
-                text = path,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                fontSize = 12.sp,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-    Box(modifier = Modifier.fillMaxWidth().height(50.dp), contentAlignment = Alignment.TopCenter) {
-        Text(
-            text = display,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            fontSize = 18.sp,
-            lineHeight = 22.sp,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
+    // The track name/path aren't shown here: the browser's folder name and the highlighted row
+    // already say what's playing, and errors pop up in their own dialog.
     // Thin playback bar with elapsed/total times at the edges, draggable/tappable to seek. Fixed
     // height so showing/hiding it (no track / on the home screen) never reflows the controls below.
-    val showBar = !atHome && !cleared && connectError == null && playerError == null && durationMs > 0L
+    val showBar = !atHome && !cleared && durationMs > 0L
     val barFraction = scrubFraction ?: (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
     val leftMs = scrubFraction?.let { (it * durationMs).toLong() } ?: positionMs
-    Spacer(Modifier.height(8.dp))
-    Box(modifier = Modifier.fillMaxWidth().height(32.dp)) {
+    Spacer(Modifier.height(if (atHome) 0.dp else 8.dp))
+    Box(modifier = Modifier.fillMaxWidth().height(if (atHome) 0.dp else 32.dp)) {
         if (showBar) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // Taller-than-the-bar touch strip so the thin bar is still easy to hit.
@@ -1691,54 +1670,59 @@ private fun NowPlaying(
     // Book progress: which file of the book plus the overall percent, with a thin bar. Time-based
     // as soon as some durations are known — still-resolving files are estimated at the known
     // average, so a cold book's percent refines smoothly batch by batch; until anything is known
-    // (or if every file failed to read) approximated by file count. Only shown while a book is
-    // the live queue.
-    if (playingAbook && !atHome && !cleared && mediaCount > 0) {
-        // Guard against a stale array while a queue edit's re-resolve is still in flight.
-        val durations = bookDurations?.takeIf { it.size == mediaCount }
-        // Elapsed/total of the whole book, once any duration is known; null while cold.
-        val timed = durations?.takeIf { d -> d.any { it > 0L } }?.let { d ->
-            val known = d.filter { it != DurationCache.UNKNOWN_MS }
-            val avgMs = known.sum() / known.size // known is non-empty: something is > 0
-            fun ms(i: Int) = if (d[i] == DurationCache.UNKNOWN_MS) avgMs else d[i]
-            val totalMs = (0 until mediaCount).sumOf { ms(it) }
-            val playedMs = ((0 until mediaIndex).sumOf { ms(it) } + positionMs).coerceIn(0L, totalMs)
-            playedMs to totalMs
+    // (or if every file failed to read) approximated by file count. Shown only while a book is the
+    // live queue, but its height is reserved on the player screen so the browser's bottom edge sits
+    // a fixed ~6 mm higher and doesn't shift when a book starts or ends.
+    Box(modifier = Modifier.fillMaxWidth().height(if (atHome) 0.dp else 36.dp)) {
+        if (playingAbook && !atHome && !cleared && mediaCount > 0) {
+            // Guard against a stale array while a queue edit's re-resolve is still in flight.
+            val durations = bookDurations?.takeIf { it.size == mediaCount }
+            // Elapsed/total of the whole book, once any duration is known; null while cold.
+            val timed = durations?.takeIf { d -> d.any { it > 0L } }?.let { d ->
+                val known = d.filter { it != DurationCache.UNKNOWN_MS }
+                val avgMs = known.sum() / known.size // known is non-empty: something is > 0
+                fun ms(i: Int) = if (d[i] == DurationCache.UNKNOWN_MS) avgMs else d[i]
+                val totalMs = (0 until mediaCount).sumOf { ms(it) }
+                val playedMs =
+                    ((0 until mediaIndex).sumOf { ms(it) } + positionMs).coerceIn(0L, totalMs)
+                playedMs to totalMs
+            }
+            val bookFraction = if (timed != null) {
+                (timed.first.toFloat() / timed.second).coerceIn(0f, 1f)
+            } else {
+                val fileFrac =
+                    if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+                ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
+            }
+            val percent = String.format(Locale.US, "%.1f", bookFraction * 100)
+            // Elapsed plus rightmost remaining (-mm:ss) or total, per the setting; empty until
+            // durations resolve.
+            val timeText = timed?.let { (played, total) ->
+                val right = if (remainingTime) "-${formatTime(total - played)}" else formatTime(total)
+                "${formatTime(played)}/$right"
+            } ?: ""
+            // File label left-aligned; "XX.X%     elapsed/-remaining" grouped at the right edge.
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount",
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        "$percent%${if (timeText.isEmpty()) "" else "     $timeText"}",
+                        fontSize = 14.sp, textAlign = TextAlign.End
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                LinearProgressIndicator(
+                    progress = { bookFraction },
+                    modifier = Modifier.fillMaxWidth().height(6.dp)
+                )
+            }
         }
-        val bookFraction = if (timed != null) {
-            (timed.first.toFloat() / timed.second).coerceIn(0f, 1f)
-        } else {
-            val fileFrac =
-                if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-            ((mediaIndex + fileFrac) / mediaCount).coerceIn(0f, 1f)
-        }
-        val percent = String.format(Locale.US, "%.1f", bookFraction * 100)
-        // Elapsed plus rightmost remaining (-mm:ss) or total, per the setting; empty until
-        // durations resolve.
-        val timeText = timed?.let { (played, total) ->
-            val right = if (remainingTime) "-${formatTime(total - played)}" else formatTime(total)
-            "${formatTime(played)}/$right"
-        } ?: ""
-        // File label left-aligned; "XX.X%     elapsed/-remaining" grouped at the right edge.
-        Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                "${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount",
-                fontSize = 14.sp
-            )
-            Text(
-                "$percent%${if (timeText.isEmpty()) "" else "     $timeText"}",
-                fontSize = 14.sp, textAlign = TextAlign.End
-            )
-        }
-        Spacer(Modifier.height(2.dp))
-        LinearProgressIndicator(
-            progress = { bookFraction },
-            modifier = Modifier.fillMaxWidth().height(5.dp)
-        )
     }
     Spacer(Modifier.height(16.dp))
     // Single control block: three equal-height columns. The side stacks (abook / prev / −30s and
