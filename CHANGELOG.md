@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Padded the delete-dialog folder-name brackets with spaces for legibility.
+
 - Shifted the music note inside the play triangle left so it reads as centered.
 
 - The delete dialog wraps the folder name in square brackets.

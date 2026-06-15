@@ -1650,7 +1650,7 @@ private fun FolderBrowser(
                 title = { Text(stringResource(R.string.delete_book)) },
                 text = {
                     Column {
-                        Text(stringResource(R.string.delete_book_message, "[${folder.name}]") + "?")
+                        Text(stringResource(R.string.delete_book_message, "[ ${folder.name} ]") + "?")
                         Spacer(Modifier.height(12.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
