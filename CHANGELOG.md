@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Add code & logic audit #8 findings doc.
+
 ## v0.5.20260615+159
 
 - Fixed the low-contrast "no folders" placeholder text on the home list background.
