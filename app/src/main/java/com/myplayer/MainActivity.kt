@@ -49,6 +49,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -1133,6 +1134,7 @@ private fun PlayerScreen(
                 )
             } else {
                 FolderBrowser(
+                    controller = controller,
                     treeUri = treeUri,
                     current = current,
                     title = stringResource(
@@ -1252,22 +1254,24 @@ private fun TopBar(
         }
         if (onSleep != null) {
             IconButton(onClick = onSleep) {
-                Box {
+                // An armed timer fills the icon with a primary circle (like the player buttons), so
+                // its state reads at a glance; idle is a plain icon.
+                Box(
+                    modifier = Modifier
+                        .size(TOP_BAR_ICON + 10.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (sleepArmed) MaterialTheme.colorScheme.primary else Color.Transparent
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_hourglass),
                         contentDescription = stringResource(R.string.sleep_timer),
+                        tint = if (sleepArmed) MaterialTheme.colorScheme.onPrimary
+                        else LocalContentColor.current,
                         modifier = Modifier.size(TOP_BAR_ICON)
                     )
-                    // A small dot marks an armed timer, so its state reads at a glance.
-                    if (sleepArmed) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
                 }
             }
         }
@@ -1456,6 +1460,7 @@ private fun RootsList(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderBrowser(
+    controller: MediaController?,
     treeUri: Uri,
     current: Node,
     title: String,
@@ -1652,6 +1657,7 @@ private fun FolderBrowser(
 
         if (showSleepDialog) {
             SleepTimerDialog(
+                controller = controller,
                 mode = sleepMode,
                 deadline = sleepDeadline,
                 onStartMinutes = onSleepMinutes,
@@ -1664,9 +1670,12 @@ private fun FolderBrowser(
 }
 
 /** Sleep-timer dialog: a stepped minutes slider (Start), an "until end of chapter" option, and a
- *  Stop (active only while a timer runs). Shows the live remaining time for a running fixed timer. */
+ *  Stop (active only while a timer runs). The running remaining time shows next to the title — a
+ *  countdown for a fixed timer, the current track's remaining for an end-of-chapter timer. Arming is
+ *  disabled while nothing is playing. */
 @Composable
 private fun SleepTimerDialog(
+    controller: MediaController?,
     mode: Int,
     deadline: Long,
     onStartMinutes: (Int) -> Unit,
@@ -1675,37 +1684,45 @@ private fun SleepTimerDialog(
     onDismiss: () -> Unit
 ) {
     var minutes by remember { mutableStateOf(Settings.SLEEP_DEFAULT) }
-    // Tick once a second so the running countdown stays current while the dialog is open.
+    // Tick so the running remaining (and the playing gate) stay current while the dialog is open.
     var now by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(mode) {
-        while (mode == 1) {
+    var positionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
+    var playing by remember { mutableStateOf(controller?.isPlaying == true) }
+    LaunchedEffect(controller) {
+        while (true) {
             now = SystemClock.elapsedRealtime()
+            positionMs = controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
+            durationMs = controller?.duration?.takeIf { it > 0L } ?: 0L
+            playing = controller?.isPlaying == true
             delay(500)
         }
+    }
+    // Remaining for a running timer: the deadline countdown (minutes) or the track's tail (chapter).
+    val remaining = when (mode) {
+        1 -> formatTime((deadline - now).coerceAtLeast(0L))
+        2 -> if (durationMs > 0L) formatTime((durationMs - positionMs).coerceAtLeast(0L)) else null
+        else -> null
     }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         textContentColor = MaterialTheme.colorScheme.onSurface,
-        title = { Text(stringResource(R.string.sleep_timer)) },
-        text = {
-            Column {
-                val running = when (mode) {
-                    1 -> stringResource(
-                        R.string.sleep_remaining,
-                        formatTime((deadline - now).coerceAtLeast(0L))
-                    )
-                    2 -> stringResource(R.string.sleep_until_chapter)
-                    else -> null
-                }
-                if (running != null) {
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.sleep_timer))
+                if (remaining != null) {
+                    Spacer(Modifier.weight(1f))
                     Text(
-                        running,
+                        remaining,
                         fontSize = FONT_CAPTION,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(8.dp))
                 }
+            }
+        },
+        text = {
+            Column {
                 Text(
                     stringResource(R.string.sleep_minutes, minutes.roundToInt()),
                     textAlign = TextAlign.Center,
@@ -1721,6 +1738,7 @@ private fun SleepTimerDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 Button(
+                    enabled = playing,
                     onClick = { onChapter(); onDismiss() },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.sleep_until_chapter)) }
@@ -1732,9 +1750,10 @@ private fun SleepTimerDialog(
                     Text(stringResource(R.string.sleep_stop))
                 }
                 Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-                Button(onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() }) {
-                    Text(stringResource(R.string.sleep_start))
-                }
+                Button(
+                    enabled = playing,
+                    onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() }
+                ) { Text(stringResource(R.string.sleep_start)) }
             }
         }
     )

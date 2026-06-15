@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Sleep timer: armed state fills the hourglass with a primary circle, the running remaining shows by the dialog title (numbers for end-of-chapter too), and arming is disabled while nothing plays.
+
 - Added a sleep timer (10–60 min or until end of chapter) from the browser top bar; it stops playback by pausing.
 
 - Internal: sleep-timer support in the player service (fires with the screen off).
