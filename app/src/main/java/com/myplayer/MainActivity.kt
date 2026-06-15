@@ -360,6 +360,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onEnterRoot = { enterRoot(it) },
+                            onOpenHistoryEntry = { openHistoryEntry(it) },
                             onAddRoot = { folderPicker.launch(null) },
                             onRemoveRoot = { removeRoot(it) },
                             onExit = { exitApp() },
@@ -578,6 +579,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Opens a history entry: restores the browser to that folder (tree + full path) without
+     *  playing. Same state shape as [enterRoot], so the user lands on the folder and presses Play. */
+    private fun openHistoryEntry(entry: Settings.HistoryEntry) {
+        val tree = Uri.parse(entry.treeUri)
+        selectedRootState.value = tree
+        treeUriState.value = tree
+        pathState.value = entry.ids.indices.map { Node(entry.ids[it], entry.names[it], true) }
+        selectedIndexState.value = null
+        visitedPathIdsState.value = entry.ids.toSet()
+    }
+
     /** Stops playback, drops the queue, and clears the now-playing UI state (labels, bar).
      *  [clearHighlight] also drops the browser's playing-track highlight — wanted when the content
      *  is gone (root removed, files deleted), not when merely navigating away, where the highlight
@@ -763,6 +775,14 @@ class MainActivity : ComponentActivity() {
             // Mark this folder as playing only now that a queue is actually starting; a failed or
             // empty scan must leave playingFolderId pointing at whatever was playing before.
             playingFolderId = queuePath.last().documentId
+            // Remember the folder the user launched (the open path, not the book root) so the
+            // history dialog can jump the browser straight back to it.
+            Settings.addHistory(
+                this@MainActivity,
+                Settings.HistoryEntry(
+                    tree.toString(), path.map { it.documentId }, path.map { it.name }, abook
+                )
+            )
             startQueue(controller, items, start, abook, key, startPos)
         }
     }
@@ -897,6 +917,11 @@ class MainActivity : ComponentActivity() {
                     Settings.clearBook(
                         this@MainActivity, Settings.bookKey(tree.toString(), folder.documentId)
                     )
+                    // Forget the deleted folder (and its descendants) in history, so a later tap
+                    // can't reopen a folder that's gone.
+                    Settings.removeHistoryForFolder(
+                        this@MainActivity, tree.toString(), folder.documentId
+                    )
                     // Drop the deleted folder's own (and descendants') cached listings, then the
                     // parent's so the now-missing folder disappears from it on re-scan.
                     val removedUris =
@@ -980,6 +1005,7 @@ private fun PlayerScreen(
     remainingTime: Boolean,
     onAbookToggle: (Boolean) -> Unit,
     onEnterRoot: (Uri) -> Unit,
+    onOpenHistoryEntry: (Settings.HistoryEntry) -> Unit,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
     onExit: () -> Unit,
@@ -1007,6 +1033,7 @@ private fun PlayerScreen(
                     roots = roots,
                     selectedRoot = selectedRoot,
                     onEnterRoot = onEnterRoot,
+                    onOpenHistoryEntry = onOpenHistoryEntry,
                     onAddRoot = onAddRoot,
                     onRemoveRoot = onRemoveRoot,
                     onExit = onExit,
@@ -1067,6 +1094,7 @@ private fun RootsList(
     roots: List<Uri>,
     selectedRoot: Uri?,
     onEnterRoot: (Uri) -> Unit,
+    onOpenHistoryEntry: (Settings.HistoryEntry) -> Unit,
     onAddRoot: () -> Unit,
     onRemoveRoot: (Uri) -> Unit,
     onExit: () -> Unit,
@@ -1075,6 +1103,7 @@ private fun RootsList(
 ) {
     val context = LocalContext.current
     var pendingRemoval by remember { mutableStateOf<Uri?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
     var labeled by remember(roots) {
         mutableStateOf(
             roots.map { it to fallbackRootLabel(it) }
@@ -1170,6 +1199,51 @@ private fun RootsList(
                     }
                 }
             }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = { showHistory = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text(stringResource(R.string.history))
+        }
+
+        if (showHistory) {
+            // Read once per open; the dialog leaves the composition when closed, so a later open
+            // re-reads the up-to-date list.
+            val entries = remember { Settings.getHistory(context) }
+            AlertDialog(
+                onDismissRequest = { showHistory = false },
+                title = { Text(stringResource(R.string.history)) },
+                text = {
+                    if (entries.isEmpty()) {
+                        Text(stringResource(R.string.no_history))
+                    } else {
+                        Column {
+                            entries.forEach { entry ->
+                                val icon = if (entry.isBook) "📖" else "🎵"
+                                Text(
+                                    text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 20.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            showHistory = false
+                                            onOpenHistoryEntry(entry)
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showHistory = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
         }
 
         pendingRemoval?.let { uri ->

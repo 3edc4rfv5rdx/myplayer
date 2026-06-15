@@ -3,6 +3,8 @@ package com.myplayer
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -24,6 +26,7 @@ object Settings {
     private const val KEY_FOLLOW = "follow"
     private const val KEY_REMAINING = "remaining"
     private const val KEY_DEFAULT_SPEED = "default_speed"
+    private const val KEY_HISTORY = "history"
     // Per-folder book state lives under these prefixes, keyed by a stable (treeUri, docId) folder key.
     private const val KEY_MODE_PREFIX = "mode:"
     private const val KEY_POS_PREFIX = "pos:"
@@ -46,6 +49,9 @@ object Settings {
     const val SPEED_STEP = 0.05f
     const val SPEED_DEFAULT = 1.0f
 
+    // How many recently played folders the history dialog keeps.
+    const val HISTORY_MAX = 5
+
     // In-memory cache so reads (after warm-up) and read-modify-write on roots stay off disk and
     // race-free; the single-thread writer persists changes in order, in the background.
     private val lock = Any()
@@ -57,6 +63,9 @@ object Settings {
     // update (the cache `lock` only makes each get/set atomic, not the compound operation). Held
     // around get/set only, both of which work off the in-memory cache, so no disk I/O runs under it.
     private val rootLock = Any()
+
+    // Serializes the read-modify-write of the history list, like rootLock for roots.
+    private val historyLock = Any()
 
     private fun get(context: Context, key: String): String? {
         synchronized(lock) { if (key in loaded) return cache[key] }
@@ -143,10 +152,12 @@ object Settings {
         return updated
     }
 
-    /** Removes [uri]; returns the updated list. */
+    /** Removes [uri]; returns the updated list. Also forgets any history under that tree, so a
+     *  later history tap can't open a folder whose root is gone. */
     fun removeRoot(context: Context, uri: String): List<String> = synchronized(rootLock) {
         val updated = getRoots(context).filter { it != uri }
         setRoots(context, updated)
+        removeHistoryForTree(context, uri)
         return updated
     }
 
@@ -172,6 +183,73 @@ object Settings {
         get(context, KEY_DEFAULT_SPEED)?.toFloatOrNull() ?: SPEED_DEFAULT
     fun setDefaultSpeed(context: Context, speed: Float) =
         set(context, KEY_DEFAULT_SPEED, speed.toString())
+
+    // ---- Recently played folders (history) -------------------------------------------------------
+
+    /** A folder the user played: the tree it lives under plus the full browser path to it
+     *  ([ids]/[names] are parallel, root-first), and whether it played as a book. The path is kept
+     *  whole so a history tap can restore the browser straight to this folder. */
+    data class HistoryEntry(
+        val treeUri: String,
+        val ids: List<String>,
+        val names: List<String>,
+        val isBook: Boolean
+    ) {
+        /** Identity for de-duplication: the same folder is one entry regardless of how it was opened. */
+        val key: String get() = "$treeUri|${ids.lastOrNull().orEmpty()}"
+    }
+
+    fun getHistory(context: Context): List<HistoryEntry> {
+        val raw = get(context, KEY_HISTORY) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.getJSONObject(i)
+                val ids = o.getJSONArray("ids").let { a -> List(a.length()) { a.getString(it) } }
+                val names = o.getJSONArray("names").let { a -> List(a.length()) { a.getString(it) } }
+                if (ids.isEmpty() || ids.size != names.size) return@mapNotNull null
+                HistoryEntry(o.getString("tree"), ids, names, o.optBoolean("book", false))
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Records [entry] at the front (most-recent-first), drops any earlier hit on the same folder,
+     *  and caps the list at [HISTORY_MAX]. */
+    fun addHistory(context: Context, entry: HistoryEntry) = synchronized(historyLock) {
+        val updated = (listOf(entry) + getHistory(context).filter { it.key != entry.key })
+            .take(HISTORY_MAX)
+        writeHistory(context, updated)
+    }
+
+    /** Drops every history entry under [treeUri] (used when a root is removed). */
+    fun removeHistoryForTree(context: Context, treeUri: String) = synchronized(historyLock) {
+        writeHistory(context, getHistory(context).filter { it.treeUri != treeUri })
+    }
+
+    /** Drops the history entry for [folderId] and any entry whose path runs through it (its
+     *  descendants), used when a folder is deleted from storage. */
+    fun removeHistoryForFolder(context: Context, treeUri: String, folderId: String) =
+        synchronized(historyLock) {
+            writeHistory(context, getHistory(context).filter {
+                it.treeUri != treeUri || folderId !in it.ids
+            })
+        }
+
+    private fun writeHistory(context: Context, entries: List<HistoryEntry>) {
+        val arr = JSONArray()
+        for (e in entries) {
+            arr.put(
+                JSONObject()
+                    .put("tree", e.treeUri)
+                    .put("ids", JSONArray(e.ids))
+                    .put("names", JSONArray(e.names))
+                    .put("book", e.isBook)
+            )
+        }
+        set(context, KEY_HISTORY, arr.toString())
+    }
 
     // ---- Audiobook mode (per folder) -------------------------------------------------------------
 

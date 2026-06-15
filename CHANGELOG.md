@@ -3,6 +3,11 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Deleting a folder now also removes it (and its descendants) from history.
+
+- New History button on the home screen opens a dialog of the 5 most recently played folders (book/note icon per entry); tapping one jumps the browser to that folder.
+
 ## v0.4.20260612+134
 
 - The shuffle icon now dims along with its switch while a book locks shuffle off.
