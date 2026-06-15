@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Added a sleep timer (10–60 min or until end of chapter) from the browser top bar; it stops playback by pausing.
+
 - Internal: sleep-timer support in the player service (fires with the screen off).
 
 - Docs: refresh README for history, shared top bar, ±30s, Track time, time-based book progress, and Auto backup.

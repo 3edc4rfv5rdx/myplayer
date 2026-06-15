@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -39,6 +40,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -113,10 +115,6 @@ private const val STATE_PLAYING_ABOOK = "playing_abook"
 private const val STATE_PLAYING_DOC_ID = "playing_doc_id"
 private const val STATE_VISITED_PATH_IDS = "visited_path_ids"
 
-// Discrete slider positions between SPEED_MIN and SPEED_MAX (endpoints excluded), one per SPEED_STEP.
-private val SPEED_SLIDER_STEPS =
-    ((Settings.SPEED_MAX - Settings.SPEED_MIN) / Settings.SPEED_STEP).roundToInt() - 1
-
 // Fixed jump for the rewind/fast-forward buttons.
 private const val SEEK_STEP_MS = 30_000L
 
@@ -166,6 +164,12 @@ class MainActivity : ComponentActivity() {
 
     // Random playback order, on by default; intentionally not persisted (resets each launch).
     private val shuffleState = mutableStateOf(true)
+
+    // Sleep-timer state mirrored from the service (the timer itself lives there): mode (0 off,
+    // 1 fixed minutes, 2 end of chapter) and, for mode 1, the elapsedRealtime deadline to count
+    // down to. Refreshed by querying the service; not persisted.
+    private val sleepModeState = mutableStateOf(0)
+    private val sleepDeadlineState = mutableStateOf(0L)
 
     // Audiobook mode of the folder currently open in the browser (persisted per folder). Mirrors
     // Settings.isAbook for the open folder; kept in sync as the browser navigates.
@@ -252,6 +256,8 @@ class MainActivity : ComponentActivity() {
                     val rescanTick by rescanTickState
                     val clearTitleTick by clearTitleTickState
                     val shuffle by shuffleState
+                    val sleepMode by sleepModeState
+                    val sleepDeadline by sleepDeadlineState
                     val playingAbook by playingAbookState
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
@@ -400,6 +406,11 @@ class MainActivity : ComponentActivity() {
                             onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() },
+                            sleepMode = sleepMode,
+                            sleepDeadline = sleepDeadline,
+                            onSleepMinutes = { sendSleepCommand("minutes", it) },
+                            onSleepChapter = { sendSleepCommand("chapter") },
+                            onSleepStop = { sendSleepCommand("off") },
                             speed = browsedBookSpeed,
                             speedEnabled = browsedBookKey != null,
                             speedLive = browsedBookKey != null &&
@@ -464,6 +475,12 @@ class MainActivity : ComponentActivity() {
                         errorState.value = "${error.errorCodeName}: ${error.message}"
                     }
 
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        // Catches a sleep timer that fired (it pauses): refresh so the armed mark
+                        // and any open dialog clear.
+                        if (!isPlaying) querySleepState()
+                    }
+
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         // Queue reached its end (repeat is always off; see Settings.REPEAT_ALL): clear
                         // the now-playing labels, bar, and book progress so a 100%-done book doesn't
@@ -512,6 +529,9 @@ class MainActivity : ComponentActivity() {
                 playingFolderKeyState.value = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
                     playFolderIdOf(c.currentMediaItem)?.let { Settings.bookKey(t, it) }
                 }
+                // Recover the sleep-timer state (the timer keeps running in the service while the
+                // activity is gone).
+                querySleepState()
             } catch (e: Exception) {
                 errorState.value = "Connect: ${e.message}"
             }
@@ -888,6 +908,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Arms/cancels/queries the service sleep timer and mirrors the returned state into
+     *  [sleepModeState]/[sleepDeadlineState]. [action] is "minutes" | "chapter" | "off" | "query". */
+    private fun sendSleepCommand(action: String, minutes: Int = 0) {
+        val controller = controllerState.value ?: return
+        val command = SessionCommand(PlayerService.CMD_SLEEP_TIMER, Bundle.EMPTY)
+        if (!controller.isSessionCommandAvailable(command)) return
+        val args = Bundle().apply {
+            putString(PlayerService.KEY_SLEEP_ACTION, action)
+            if (action == "minutes") putInt(PlayerService.KEY_SLEEP_MINUTES, minutes)
+        }
+        val future = controller.sendCustomCommand(command, args)
+        future.addListener({
+            val extras = runCatching { future.get() }.getOrNull()?.extras ?: return@addListener
+            sleepModeState.value = extras.getInt(PlayerService.KEY_SLEEP_MODE, 0)
+            sleepDeadlineState.value = extras.getLong(PlayerService.KEY_SLEEP_DEADLINE, -1L)
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun querySleepState() = sendSleepCommand("query")
+
     /** Tells the service to re-apply ReplayGain to the current track immediately (no track wait). */
     private fun sendReplayGainChanged() {
         val controller = controllerState.value ?: return
@@ -1062,6 +1102,11 @@ private fun PlayerScreen(
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onPlayPause: () -> Unit,
+    sleepMode: Int,
+    sleepDeadline: Long,
+    onSleepMinutes: (Int) -> Unit,
+    onSleepChapter: () -> Unit,
+    onSleepStop: () -> Unit,
     speed: Float,
     speedEnabled: Boolean,
     speedLive: Boolean,
@@ -1103,6 +1148,11 @@ private fun PlayerScreen(
                     onDeleteBook = onDeleteBook,
                     onSelectFile = onSelectFile,
                     onOpenSettings = onOpenSettings,
+                    sleepMode = sleepMode,
+                    sleepDeadline = sleepDeadline,
+                    onSleepMinutes = onSleepMinutes,
+                    onSleepChapter = onSleepChapter,
+                    onSleepStop = onSleepStop,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -1152,6 +1202,8 @@ private fun TopBar(
     onAdd: (() -> Unit)?,
     onSettings: (() -> Unit)?,
     onAbout: (() -> Unit)? = null,
+    onSleep: (() -> Unit)? = null,
+    sleepArmed: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1196,6 +1248,27 @@ private fun TopBar(
                     contentDescription = stringResource(R.string.about),
                     modifier = Modifier.size(TOP_BAR_ICON)
                 )
+            }
+        }
+        if (onSleep != null) {
+            IconButton(onClick = onSleep) {
+                Box {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_hourglass),
+                        contentDescription = stringResource(R.string.sleep_timer),
+                        modifier = Modifier.size(TOP_BAR_ICON)
+                    )
+                    // A small dot marks an armed timer, so its state reads at a glance.
+                    if (sleepArmed) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                }
             }
         }
         if (onSettings != null) {
@@ -1396,9 +1469,15 @@ private fun FolderBrowser(
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onOpenSettings: () -> Unit,
+    sleepMode: Int,
+    sleepDeadline: Long,
+    onSleepMinutes: (Int) -> Unit,
+    onSleepChapter: () -> Unit,
+    onSleepStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var pendingDelete by remember { mutableStateOf<Node?>(null) }
+    var showSleepDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val listState = rememberLazyListState()
     var contents by remember(current.documentId) {
@@ -1452,6 +1531,8 @@ private fun FolderBrowser(
             title = title,
             onAdd = null,
             onSettings = onOpenSettings,
+            onSleep = { showSleepDialog = true },
+            sleepArmed = sleepMode != 0,
         )
 
         Spacer(Modifier.height(8.dp))
@@ -1568,7 +1649,95 @@ private fun FolderBrowser(
                 }
             )
         }
+
+        if (showSleepDialog) {
+            SleepTimerDialog(
+                mode = sleepMode,
+                deadline = sleepDeadline,
+                onStartMinutes = onSleepMinutes,
+                onChapter = onSleepChapter,
+                onStop = onSleepStop,
+                onDismiss = { showSleepDialog = false }
+            )
+        }
     }
+}
+
+/** Sleep-timer dialog: a stepped minutes slider (Start), an "until end of chapter" option, and a
+ *  Stop (active only while a timer runs). Shows the live remaining time for a running fixed timer. */
+@Composable
+private fun SleepTimerDialog(
+    mode: Int,
+    deadline: Long,
+    onStartMinutes: (Int) -> Unit,
+    onChapter: () -> Unit,
+    onStop: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var minutes by remember { mutableStateOf(Settings.SLEEP_DEFAULT) }
+    // Tick once a second so the running countdown stays current while the dialog is open.
+    var now by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(mode) {
+        while (mode == 1) {
+            now = SystemClock.elapsedRealtime()
+            delay(500)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
+        title = { Text(stringResource(R.string.sleep_timer)) },
+        text = {
+            Column {
+                val running = when (mode) {
+                    1 -> stringResource(
+                        R.string.sleep_remaining,
+                        formatTime((deadline - now).coerceAtLeast(0L))
+                    )
+                    2 -> stringResource(R.string.sleep_until_chapter)
+                    else -> null
+                }
+                if (running != null) {
+                    Text(
+                        running,
+                        fontSize = FONT_CAPTION,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Text(
+                    stringResource(R.string.sleep_minutes, minutes.roundToInt()),
+                    textAlign = TextAlign.Center,
+                    fontSize = FONT_DISPLAY,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                SteppedSlider(
+                    value = minutes,
+                    onValueChange = { minutes = it },
+                    min = Settings.SLEEP_MIN,
+                    max = Settings.SLEEP_MAX,
+                    step = Settings.SLEEP_STEP
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { onChapter(); onDismiss() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.sleep_until_chapter)) }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = mode != 0, onClick = { onStop(); onDismiss() }) {
+                    Text(stringResource(R.string.sleep_stop))
+                }
+                Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                Button(onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() }) {
+                    Text(stringResource(R.string.sleep_start))
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -2006,36 +2175,13 @@ private fun SpeedDialog(
                     fontSize = FONT_DISPLAY,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(
-                        onClick = {
-                            sliderSpeed = snapSpeed(sliderSpeed - Settings.SPEED_STEP)
-                                .coerceAtLeast(Settings.SPEED_MIN)
-                            onPreview(sliderSpeed)
-                        },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.size(40.dp)
-                    ) { Text("−", fontSize = FONT_LIST) }
-                    Slider(
-                        value = sliderSpeed,
-                        onValueChange = {
-                            sliderSpeed = snapSpeed(it)
-                            onPreview(sliderSpeed)
-                        },
-                        valueRange = Settings.SPEED_MIN..Settings.SPEED_MAX,
-                        steps = SPEED_SLIDER_STEPS,
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                    )
-                    Button(
-                        onClick = {
-                            sliderSpeed = snapSpeed(sliderSpeed + Settings.SPEED_STEP)
-                                .coerceAtMost(Settings.SPEED_MAX)
-                            onPreview(sliderSpeed)
-                        },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.size(40.dp)
-                    ) { Text("+", fontSize = FONT_LIST) }
-                }
+                SteppedSlider(
+                    value = sliderSpeed,
+                    onValueChange = { sliderSpeed = it; onPreview(it) },
+                    min = Settings.SPEED_MIN,
+                    max = Settings.SPEED_MAX,
+                    step = Settings.SPEED_STEP
+                )
             }
         },
         confirmButton = {
@@ -2057,9 +2203,42 @@ private fun formatSpeed(speed: Float): String {
     return "x$text"
 }
 
-/** Snaps a raw slider value to the nearest [Settings.SPEED_STEP]. */
-private fun snapSpeed(raw: Float): Float =
-    (raw / Settings.SPEED_STEP).roundToInt() * Settings.SPEED_STEP
+/** Stepped slider with −/+ step buttons, shared by the speed and sleep-timer dialogs. [onValueChange]
+ *  always receives a value snapped to [step]; the caller renders the value label itself. */
+@Composable
+private fun SteppedSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    min: Float,
+    max: Float,
+    step: Float,
+    modifier: Modifier = Modifier
+) {
+    // Discrete inner positions between the endpoints (endpoints excluded), one per step.
+    val steps = ((max - min) / step).roundToInt() - 1
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+        Button(
+            onClick = { onValueChange(snapStep(value - step, step).coerceAtLeast(min)) },
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.size(40.dp)
+        ) { Text("−", fontSize = FONT_LIST) }
+        Slider(
+            value = value,
+            onValueChange = { onValueChange(snapStep(it, step)) },
+            valueRange = min..max,
+            steps = steps,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+        )
+        Button(
+            onClick = { onValueChange(snapStep(value + step, step).coerceAtMost(max)) },
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.size(40.dp)
+        ) { Text("+", fontSize = FONT_LIST) }
+    }
+}
+
+/** Snaps a raw slider value to the nearest multiple of [step]. */
+private fun snapStep(raw: Float, step: Float): Float = (raw / step).roundToInt() * step
 
 @Composable
 private fun SettingsScreen(
