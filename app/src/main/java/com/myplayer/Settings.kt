@@ -295,7 +295,12 @@ object Settings {
     }
 
     /** Forgets every per-folder book state row under [treeUri] (modes, positions, speeds).
-     *  Removing a root forgets its books too; re-adding the same tree later starts clean. */
+     *  Removing a root forgets its books too; re-adding the same tree later starts clean.
+     *
+     *  Relies on no concurrent reads of the removed tree's keys: the cache pass nulls only the keys
+     *  already loaded, while the DB delete runs on the background writer. A get() of a not-yet-cached
+     *  key under this tree between the two could re-cache a stale row from disk. Safe in practice —
+     *  the only caller is removeRoot, after which the browser can't reach the removed root's folders. */
     fun clearRootState(context: Context, treeUri: String) {
         // bookKey is "<treeUri>|<docId>", so the per-tree prefix ends at the separator.
         val keyPrefixes =

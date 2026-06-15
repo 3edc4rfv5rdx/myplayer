@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Internal: document clearRootState's no-concurrent-reads assumption.
+
 - Add commercial-readiness gaps doc (non-feature).
 
 - Fixed the +30s button jumping to the start of a track before its duration was known.
