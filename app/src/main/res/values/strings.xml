@@ -47,7 +47,9 @@
     <string name="delete">Delete</string>
     <string name="delete_failed">Couldn\'t delete the folder</string>
     <string name="replaygain">ReplayGain</string>
+    <string name="replaygain_hint">Even out track volumes</string>
     <string name="follow_playing">Follow playing track</string>
+    <string name="follow_playing_hint">Jump to the playing folder</string>
     <string name="track_time">Track time</string>
     <string name="remaining_time">Remaining time</string>
     <string name="total_time">Total time</string>

@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Added one-line descriptions under the ReplayGain and Follow playing track settings.
+
 - Sleep timer: renamed the option to "Until end of track", allowed arming any time (Start re-arms), and show the running remaining large by the dialog title.
 
 - Sleep timer: armed state fills the hourglass with a primary circle, the running remaining shows by the dialog title (numbers for end-of-chapter too), and arming is disabled while nothing plays.

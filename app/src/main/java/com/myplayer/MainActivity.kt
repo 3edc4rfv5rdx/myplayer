@@ -2311,15 +2311,29 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.replaygain), fontSize = FONT_TITLE)
-            Spacer(Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.replaygain), fontSize = FONT_TITLE)
+                Text(
+                    stringResource(R.string.replaygain_hint),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
             Switch(checked = replayGainEnabled, onCheckedChange = onReplayGainChange)
         }
 
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.follow_playing), fontSize = FONT_TITLE)
-            Spacer(Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.follow_playing), fontSize = FONT_TITLE)
+                Text(
+                    stringResource(R.string.follow_playing_hint),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
             Switch(checked = followEnabled, onCheckedChange = onFollowChange)
         }
 
