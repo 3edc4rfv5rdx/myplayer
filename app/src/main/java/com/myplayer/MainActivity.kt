@@ -68,6 +68,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -1044,7 +1045,6 @@ private fun PlayerScreen(
                 FolderBrowser(
                     treeUri = treeUri,
                     current = current,
-                    canGoUp = true,
                     selectedIndex = selectedIndex,
                     playingDocId = playingDocId,
                     visitedPathIds = visitedPathIds,
@@ -1068,7 +1068,7 @@ private fun PlayerScreen(
             playingAbook, remainingTime, onPlayPause,
             speed, speedEnabled, speedLive, onSpeedChange
         )
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -1086,6 +1086,49 @@ private fun formatTime(ms: Long): String {
     val m = (totalSec / 60) % 60
     val h = totalSec / 3600
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+/** Shared top bar for the home and browser screens: a leading icon button (close on home, back in
+ *  the browser), an optional title, an optional add button (home only), and settings. */
+@Composable
+private fun TopBar(
+    leadingIcon: Painter,
+    leadingDesc: String,
+    onLeading: () -> Unit,
+    title: String?,
+    onAdd: (() -> Unit)?,
+    onSettings: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        IconButton(onClick = onLeading) {
+            Icon(painter = leadingIcon, contentDescription = leadingDesc)
+        }
+        if (title != null) {
+            Text(
+                text = title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+        if (onAdd != null) {
+            IconButton(onClick = onAdd) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_add_circle),
+                    contentDescription = stringResource(R.string.add_folder),
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+        IconButton(onClick = onSettings) {
+            Icon(
+                painter = painterResource(R.drawable.ic_settings),
+                contentDescription = stringResource(R.string.settings)
+            )
+        }
+    }
 }
 
 /** Home screen: the list of root folders on a distinct background, with add/remove. */
@@ -1120,33 +1163,14 @@ private fun RootsList(
     }
 
     Column(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = onExit) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_close),
-                    contentDescription = stringResource(R.string.exit)
-                )
-            }
-            Text(
-                text = stringResource(R.string.folders),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = onAddRoot) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_add_circle),
-                    contentDescription = stringResource(R.string.add_folder),
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_settings),
-                    contentDescription = stringResource(R.string.settings)
-                )
-            }
-        }
+        TopBar(
+            leadingIcon = painterResource(R.drawable.ic_close),
+            leadingDesc = stringResource(R.string.exit),
+            onLeading = onExit,
+            title = stringResource(R.string.folders),
+            onAdd = onAddRoot,
+            onSettings = onOpenSettings,
+        )
 
         Spacer(Modifier.height(8.dp))
         Box(
@@ -1178,7 +1202,7 @@ private fun RootsList(
                                     else Color.Transparent
                                 )
                                 .clickable { onEnterRoot(uri) }
-                                .padding(start = 8.dp, top = 6.dp, bottom = 6.dp)
+                                .padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
                         ) {
                             Text(
                                 text = "📁  $name",
@@ -1273,7 +1297,6 @@ private fun RootsList(
 private fun FolderBrowser(
     treeUri: Uri,
     current: Node,
-    canGoUp: Boolean,
     selectedIndex: Int?,
     playingDocId: String?,
     visitedPathIds: Set<String>,
@@ -1333,33 +1356,27 @@ private fun FolderBrowser(
     }
 
     Column(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = current.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_settings),
-                    contentDescription = stringResource(R.string.settings)
-                )
-            }
-        }
+        TopBar(
+            leadingIcon = painterResource(R.drawable.ic_arrow_back),
+            leadingDesc = stringResource(R.string.back),
+            onLeading = onUp,
+            title = null,
+            onAdd = null,
+            onSettings = onOpenSettings,
+        )
 
         Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { onPlayFolder(current) }, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.play_this_folder))
-            }
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = onUp, enabled = canGoUp) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_up),
-                    contentDescription = stringResource(R.string.up)
-                )
-            }
+        Text(
+            text = current.name,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 20.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = { onPlayFolder(current) }, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.play_this_folder))
         }
         Spacer(Modifier.height(8.dp))
 

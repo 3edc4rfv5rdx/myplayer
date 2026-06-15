@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Browser now has a real back arrow in the top-left corner (replacing the up button), the folder name sits on its own row below it (up to 2 lines), and "Play this folder" spans the full width.
+- Home screen roots list stretches taller with tighter rows; shared top bar between home and browser.
+
 - Deleting a folder now also removes it (and its descendants) from history.
 
 - New History button on the home screen opens a dialog of the 5 most recently played folders (book/note icon per entry); tapping one jumps the browser to that folder.
