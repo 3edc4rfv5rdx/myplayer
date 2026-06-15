@@ -32,7 +32,6 @@
     <string name="forward_30">+30s</string>
     <string name="playback_speed">Playback speed</string>
     <string name="default_speed">Abook default speed</string>
-    <string name="done">Done</string>
     <string name="audiobook_mode">abook</string>
     <string name="mode_music">Music</string>
     <string name="mode_audiobook">AudioBook</string>

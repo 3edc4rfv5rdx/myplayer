@@ -1309,6 +1309,8 @@ private fun RootsList(
             val entries = remember { Settings.getHistory(context) }
             AlertDialog(
                 onDismissRequest = { showHistory = false },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                textContentColor = MaterialTheme.colorScheme.onSurface,
                 title = { Text(stringResource(R.string.history)) },
                 text = {
                     if (entries.isEmpty()) {
@@ -1347,6 +1349,8 @@ private fun RootsList(
             val name = labeled.firstOrNull { it.first == uri }?.second ?: uri.toString()
             AlertDialog(
                 onDismissRequest = { pendingRemoval = null },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                textContentColor = MaterialTheme.colorScheme.onSurface,
                 title = { Text(stringResource(R.string.remove_folder)) },
                 text = { Text(stringResource(R.string.remove_folder_message, name) + "?") },
                 confirmButton = {
@@ -1517,6 +1521,8 @@ private fun FolderBrowser(
             var confirmed by remember(folder) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { pendingDelete = null },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                textContentColor = MaterialTheme.colorScheme.onSurface,
                 title = { Text(stringResource(R.string.delete_book)) },
                 text = {
                     Column {
@@ -1972,6 +1978,8 @@ private fun SpeedDialog(
     var sliderSpeed by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = { onConfirm(sliderSpeed); onDismiss() },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text(stringResource(R.string.playback_speed)) },
         text = {
             Column {
@@ -2015,7 +2023,7 @@ private fun SpeedDialog(
         },
         confirmButton = {
             Button(onClick = { onConfirm(sliderSpeed); onDismiss() }) {
-                Text(stringResource(R.string.done))
+                Text(stringResource(R.string.ok))
             }
         }
     )
@@ -2145,6 +2153,8 @@ private fun SettingsScreen(
     if (showAbout) {
         AlertDialog(
             onDismissRequest = { showAbout = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
             title = { Text(stringResource(R.string.about)) },
             text = {
                 Column {
@@ -2155,7 +2165,7 @@ private fun SettingsScreen(
             },
             confirmButton = {
                 Button(onClick = { showAbout = false }) {
-                    Text(stringResource(R.string.done))
+                    Text(stringResource(R.string.ok))
                 }
             }
         )
