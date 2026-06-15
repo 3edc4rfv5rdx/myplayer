@@ -25,6 +25,7 @@ object Settings {
     private const val KEY_THEME = "theme"
     private const val KEY_FOLLOW = "follow"
     private const val KEY_REMAINING = "remaining"
+    private const val KEY_BACKUP = "backup"
     private const val KEY_DEFAULT_SPEED = "default_speed"
     private const val KEY_HISTORY = "history"
     // Per-folder book state lives under these prefixes, keyed by a stable (treeUri, docId) folder key.
@@ -177,6 +178,13 @@ object Settings {
     fun isRemainingTime(context: Context): Boolean = get(context, KEY_REMAINING) == "true"
     fun setRemainingTime(context: Context, enabled: Boolean) =
         set(context, KEY_REMAINING, enabled.toString())
+
+    /** Whether Android Auto Backup may upload settings + book progress (default off, so an uninstall
+     *  wipes everything). The manifest enables backup; [MyBackupAgent] gates the actual upload on
+     *  this flag, so the toggle takes effect at runtime. */
+    fun isBackupEnabled(context: Context): Boolean = get(context, KEY_BACKUP) == "true"
+    fun setBackupEnabled(context: Context, enabled: Boolean) =
+        set(context, KEY_BACKUP, enabled.toString())
 
     /** Default playback speed applied to folders without a saved speed of their own. */
     fun getDefaultSpeed(context: Context): Float =

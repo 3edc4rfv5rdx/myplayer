@@ -1,12 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Backups are disabled (allowBackup=false). The app's data is just SAF roots/settings/cache in
-     app.db; moving it without the matching persisted URI permissions would be useless or harmful,
-     so both cloud backup and device-to-device transfer exclude everything. -->
+<!-- Backup is enabled in the manifest but gated at runtime by MyBackupAgent (the "Auto backup"
+     setting, off by default). When on, app.db is backed up: settings (SAF roots, toggles, theme,
+     audiobook flags/positions/speeds) and the per-file duration cache. The rebuildable folder
+     listing cache (cache.db) is excluded — its listings reference SAF document ids whose URI
+     permissions don't survive a restore, and they re-scan on demand. Note: the persisted root URI
+     permissions themselves are not backed up, so after a restore the roots reappear but must be
+     re-granted via the picker. -->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="root" path="." />
+        <exclude domain="database" path="cache.db" />
+        <exclude domain="database" path="cache.db-wal" />
+        <exclude domain="database" path="cache.db-shm" />
+        <exclude domain="database" path="cache.db-journal" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="root" path="." />
+        <exclude domain="database" path="cache.db" />
+        <exclude domain="database" path="cache.db-wal" />
+        <exclude domain="database" path="cache.db-shm" />
+        <exclude domain="database" path="cache.db-journal" />
     </device-transfer>
 </data-extraction-rules>

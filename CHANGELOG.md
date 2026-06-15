@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Added an opt-in Auto backup setting (off by default) that backs up settings and book progress to the user's Google account; the listing cache is excluded.
+
 - Split the rebuildable folder-listing cache into its own cache.db, separate from app.db.
 
 - Audiobook tracks now show a page glyph in the browser instead of the music note.

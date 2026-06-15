@@ -1,6 +1,7 @@
 package com.myplayer
 
 import android.Manifest
+import android.app.backup.BackupManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -255,6 +256,7 @@ class MainActivity : ComponentActivity() {
                     var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
                     var remaining by remember { mutableStateOf(Settings.isRemainingTime(this)) }
+                    var backup by remember { mutableStateOf(Settings.isBackupEnabled(this)) }
                     var defaultSpeed by remember { mutableStateOf(Settings.getDefaultSpeed(this)) }
 
                     BackHandler(enabled = screen == Screen.Settings || path.isNotEmpty()) {
@@ -269,6 +271,7 @@ class MainActivity : ComponentActivity() {
                             replayGainEnabled = replayGain,
                             followEnabled = follow,
                             remainingEnabled = remaining,
+                            backupEnabled = backup,
                             defaultSpeed = defaultSpeed,
                             onThemeChange = {
                                 themeState.value = it
@@ -288,6 +291,13 @@ class MainActivity : ComponentActivity() {
                             onRemainingChange = {
                                 remaining = it
                                 Settings.setRemainingTime(this, it)
+                            },
+                            onBackupChange = {
+                                backup = it
+                                Settings.setBackupEnabled(this, it)
+                                // Hint the framework to (re)back up now that the flag flipped; turning
+                                // it off also lets the next run replace the cloud copy with nothing.
+                                BackupManager(this).dataChanged()
                             },
                             onDefaultSpeedChange = {
                                 defaultSpeed = it
@@ -2059,11 +2069,13 @@ private fun SettingsScreen(
     replayGainEnabled: Boolean,
     followEnabled: Boolean,
     remainingEnabled: Boolean,
+    backupEnabled: Boolean,
     defaultSpeed: Float,
     onThemeChange: (ThemeMode) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
     onRemainingChange: (Boolean) -> Unit,
+    onBackupChange: (Boolean) -> Unit,
     onDefaultSpeedChange: (Float) -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
@@ -2134,6 +2146,20 @@ private fun SettingsScreen(
             }
             Spacer(Modifier.weight(1f))
             Switch(checked = remainingEnabled, onCheckedChange = onRemainingChange)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.auto_backup), fontSize = FONT_TITLE)
+                Text(
+                    stringResource(R.string.auto_backup_hint),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = backupEnabled, onCheckedChange = onBackupChange)
         }
 
         Spacer(Modifier.height(10.dp))
