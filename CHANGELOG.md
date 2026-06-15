@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Unified font sizes into a shared type scale (caption/title/list/display) so same-purpose text matches across all screens.
+
+- Top-bar back/close and settings icons share one slightly larger size; the add (+) icon is larger still to stand out.
+
 - The player top bar shows "Music" or "AudioBook" for the current folder's play mode.
 
 - Top bar now sits on a neutral grey strip; player controls are dimmed on the home screen (still interactive). The settings screen uses the same shared top bar.

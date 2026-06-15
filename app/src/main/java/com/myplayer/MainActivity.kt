@@ -126,6 +126,19 @@ private val CONTROL_BTN_HEIGHT = 36.dp
 private val CONTROL_GAP = 18.dp
 private val PLAY_HEIGHT = CONTROL_BTN_HEIGHT * 2 + CONTROL_GAP
 
+// Shared type scale: one size per role so same-purpose text matches across every screen. Body text
+// (settings rows, version lines) keeps the Material default ~16sp and is left unstyled. Priority maps
+// to size: emphasised value > tappable list content > headings > captions.
+private val FONT_CAPTION = 14.sp   // secondary lines: track/book times, sub-labels
+private val FONT_TITLE = 18.sp     // headings: top-bar title, current folder, "About"
+private val FONT_LIST = 20.sp      // tappable list rows + compact control glyphs (speed −/+)
+private val FONT_DISPLAY = 24.sp   // single emphasised value (speed dialog)
+
+// Shared size for the plain top-bar icons (back/close, settings) so the bar reads evenly.
+private val TOP_BAR_ICON = 30.dp
+// The add (+) action is deliberately larger to stand out as the primary action.
+private val TOP_BAR_ADD_ICON = 38.dp
+
 class MainActivity : ComponentActivity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -1137,13 +1150,18 @@ private fun TopBar(
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
     ) {
         IconButton(onClick = onLeading) {
-            Icon(painter = leadingIcon, contentDescription = leadingDesc)
+            Icon(
+                painter = leadingIcon,
+                contentDescription = leadingDesc,
+                modifier = Modifier.size(TOP_BAR_ICON)
+            )
         }
         if (title != null) {
             Text(
                 text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                fontSize = FONT_TITLE,
                 modifier = Modifier.weight(1f)
             )
         } else {
@@ -1154,7 +1172,7 @@ private fun TopBar(
                 Icon(
                     painter = painterResource(R.drawable.ic_add_circle),
                     contentDescription = stringResource(R.string.add_folder),
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(TOP_BAR_ADD_ICON)
                 )
             }
         }
@@ -1162,7 +1180,8 @@ private fun TopBar(
             IconButton(onClick = onSettings) {
                 Icon(
                     painter = painterResource(R.drawable.ic_settings),
-                    contentDescription = stringResource(R.string.settings)
+                    contentDescription = stringResource(R.string.settings),
+                    modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
         }
@@ -1246,7 +1265,7 @@ private fun RootsList(
                                 text = "📁  $name",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                fontSize = 22.sp,
+                                fontSize = FONT_LIST,
                                 color = if (selected) foreground else Color.Unspecified,
                                 modifier = Modifier.weight(1f)
                             )
@@ -1291,7 +1310,7 @@ private fun RootsList(
                                     text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    fontSize = 20.sp,
+                                    fontSize = FONT_LIST,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(8.dp))
@@ -1416,7 +1435,7 @@ private fun FolderBrowser(
             minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 17.sp,
+            fontSize = FONT_TITLE,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(8.dp))
@@ -1443,7 +1462,7 @@ private fun FolderBrowser(
                         text = "${if (isBook) "📖" else "📁"}  ${folder.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 19.sp,
+                        fontSize = FONT_LIST,
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1468,7 +1487,7 @@ private fun FolderBrowser(
                         text = "🎵  ${file.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 19.sp,
+                        fontSize = FONT_LIST,
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1673,12 +1692,12 @@ private fun NowPlaying(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(formatTime(leftMs), fontSize = 14.sp)
+                    Text(formatTime(leftMs), fontSize = FONT_CAPTION)
                     // Rightmost: remaining (-mm:ss) or total, per the setting.
                     Text(
                         if (remainingTime) "-${formatTime(durationMs - leftMs)}"
                         else formatTime(durationMs),
-                        fontSize = 14.sp
+                        fontSize = FONT_CAPTION
                     )
                 }
             }
@@ -1726,11 +1745,11 @@ private fun NowPlaying(
                 ) {
                     Text(
                         "${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount",
-                        fontSize = 14.sp
+                        fontSize = FONT_CAPTION
                     )
                     Text(
                         "$percent%${if (timeText.isEmpty()) "" else "     $timeText"}",
-                        fontSize = 14.sp, textAlign = TextAlign.End
+                        fontSize = FONT_CAPTION, textAlign = TextAlign.End
                     )
                 }
                 Spacer(Modifier.height(2.dp))
@@ -1948,7 +1967,7 @@ private fun SpeedDialog(
                 Text(
                     formatSpeed(sliderSpeed),
                     textAlign = TextAlign.Center,
-                    fontSize = 22.sp,
+                    fontSize = FONT_DISPLAY,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1960,7 +1979,7 @@ private fun SpeedDialog(
                         },
                         contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.size(40.dp)
-                    ) { Text("−", fontSize = 20.sp) }
+                    ) { Text("−", fontSize = FONT_LIST) }
                     Slider(
                         value = sliderSpeed,
                         onValueChange = {
@@ -1979,7 +1998,7 @@ private fun SpeedDialog(
                         },
                         contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.size(40.dp)
-                    ) { Text("+", fontSize = 20.sp) }
+                    ) { Text("+", fontSize = FONT_LIST) }
                 }
             }
         },
@@ -2081,7 +2100,7 @@ private fun SettingsScreen(
                     stringResource(
                         if (remainingEnabled) R.string.remaining_time else R.string.total_time
                     ),
-                    fontSize = 13.sp,
+                    fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -2110,7 +2129,7 @@ private fun SettingsScreen(
         }
 
         Spacer(Modifier.weight(1f))
-        Text(stringResource(R.string.about), fontSize = 18.sp)
+        Text(stringResource(R.string.about), fontSize = FONT_TITLE)
         Spacer(Modifier.height(4.dp))
         Text(stringResource(R.string.app_name))
         Text("${stringResource(R.string.version)} $version")
