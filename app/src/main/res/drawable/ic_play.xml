@@ -4,9 +4,10 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
     <!-- Play triangle (corners rounded via quadratic arcs) with a music note cut out (evenOdd),
-         matching the launcher icon. -->
+         matching the launcher icon. The note is shifted left toward the triangle's vertical base so
+         it sits centered on the triangle's mass rather than off to the right. -->
     <path
         android:fillColor="@android:color/white"
         android:fillType="evenOdd"
-        android:pathData="M5,5.6L5,18.4Q5,21 7.3,19.78L19.7,13.22Q22,12 19.7,10.78L7.3,4.22Q5,3 5,5.6Z M12.02,8.5v4.43c-0.25,-0.14 -0.53,-0.23 -0.84,-0.23 -0.84,0 -1.68,0.75 -1.68,1.68s0.75,1.68 1.68,1.68 1.68,-0.75 1.68,-1.68V10.18h1.68V8.5h-2.52z" />
+        android:pathData="M5,5.6L5,18.4Q5,21 7.3,19.78L19.7,13.22Q22,12 19.7,10.78L7.3,4.22Q5,3 5,5.6Z M10.02,8.5v4.43c-0.25,-0.14 -0.53,-0.23 -0.84,-0.23 -0.84,0 -1.68,0.75 -1.68,1.68s0.75,1.68 1.68,1.68 1.68,-0.75 1.68,-1.68V10.18h1.68V8.5h-2.52z" />
 </vector>

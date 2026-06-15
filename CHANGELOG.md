@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Shifted the music note inside the play triangle left so it reads as centered.
+
 - The delete dialog wraps the folder name in square brackets.
 
 - The highlighted file row now shows the track duration after its name in the scrolling line.
