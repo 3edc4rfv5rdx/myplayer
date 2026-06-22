@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Added a Settings accent-color picker (lilac, yellow, teal, pink, green, orange, blue, beige).
+
 ## v0.5.20260615+170
 
 - Padded the delete-dialog folder-name brackets with spaces for legibility.

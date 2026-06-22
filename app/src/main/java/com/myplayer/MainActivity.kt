@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -46,6 +47,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -162,6 +165,7 @@ class MainActivity : ComponentActivity() {
     private val rescanTickState = mutableStateOf(0)
     private val clearTitleTickState = mutableStateOf(0)
     private val themeState = mutableStateOf(ThemeMode.System)
+    private val accentState = mutableStateOf(AccentColor.Default)
 
     // Random playback order, on by default; intentionally not persisted (resets each launch).
     private val shuffleState = mutableStateOf(true)
@@ -227,6 +231,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
         themeState.value = Settings.getThemeMode(this)
+        accentState.value = Settings.getAccentColor(this)
         followEnabled = Settings.isFollowEnabled(this)
         rootsState.value = Settings.getRoots(this).map(Uri::parse)
         savedInstanceState?.let(::restoreUiState)
@@ -238,7 +243,15 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
-            val colorScheme = if (dark) darkColorScheme() else lightColorScheme()
+            val accent by accentState
+            val colorScheme = run {
+                val base = if (dark) darkColorScheme() else lightColorScheme()
+                if (accent == AccentColor.Default) base
+                else base.copy(
+                    primary = Color(accent.primary),
+                    onPrimary = Color(accent.onPrimary)
+                )
+            }
             MaterialTheme(colorScheme = colorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -275,6 +288,7 @@ class MainActivity : ComponentActivity() {
                             version = appVersionName(),
                             build = appVersionCode(),
                             themeMode = theme,
+                            accentColor = accent,
                             replayGainEnabled = replayGain,
                             followEnabled = follow,
                             remainingEnabled = remaining,
@@ -283,6 +297,10 @@ class MainActivity : ComponentActivity() {
                             onThemeChange = {
                                 themeState.value = it
                                 Settings.setThemeMode(this, it)
+                            },
+                            onAccentChange = {
+                                accentState.value = it
+                                Settings.setAccentColor(this, it)
                             },
                             onReplayGainChange = {
                                 replayGain = it
@@ -2281,12 +2299,14 @@ private fun SettingsScreen(
     version: String,
     build: Long,
     themeMode: ThemeMode,
+    accentColor: AccentColor,
     replayGainEnabled: Boolean,
     followEnabled: Boolean,
     remainingEnabled: Boolean,
     backupEnabled: Boolean,
     defaultSpeed: Float,
     onThemeChange: (ThemeMode) -> Unit,
+    onAccentChange: (AccentColor) -> Unit,
     onReplayGainChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
     onRemainingChange: (Boolean) -> Unit,
@@ -2331,6 +2351,13 @@ private fun SettingsScreen(
             ThemeOption(stringResource(R.string.theme_dark), themeMode == ThemeMode.Dark) {
                 onThemeChange(ThemeMode.Dark)
             }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.accent_color), fontSize = FONT_TITLE)
+            Spacer(Modifier.weight(1f))
+            AccentPicker(selected = accentColor, onSelect = onAccentChange)
         }
 
         Spacer(Modifier.height(20.dp))
@@ -2443,4 +2470,67 @@ private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Button(onClick = onClick, colors = colors) { Text(label, fontSize = FONT_TITLE) }
+}
+
+/** Swatch colour shown in the picker. [AccentColor.Default] has no stored colour, so it shows the
+ *  built-in lilac used when nothing overrides the Material primary. */
+private fun accentDisplayColor(accent: AccentColor): Color =
+    if (accent == AccentColor.Default) Color(0xFFD0BCFF) else Color(accent.primary)
+
+@Composable
+private fun accentLabel(accent: AccentColor): String = stringResource(
+    when (accent) {
+        AccentColor.Default -> R.string.accent_default
+        AccentColor.Yellow -> R.string.accent_yellow
+        AccentColor.Teal -> R.string.accent_teal
+        AccentColor.Pink -> R.string.accent_pink
+        AccentColor.Green -> R.string.accent_green
+        AccentColor.Orange -> R.string.accent_orange
+        AccentColor.Blue -> R.string.accent_blue
+        AccentColor.Beige -> R.string.accent_beige
+    }
+)
+
+@Composable
+private fun AccentSwatch(color: Color, selected: Boolean, onClick: (() -> Unit)?) {
+    val ring = if (selected) MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.outline
+    var modifier = Modifier
+        .size(34.dp)
+        .clip(CircleShape)
+        .background(color)
+        .border(width = if (selected) 3.dp else 1.dp, color = ring, shape = CircleShape)
+    if (onClick != null) modifier = modifier.clickable(onClick = onClick)
+    Box(modifier = modifier)
+}
+
+/** Current accent shown as a swatch; tapping opens a dropdown of all accents (swatch + name). */
+@Composable
+private fun AccentPicker(selected: AccentColor, onSelect: (AccentColor) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        AccentSwatch(
+            color = accentDisplayColor(selected),
+            selected = false,
+            onClick = { expanded = true }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            AccentColor.entries.forEach { accent ->
+                DropdownMenuItem(
+                    leadingIcon = {
+                        AccentSwatch(
+                            color = accentDisplayColor(accent),
+                            selected = accent == selected,
+                            onClick = null
+                        )
+                    },
+                    text = { Text(accentLabel(accent), fontSize = FONT_TITLE) },
+                    onClick = {
+                        onSelect(accent)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
 }

@@ -59,4 +59,13 @@
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="accent_color">Accent color</string>
+    <string name="accent_default">Lilac</string>
+    <string name="accent_yellow">Yellow</string>
+    <string name="accent_teal">Teal</string>
+    <string name="accent_pink">Pink</string>
+    <string name="accent_green">Green</string>
+    <string name="accent_orange">Orange</string>
+    <string name="accent_blue">Blue</string>
+    <string name="accent_beige">Beige</string>
 </resources>

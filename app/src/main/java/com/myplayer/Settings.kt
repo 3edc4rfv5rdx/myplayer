@@ -17,12 +17,31 @@ enum class ThemeMode {
     }
 }
 
+/** Accent colour applied to the Material `primary`/`onPrimary` roles. Values are packed ARGB longs;
+ *  [Default] keeps the built-in (theme-dependent) Material lilac, signalled by zero sentinels. Each
+ *  colour is a mid-tone that reads on both the light and dark backgrounds, with a matching foreground. */
+enum class AccentColor(val primary: Long, val onPrimary: Long) {
+    Default(0L, 0L),
+    Yellow(0xFFFFC107, 0xFF000000),
+    Teal(0xFF26A69A, 0xFFFFFFFF),
+    Pink(0xFFEC407A, 0xFFFFFFFF),
+    Green(0xFF66BB6A, 0xFF000000),
+    Orange(0xFFFFA726, 0xFF000000),
+    Blue(0xFF42A5F5, 0xFF000000),
+    Beige(0xFFD2B48C, 0xFF000000);
+
+    companion object {
+        fun from(value: String?): AccentColor = entries.firstOrNull { it.name == value } ?: Default
+    }
+}
+
 /** App settings stored in the `settings` table of [AppDb]. */
 object Settings {
     private const val KEY_FOLDER = "folder_uri"
     private const val KEY_ROOTS = "roots"
     private const val KEY_REPLAYGAIN = "replaygain"
     private const val KEY_THEME = "theme"
+    private const val KEY_ACCENT = "accent"
     private const val KEY_FOLLOW = "follow"
     private const val KEY_REMAINING = "remaining"
     private const val KEY_BACKUP = "backup"
@@ -174,6 +193,9 @@ object Settings {
 
     fun getThemeMode(context: Context): ThemeMode = ThemeMode.from(get(context, KEY_THEME))
     fun setThemeMode(context: Context, mode: ThemeMode) = set(context, KEY_THEME, mode.name)
+
+    fun getAccentColor(context: Context): AccentColor = AccentColor.from(get(context, KEY_ACCENT))
+    fun setAccentColor(context: Context, color: AccentColor) = set(context, KEY_ACCENT, color.name)
 
     /** Follow playback: jump the browser to the playing track's folder and center it (default on). */
     fun isFollowEnabled(context: Context): Boolean = get(context, KEY_FOLLOW) != "false"
