@@ -46,8 +46,15 @@
     <string name="delete_book_confirm">Confirm</string>
     <string name="delete">Delete</string>
     <string name="delete_failed">Couldn\'t delete the folder</string>
-    <string name="replaygain">ReplayGain</string>
-    <string name="replaygain_hint">Even out track volumes</string>
+    <string name="skip_silence">Skip silence</string>
+    <string name="skip_silence_hint">Drop silent gaps in playback</string>
+    <string name="volume_leveling">Volume leveling</string>
+    <string name="norm_off">Off</string>
+    <string name="norm_tags">Tags</string>
+    <string name="norm_auto">Auto</string>
+    <string name="norm_off_hint">Original volume</string>
+    <string name="norm_tags_hint">ReplayGain tags only</string>
+    <string name="norm_auto_hint">Levels every track live</string>
     <string name="follow_playing">Follow playing track</string>
     <string name="follow_playing_hint">Jump to the playing folder</string>
     <string name="track_time">Track time</string>

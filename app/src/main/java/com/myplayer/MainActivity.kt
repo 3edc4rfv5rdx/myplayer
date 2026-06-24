@@ -273,7 +273,8 @@ class MainActivity : ComponentActivity() {
                     val sleepMode by sleepModeState
                     val sleepDeadline by sleepDeadlineState
                     val playingAbook by playingAbookState
-                    var replayGain by remember { mutableStateOf(Settings.isReplayGainEnabled(this)) }
+                    var volumeNorm by remember { mutableStateOf(Settings.getVolumeNorm(this)) }
+                    var skipSilence by remember { mutableStateOf(Settings.isSkipSilenceEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
                     var remaining by remember { mutableStateOf(Settings.isRemainingTime(this)) }
                     var backup by remember { mutableStateOf(Settings.isBackupEnabled(this)) }
@@ -289,7 +290,8 @@ class MainActivity : ComponentActivity() {
                             build = appVersionCode(),
                             themeMode = theme,
                             accentColor = accent,
-                            replayGainEnabled = replayGain,
+                            volumeNorm = volumeNorm,
+                            skipSilenceEnabled = skipSilence,
                             followEnabled = follow,
                             remainingEnabled = remaining,
                             backupEnabled = backup,
@@ -302,10 +304,15 @@ class MainActivity : ComponentActivity() {
                                 accentState.value = it
                                 Settings.setAccentColor(this, it)
                             },
-                            onReplayGainChange = {
-                                replayGain = it
-                                Settings.setReplayGainEnabled(this, it)
-                                sendReplayGainChanged()
+                            onVolumeNormChange = {
+                                volumeNorm = it
+                                Settings.setVolumeNorm(this, it)
+                                sendVolumeNormChanged()
+                            },
+                            onSkipSilenceChange = {
+                                skipSilence = it
+                                Settings.setSkipSilenceEnabled(this, it)
+                                sendSkipSilenceChanged()
                             },
                             onFollowChange = {
                                 follow = it
@@ -947,10 +954,19 @@ class MainActivity : ComponentActivity() {
 
     private fun querySleepState() = sendSleepCommand("query")
 
-    /** Tells the service to re-apply ReplayGain to the current track immediately (no track wait). */
-    private fun sendReplayGainChanged() {
+    /** Tells the service to re-apply the volume-normalization mode immediately (no track wait). */
+    private fun sendVolumeNormChanged() {
         val controller = controllerState.value ?: return
-        val command = SessionCommand(PlayerService.CMD_REPLAYGAIN, Bundle.EMPTY)
+        val command = SessionCommand(PlayerService.CMD_VOLUME_NORM, Bundle.EMPTY)
+        if (controller.isSessionCommandAvailable(command)) {
+            controller.sendCustomCommand(command, Bundle.EMPTY)
+        }
+    }
+
+    /** Tells the service to re-apply the skip-silence toggle to the player live. */
+    private fun sendSkipSilenceChanged() {
+        val controller = controllerState.value ?: return
+        val command = SessionCommand(PlayerService.CMD_SKIP_SILENCE, Bundle.EMPTY)
         if (controller.isSessionCommandAvailable(command)) {
             controller.sendCustomCommand(command, Bundle.EMPTY)
         }
@@ -2300,14 +2316,16 @@ private fun SettingsScreen(
     build: Long,
     themeMode: ThemeMode,
     accentColor: AccentColor,
-    replayGainEnabled: Boolean,
+    volumeNorm: VolumeNorm,
+    skipSilenceEnabled: Boolean,
     followEnabled: Boolean,
     remainingEnabled: Boolean,
     backupEnabled: Boolean,
     defaultSpeed: Float,
     onThemeChange: (ThemeMode) -> Unit,
     onAccentChange: (AccentColor) -> Unit,
-    onReplayGainChange: (Boolean) -> Unit,
+    onVolumeNormChange: (VolumeNorm) -> Unit,
+    onSkipSilenceChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
     onRemainingChange: (Boolean) -> Unit,
     onBackupChange: (Boolean) -> Unit,
@@ -2340,17 +2358,23 @@ private fun SettingsScreen(
         Text(stringResource(R.string.theme), fontSize = FONT_TITLE)
         Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            ThemeOption(stringResource(R.string.theme_system), themeMode == ThemeMode.System) {
-                onThemeChange(ThemeMode.System)
-            }
+            ThemeOption(
+                stringResource(R.string.theme_system),
+                themeMode == ThemeMode.System,
+                Modifier.weight(1f)
+            ) { onThemeChange(ThemeMode.System) }
             Spacer(Modifier.width(8.dp))
-            ThemeOption(stringResource(R.string.theme_light), themeMode == ThemeMode.Light) {
-                onThemeChange(ThemeMode.Light)
-            }
+            ThemeOption(
+                stringResource(R.string.theme_light),
+                themeMode == ThemeMode.Light,
+                Modifier.weight(1f)
+            ) { onThemeChange(ThemeMode.Light) }
             Spacer(Modifier.width(8.dp))
-            ThemeOption(stringResource(R.string.theme_dark), themeMode == ThemeMode.Dark) {
-                onThemeChange(ThemeMode.Dark)
-            }
+            ThemeOption(
+                stringResource(R.string.theme_dark),
+                themeMode == ThemeMode.Dark,
+                Modifier.weight(1f)
+            ) { onThemeChange(ThemeMode.Dark) }
         }
 
         Spacer(Modifier.height(20.dp))
@@ -2361,17 +2385,51 @@ private fun SettingsScreen(
         }
 
         Spacer(Modifier.height(20.dp))
+        Text(stringResource(R.string.volume_leveling), fontSize = FONT_TITLE)
+        Text(
+            stringResource(
+                when (volumeNorm) {
+                    VolumeNorm.Off -> R.string.norm_off_hint
+                    VolumeNorm.ReplayGain -> R.string.norm_tags_hint
+                    VolumeNorm.AutoLevel -> R.string.norm_auto_hint
+                }
+            ),
+            fontSize = FONT_CAPTION,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            ThemeOption(
+                stringResource(R.string.norm_off),
+                volumeNorm == VolumeNorm.Off,
+                Modifier.weight(1f)
+            ) { onVolumeNormChange(VolumeNorm.Off) }
+            Spacer(Modifier.width(8.dp))
+            ThemeOption(
+                stringResource(R.string.norm_tags),
+                volumeNorm == VolumeNorm.ReplayGain,
+                Modifier.weight(1f)
+            ) { onVolumeNormChange(VolumeNorm.ReplayGain) }
+            Spacer(Modifier.width(8.dp))
+            ThemeOption(
+                stringResource(R.string.norm_auto),
+                volumeNorm == VolumeNorm.AutoLevel,
+                Modifier.weight(1f)
+            ) { onVolumeNormChange(VolumeNorm.AutoLevel) }
+        }
+
+        Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.replaygain), fontSize = FONT_TITLE)
+                Text(stringResource(R.string.skip_silence), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(R.string.replaygain_hint),
+                    stringResource(R.string.skip_silence_hint),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Switch(checked = replayGainEnabled, onCheckedChange = onReplayGainChange)
+            Switch(checked = skipSilenceEnabled, onCheckedChange = onSkipSilenceChange)
         }
 
         Spacer(Modifier.height(10.dp))
@@ -2462,14 +2520,27 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun ThemeOption(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     // Both filled; selected is primary (colored), unselected is a clearly different grey fill.
     val colors = if (selected) ButtonDefaults.buttonColors()
     else ButtonDefaults.buttonColors(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Button(onClick = onClick, colors = colors) { Text(label, fontSize = FONT_TITLE) }
+    Button(
+        onClick = onClick,
+        colors = colors,
+        modifier = modifier,
+        // Trim the wide default side padding so labels like "System" stay on one line in the row.
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+    ) {
+        Text(label, fontSize = FONT_TITLE, maxLines = 1, softWrap = false)
+    }
 }
 
 /** Swatch colour shown in the picker. [AccentColor.Default] has no stored colour, so it shows the

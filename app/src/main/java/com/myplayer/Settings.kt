@@ -35,11 +35,24 @@ enum class AccentColor(val primary: Long, val onPrimary: Long) {
     }
 }
 
+/** How music loudness is evened out. [Off] leaves it raw; [ReplayGain] applies per-track gain from
+ *  file tags only (untagged files play unchanged); [AutoLevel] runs a real-time compressor/limiter on
+ *  the audio session, so every track is leveled regardless of tags. The two are mutually exclusive. */
+enum class VolumeNorm {
+    Off, ReplayGain, AutoLevel;
+
+    companion object {
+        fun from(value: String?): VolumeNorm = entries.firstOrNull { it.name == value } ?: Off
+    }
+}
+
 /** App settings stored in the `settings` table of [AppDb]. */
 object Settings {
     private const val KEY_FOLDER = "folder_uri"
     private const val KEY_ROOTS = "roots"
-    private const val KEY_REPLAYGAIN = "replaygain"
+    private const val KEY_REPLAYGAIN = "replaygain" // legacy boolean, migrated into KEY_VOLUME_NORM
+    private const val KEY_VOLUME_NORM = "volume_norm"
+    private const val KEY_SKIP_SILENCE = "skip_silence"
     private const val KEY_THEME = "theme"
     private const val KEY_ACCENT = "accent"
     private const val KEY_FOLLOW = "follow"
@@ -187,9 +200,19 @@ object Settings {
         return updated
     }
 
-    fun isReplayGainEnabled(context: Context): Boolean = get(context, KEY_REPLAYGAIN) == "true"
-    fun setReplayGainEnabled(context: Context, enabled: Boolean) =
-        set(context, KEY_REPLAYGAIN, enabled.toString())
+    /** Music loudness-normalization mode. Migrates the legacy on/off ReplayGain boolean on first read:
+     *  the old "on" becomes [VolumeNorm.ReplayGain], "off"/absent becomes [VolumeNorm.Off]. */
+    fun getVolumeNorm(context: Context): VolumeNorm {
+        get(context, KEY_VOLUME_NORM)?.let { return VolumeNorm.from(it) }
+        return if (get(context, KEY_REPLAYGAIN) == "true") VolumeNorm.ReplayGain else VolumeNorm.Off
+    }
+    fun setVolumeNorm(context: Context, mode: VolumeNorm) =
+        set(context, KEY_VOLUME_NORM, mode.name)
+
+    /** Skip silence: let ExoPlayer drop silent stretches so books/podcasts play tighter (default off). */
+    fun isSkipSilenceEnabled(context: Context): Boolean = get(context, KEY_SKIP_SILENCE) == "true"
+    fun setSkipSilenceEnabled(context: Context, enabled: Boolean) =
+        set(context, KEY_SKIP_SILENCE, enabled.toString())
 
     fun getThemeMode(context: Context): ThemeMode = ThemeMode.from(get(context, KEY_THEME))
     fun setThemeMode(context: Context, mode: ThemeMode) = set(context, KEY_THEME, mode.name)

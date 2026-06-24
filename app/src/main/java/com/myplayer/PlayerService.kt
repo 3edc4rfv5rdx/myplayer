@@ -30,8 +30,12 @@ class PlayerService : MediaSessionService() {
     companion object {
         private const val TAG = "PlayerService"
 
-        /** Custom session command: re-apply the ReplayGain setting to the current track live. */
-        const val CMD_REPLAYGAIN = "com.myplayer.REPLAYGAIN_CHANGED"
+        /** Custom session command: re-apply the volume-normalization mode (ReplayGain / auto-level)
+         *  to the current track live. */
+        const val CMD_VOLUME_NORM = "com.myplayer.VOLUME_NORM_CHANGED"
+
+        /** Custom session command: re-apply the skip-silence setting to the player live. */
+        const val CMD_SKIP_SILENCE = "com.myplayer.SKIP_SILENCE_CHANGED"
 
         /** Custom session command: declare the active queue's book key (empty = plain music, no
          *  position tracking). Sent by the activity whenever it installs a new queue. */
@@ -54,11 +58,14 @@ class PlayerService : MediaSessionService() {
 
     private var session: MediaSession? = null
     private var player: ExoPlayer? = null
+    // ReplayGain boost (positive tag gain) and real-time auto-leveling are both audio-session effects;
+    // they're recreated whenever the session id changes and toggled by the active [normMode].
     private var enhancer: LoudnessEnhancer? = null
+    private var leveler: android.media.audiofx.DynamicsProcessing? = null
     private var currentTrackGainDb: Float? = null
-    // Cached so applyGain() (called on every metadata/transition/session callback) needn't hit the DB.
+    // Cached so applyNorm() (called on every metadata/transition/session callback) needn't hit the DB.
     // Loaded from Settings in onCreate, before the player or any listener exists.
-    private var replayGainEnabled = false
+    private var normMode = VolumeNorm.Off
 
     // Book key of the active queue, or null for plain music. When set, the current file uri and
     // offset are persisted as the book's resume point (see [saveBookPosition]).
@@ -83,7 +90,7 @@ class PlayerService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        replayGainEnabled = Settings.isReplayGainEnabled(this)
+        normMode = Settings.getVolumeNorm(this)
 
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(
@@ -98,6 +105,7 @@ class PlayerService : MediaSessionService() {
 
         player.repeatMode =
             if (Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        player.skipSilenceEnabled = Settings.isSkipSilenceEnabled(this)
 
         player.addListener(object : Player.Listener {
             @UnstableApi
@@ -109,12 +117,14 @@ class PlayerService : MediaSessionService() {
                     Log.w(TAG, "LoudnessEnhancer unavailable; ReplayGain boost is a no-op", e)
                     null
                 }
-                applyGain()
+                leveler?.release()
+                leveler = AutoLevel.create(audioSessionId)
+                applyNorm()
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 currentTrackGainDb = null
-                applyGain()
+                applyNorm()
                 // "Until end of chapter" fires when the current track finishes on its own: the queue
                 // auto-advances to the next file (position ~0), so pausing here leaves the resume
                 // point cleanly at the start of the next chapter.
@@ -178,7 +188,7 @@ class PlayerService : MediaSessionService() {
             override fun onMetadata(metadata: Metadata) {
                 ReplayGain.parseTrackGainDb(metadata)?.let {
                     currentTrackGainDb = it
-                    applyGain()
+                    applyNorm()
                 }
             }
         })
@@ -266,7 +276,8 @@ class PlayerService : MediaSessionService() {
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                .add(SessionCommand(CMD_REPLAYGAIN, Bundle.EMPTY))
+                .add(SessionCommand(CMD_VOLUME_NORM, Bundle.EMPTY))
+                .add(SessionCommand(CMD_SKIP_SILENCE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_BOOK_MODE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SLEEP_TIMER, Bundle.EMPTY))
                 .build()
@@ -281,9 +292,13 @@ class PlayerService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == CMD_REPLAYGAIN) {
-                replayGainEnabled = Settings.isReplayGainEnabled(this@PlayerService)
-                applyGain()
+            if (customCommand.customAction == CMD_VOLUME_NORM) {
+                normMode = Settings.getVolumeNorm(this@PlayerService)
+                applyNorm()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == CMD_SKIP_SILENCE) {
+                player?.skipSilenceEnabled = Settings.isSkipSilenceEnabled(this@PlayerService)
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_BOOK_MODE) {
@@ -293,6 +308,8 @@ class PlayerService : MediaSessionService() {
                 // item still belongs to the old book here. No-op when no book was tracked.
                 if (newKey != bookFolderKey) saveBookPosition()
                 bookFolderKey = newKey
+                // Switching between a music and a book queue flips whether leveling applies.
+                applyNorm()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_SLEEP_TIMER) {
@@ -310,11 +327,36 @@ class PlayerService : MediaSessionService() {
         }
     }
 
-    /** Applies the current track's ReplayGain (capped at +12 dB) when enabled in [Settings]. */
-    private fun applyGain() {
+    /** Applies the active [normMode]: nothing (Off), per-track tag gain (ReplayGain), or the
+     *  real-time compressor/limiter (AutoLevel). The two leveling paths are mutually exclusive.
+     *  Leveling is music-only — a book queue ([bookFolderKey] set) always plays raw, since
+     *  compressing speech and squashing its pauses hurts more than it helps. */
+    private fun applyNorm() {
         val p = player ?: return
-        val db = currentTrackGainDb
-        if (!replayGainEnabled || db == null) {
+        val mode = if (bookFolderKey != null) VolumeNorm.Off else normMode
+        when (mode) {
+            VolumeNorm.AutoLevel -> {
+                // Tag-based path off; the audio-session effect does the work, leaving player volume flat.
+                p.volume = 1f
+                enhancer?.enabled = false
+                leveler?.enabled = true
+            }
+            VolumeNorm.ReplayGain -> {
+                leveler?.enabled = false
+                applyReplayGain(p, currentTrackGainDb)
+            }
+            VolumeNorm.Off -> {
+                p.volume = 1f
+                enhancer?.enabled = false
+                leveler?.enabled = false
+            }
+        }
+    }
+
+    /** Applies the current track's ReplayGain (capped at +12 dB), or resets to unity when [db] is
+     *  null (untagged track). */
+    private fun applyReplayGain(p: ExoPlayer, db: Float?) {
+        if (db == null) {
             p.volume = 1f
             enhancer?.enabled = false
             return
@@ -344,6 +386,8 @@ class PlayerService : MediaSessionService() {
         Settings.flush() // make sure the final position write reaches disk before the process can die
         enhancer?.release()
         enhancer = null
+        leveler?.release()
+        leveler = null
         session?.run {
             player.release()
             release()

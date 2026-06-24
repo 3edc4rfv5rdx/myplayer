@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Volume leveling now has three modes (Off / Tags / Auto), music only; Auto evens out loudness in real time for untagged music too.
+
+- Added a Skip silence setting that drops silent gaps during playback.
+
 - Added a Settings accent-color picker (lilac, yellow, teal, pink, green, orange, blue, beige).
 
 ## v0.5.20260615+170
