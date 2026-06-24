@@ -61,6 +61,7 @@ object Settings {
     private const val KEY_BACKUP = "backup"
     private const val KEY_DEFAULT_SPEED = "default_speed"
     private const val KEY_HISTORY = "history"
+    private const val KEY_FAVORITES = "favorites"
     // Per-folder book state lives under these prefixes, keyed by a stable (treeUri, docId) folder key.
     private const val KEY_MODE_PREFIX = "mode:"
     private const val KEY_POS_PREFIX = "pos:"
@@ -96,6 +97,9 @@ object Settings {
     // How many recently played folders the history dialog keeps.
     const val HISTORY_MAX = 5
 
+    // How many manually pinned folders the favorites dialog keeps.
+    const val FAVORITES_MAX = 15
+
     // In-memory cache so reads (after warm-up) and read-modify-write on roots stay off disk and
     // race-free; the single-thread writer persists changes in order, in the background.
     private val lock = Any()
@@ -110,6 +114,9 @@ object Settings {
 
     // Serializes the read-modify-write of the history list, like rootLock for roots.
     private val historyLock = Any()
+
+    // Serializes the read-modify-write of the favorites list, like historyLock for history.
+    private val favoritesLock = Any()
 
     private fun get(context: Context, key: String): String? {
         synchronized(lock) { if (key in loaded) return cache[key] }
@@ -202,6 +209,7 @@ object Settings {
         val updated = getRoots(context).filter { it != uri }
         setRoots(context, updated)
         removeHistoryForTree(context, uri)
+        removeFavoritesForTree(context, uri)
         return updated
     }
 
@@ -270,8 +278,69 @@ object Settings {
         val key: String get() = "$treeUri|${ids.lastOrNull().orEmpty()}"
     }
 
-    fun getHistory(context: Context): List<HistoryEntry> {
-        val raw = get(context, KEY_HISTORY) ?: return emptyList()
+    fun getHistory(context: Context): List<HistoryEntry> = readEntries(context, KEY_HISTORY)
+
+    /** Records [entry] at the front (most-recent-first), drops any earlier hit on the same folder,
+     *  and caps the list at [HISTORY_MAX]. */
+    fun addHistory(context: Context, entry: HistoryEntry) = synchronized(historyLock) {
+        val updated = (listOf(entry) + getHistory(context).filter { it.key != entry.key })
+            .take(HISTORY_MAX)
+        writeEntries(context, KEY_HISTORY, updated)
+    }
+
+    /** Drops every history entry under [treeUri] (used when a root is removed). */
+    fun removeHistoryForTree(context: Context, treeUri: String) = synchronized(historyLock) {
+        writeEntries(context, KEY_HISTORY, getHistory(context).filter { it.treeUri != treeUri })
+    }
+
+    /** Drops the history entry for [folderId] and any entry whose path runs through it (its
+     *  descendants), used when a folder is deleted from storage. */
+    fun removeHistoryForFolder(context: Context, treeUri: String, folderId: String) =
+        synchronized(historyLock) {
+            writeEntries(context, KEY_HISTORY, getHistory(context).filter {
+                it.treeUri != treeUri || folderId !in it.ids
+            })
+        }
+
+    // ---- Favorites (manually pinned folders) -----------------------------------------------------
+    // Same shape and navigation as history, but pinned by hand (never auto-evicted) and capped higher.
+
+    fun getFavorites(context: Context): List<HistoryEntry> = readEntries(context, KEY_FAVORITES)
+
+    /** Whether the folder with this [HistoryEntry.key] is pinned. */
+    fun isFavorite(context: Context, key: String): Boolean =
+        getFavorites(context).any { it.key == key }
+
+    /** Pins [entry] at the front, de-duped by folder, capped at [FAVORITES_MAX]. */
+    fun addFavorite(context: Context, entry: HistoryEntry) = synchronized(favoritesLock) {
+        val updated = (listOf(entry) + getFavorites(context).filter { it.key != entry.key })
+            .take(FAVORITES_MAX)
+        writeEntries(context, KEY_FAVORITES, updated)
+    }
+
+    /** Unpins the folder with this [HistoryEntry.key]. */
+    fun removeFavorite(context: Context, key: String) = synchronized(favoritesLock) {
+        writeEntries(context, KEY_FAVORITES, getFavorites(context).filter { it.key != key })
+    }
+
+    /** Drops every favorite under [treeUri] (used when a root is removed). */
+    fun removeFavoritesForTree(context: Context, treeUri: String) = synchronized(favoritesLock) {
+        writeEntries(context, KEY_FAVORITES, getFavorites(context).filter { it.treeUri != treeUri })
+    }
+
+    /** Drops the favorite for [folderId] and any entry whose path runs through it (used when a
+     *  folder is deleted from storage). */
+    fun removeFavoriteForFolder(context: Context, treeUri: String, folderId: String) =
+        synchronized(favoritesLock) {
+            writeEntries(context, KEY_FAVORITES, getFavorites(context).filter {
+                it.treeUri != treeUri || folderId !in it.ids
+            })
+        }
+
+    // ---- Shared folder-entry (history/favorites) JSON --------------------------------------------
+
+    private fun readEntries(context: Context, key: String): List<HistoryEntry> {
+        val raw = get(context, key) ?: return emptyList()
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
@@ -286,29 +355,7 @@ object Settings {
         }
     }
 
-    /** Records [entry] at the front (most-recent-first), drops any earlier hit on the same folder,
-     *  and caps the list at [HISTORY_MAX]. */
-    fun addHistory(context: Context, entry: HistoryEntry) = synchronized(historyLock) {
-        val updated = (listOf(entry) + getHistory(context).filter { it.key != entry.key })
-            .take(HISTORY_MAX)
-        writeHistory(context, updated)
-    }
-
-    /** Drops every history entry under [treeUri] (used when a root is removed). */
-    fun removeHistoryForTree(context: Context, treeUri: String) = synchronized(historyLock) {
-        writeHistory(context, getHistory(context).filter { it.treeUri != treeUri })
-    }
-
-    /** Drops the history entry for [folderId] and any entry whose path runs through it (its
-     *  descendants), used when a folder is deleted from storage. */
-    fun removeHistoryForFolder(context: Context, treeUri: String, folderId: String) =
-        synchronized(historyLock) {
-            writeHistory(context, getHistory(context).filter {
-                it.treeUri != treeUri || folderId !in it.ids
-            })
-        }
-
-    private fun writeHistory(context: Context, entries: List<HistoryEntry>) {
+    private fun writeEntries(context: Context, key: String, entries: List<HistoryEntry>) {
         val arr = JSONArray()
         for (e in entries) {
             arr.put(
@@ -319,7 +366,7 @@ object Settings {
                     .put("book", e.isBook)
             )
         }
-        set(context, KEY_HISTORY, arr.toString())
+        set(context, key, arr.toString())
     }
 
     // ---- Audiobook mode (per folder) -------------------------------------------------------------

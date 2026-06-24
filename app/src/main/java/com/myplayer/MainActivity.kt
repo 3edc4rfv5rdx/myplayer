@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.DocumentsContract
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -180,6 +181,10 @@ class MainActivity : ComponentActivity() {
     // down to. Refreshed by querying the service; not persisted.
     private val sleepModeState = mutableStateOf(0)
     private val sleepDeadlineState = mutableStateOf(0L)
+
+    // Whether the folder currently open in the browser is pinned to favorites. Mirrors
+    // Settings.isFavorite for the open folder; kept in sync as the browser navigates.
+    private val favoriteState = mutableStateOf(false)
 
     // Audiobook mode of the folder currently open in the browser (persisted per folder). Mirrors
     // Settings.isAbook for the open folder; kept in sync as the browser navigates.
@@ -362,12 +367,15 @@ class MainActivity : ComponentActivity() {
                             }
                             val abook by abookState
                             val abookInherited by abookInheritedState
+                            val favorite by favoriteState
                             // Re-keyed on `abook` too so toggling this folder's checkbox (which
                             // doesn't change currentFolderKey) immediately re-resolves the book key
                             // and speed — otherwise the speed button only appears after re-entering.
                             LaunchedEffect(currentFolderKey, abook) {
                                 abookState.value = currentFolderKey != null &&
                                     Settings.isAbook(this@MainActivity, currentFolderKey)
+                                favoriteState.value = currentFolderKey != null &&
+                                    Settings.isFavorite(this@MainActivity, currentFolderKey)
                                 val t = treeUriState.value
                                 val p = pathState.value
                                 val bookPath =
@@ -424,6 +432,19 @@ class MainActivity : ComponentActivity() {
                                     // the checkbox is locked, so the flag can't contradict it.
                                     Settings.setAbook(this, key, enabled)
                                 }
+                            },
+                            favorite = favorite,
+                            onToggleFavorite = {
+                                favoriteState.value = toggleFavorite(path, abook || abookInherited)
+                            },
+                            isChildFavorite = { isFavoriteFolder(it) },
+                            onToggleChildFavorite = { folder ->
+                                val isBook = treeUri?.let {
+                                    Settings.isAbook(
+                                        this, Settings.bookKey(it.toString(), folder.documentId)
+                                    )
+                                } ?: false
+                                toggleFavorite(path + folder, isBook)
                             },
                             onEnterRoot = { enterRoot(it) },
                             onOpenHistoryEntry = { openHistoryEntry(it) },
@@ -694,6 +715,32 @@ class MainActivity : ComponentActivity() {
         pathState.value = entry.ids.indices.map { Node(entry.ids[it], entry.names[it], true) }
         selectedIndexState.value = null
         visitedPathIdsState.value = entry.ids.toSet()
+    }
+
+    /** Pins/unpins [targetPath]'s last folder (the open folder, or a long-pressed child reached via
+     *  it) to favorites; returns true when it is now pinned. [isBook] only sets the dialog glyph. */
+    private fun toggleFavorite(targetPath: List<Node>, isBook: Boolean): Boolean {
+        val tree = treeUriState.value ?: return false
+        if (targetPath.isEmpty()) return false
+        val key = Settings.bookKey(tree.toString(), targetPath.last().documentId)
+        if (Settings.isFavorite(this, key)) {
+            Settings.removeFavorite(this, key)
+            return false
+        }
+        Settings.addFavorite(
+            this,
+            Settings.HistoryEntry(
+                tree.toString(), targetPath.map { it.documentId }, targetPath.map { it.name }, isBook
+            )
+        )
+        Toast.makeText(this, R.string.added_to_favorites, Toast.LENGTH_SHORT).show()
+        return true
+    }
+
+    /** Whether [folder] (a child of the open folder) is pinned. */
+    private fun isFavoriteFolder(folder: Node): Boolean {
+        val tree = treeUriState.value ?: return false
+        return Settings.isFavorite(this, Settings.bookKey(tree.toString(), folder.documentId))
     }
 
     /** Stops playback, drops the queue, and clears the now-playing UI state (labels, bar).
@@ -1057,6 +1104,10 @@ class MainActivity : ComponentActivity() {
                     Settings.removeHistoryForFolder(
                         this@MainActivity, tree.toString(), folder.documentId
                     )
+                    // Likewise unpin it (and any descendant) from favorites.
+                    Settings.removeFavoriteForFolder(
+                        this@MainActivity, tree.toString(), folder.documentId
+                    )
                     // Drop the deleted folder's own (and descendants') cached listings, then the
                     // parent's so the now-missing folder disappears from it on re-scan.
                     val removedUris =
@@ -1138,6 +1189,10 @@ private fun PlayerScreen(
     playingAbook: Boolean,
     remainingTime: Boolean,
     onAbookToggle: (Boolean) -> Unit,
+    favorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    isChildFavorite: (Node) -> Boolean,
+    onToggleChildFavorite: (Node) -> Unit,
     onEnterRoot: (Uri) -> Unit,
     onOpenHistoryEntry: (Settings.HistoryEntry) -> Unit,
     onAddRoot: () -> Unit,
@@ -1192,6 +1247,10 @@ private fun PlayerScreen(
                     playingDocId = playingDocId,
                     visitedPathIds = visitedPathIds,
                     rescanTick = rescanTick,
+                    favorite = favorite,
+                    onToggleFavorite = onToggleFavorite,
+                    isChildFavorite = isChildFavorite,
+                    onToggleChildFavorite = onToggleChildFavorite,
                     onUp = onUp,
                     onDescend = onDescend,
                     onDeleteBook = onDeleteBook,
@@ -1252,6 +1311,8 @@ private fun TopBar(
     onAdd: (() -> Unit)?,
     onSettings: (() -> Unit)?,
     onAbout: (() -> Unit)? = null,
+    onFavorite: (() -> Unit)? = null,
+    favoriteOn: Boolean = false,
     onSleep: (() -> Unit)? = null,
     sleepArmed: Boolean = false,
 ) {
@@ -1296,6 +1357,21 @@ private fun TopBar(
                 Icon(
                     painter = painterResource(R.drawable.ic_info),
                     contentDescription = stringResource(R.string.about),
+                    modifier = Modifier.size(TOP_BAR_ICON)
+                )
+            }
+        }
+        if (onFavorite != null) {
+            IconButton(onClick = onFavorite) {
+                Icon(
+                    painter = painterResource(
+                        if (favoriteOn) R.drawable.ic_star else R.drawable.ic_star_outline
+                    ),
+                    contentDescription = stringResource(
+                        if (favoriteOn) R.string.remove_from_favorites else R.string.add_to_favorites
+                    ),
+                    tint = if (favoriteOn) MaterialTheme.colorScheme.primary
+                    else LocalContentColor.current,
                     modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
@@ -1351,6 +1427,7 @@ private fun RootsList(
     val context = LocalContext.current
     var pendingRemoval by remember { mutableStateOf<Uri?>(null) }
     var showHistory by remember { mutableStateOf(false) }
+    var showFavorites by remember { mutableStateOf(false) }
     var labeled by remember(roots) {
         mutableStateOf(
             roots.map { it to fallbackRootLabel(it) }
@@ -1437,54 +1514,56 @@ private fun RootsList(
         }
 
         Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = { showHistory = true },
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-            // ~5 mm extra on each side on top of the Button's default 24dp horizontal padding.
-            contentPadding = PaddingValues(horizontal = 56.dp, vertical = 8.dp)
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(stringResource(R.string.history))
+            // Favorites: a short filled-star button mirroring History (both open a folder-list dialog).
+            Button(
+                onClick = { showFavorites = true },
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_star),
+                    contentDescription = stringResource(R.string.favorites),
+                    modifier = Modifier.size(TOP_BAR_ICON)
+                )
+            }
+            Button(
+                onClick = { showHistory = true },
+                contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp)
+            ) {
+                Text(stringResource(R.string.history))
+            }
         }
 
         if (showHistory) {
             // Read once per open; the dialog leaves the composition when closed, so a later open
             // re-reads the up-to-date list.
             val entries = remember { Settings.getHistory(context) }
-            AlertDialog(
-                onDismissRequest = { showHistory = false },
-                containerColor = SurfaceTint,
-                textContentColor = MaterialTheme.colorScheme.onSurface,
-                title = { Text(stringResource(R.string.history)) },
-                text = {
-                    if (entries.isEmpty()) {
-                        Text(stringResource(R.string.no_history))
-                    } else {
-                        Column {
-                            entries.forEach { entry ->
-                                val icon = if (entry.isBook) "📖" else "🎵"
-                                Text(
-                                    text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontSize = FONT_LIST,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            showHistory = false
-                                            onOpenHistoryEntry(entry)
-                                        }
-                                        .padding(vertical = 10.dp, horizontal = 4.dp)
-                                )
-                            }
-                        }
-                    }
+            FolderEntryDialog(
+                title = stringResource(R.string.history),
+                emptyText = stringResource(R.string.no_history),
+                entries = entries,
+                onPick = { showHistory = false; onOpenHistoryEntry(it) },
+                onRemove = null,
+                onDismiss = { showHistory = false }
+            )
+        }
+
+        if (showFavorites) {
+            // Mutable so unpinning a row (long-press) updates the open list in place.
+            var favorites by remember { mutableStateOf(Settings.getFavorites(context)) }
+            FolderEntryDialog(
+                title = stringResource(R.string.favorites),
+                emptyText = stringResource(R.string.no_favorites),
+                entries = favorites,
+                onPick = { showFavorites = false; onOpenHistoryEntry(it) },
+                onRemove = { entry ->
+                    Settings.removeFavorite(context, entry.key)
+                    favorites = favorites.filter { it.key != entry.key }
                 },
-                confirmButton = {
-                    Button(onClick = { showHistory = false }) {
-                        Text(stringResource(R.string.cancel))
-                    }
-                }
+                onDismiss = { showFavorites = false }
             )
         }
 
@@ -1512,6 +1591,59 @@ private fun RootsList(
     }
 }
 
+/** A tappable list of saved folders, shared by the History and Favorites dialogs. Each row opens the
+ *  folder via [onPick]; when [onRemove] is non-null (favorites) a long-press removes the row. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderEntryDialog(
+    title: String,
+    emptyText: String,
+    entries: List<Settings.HistoryEntry>,
+    onPick: (Settings.HistoryEntry) -> Unit,
+    onRemove: ((Settings.HistoryEntry) -> Unit)?,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceTint,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
+        title = { Text(title) },
+        text = {
+            if (entries.isEmpty()) {
+                Text(emptyText)
+            } else {
+                Column {
+                    entries.forEach { entry ->
+                        val icon = if (entry.isBook) "📖" else "🎵"
+                        val rowClick = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .then(
+                                if (onRemove != null)
+                                    Modifier.combinedClickable(
+                                        onClick = { onPick(entry) },
+                                        onLongClick = { onRemove(entry) }
+                                    )
+                                else Modifier.clickable { onPick(entry) }
+                            )
+                            .padding(vertical = 10.dp, horizontal = 4.dp)
+                        Text(
+                            text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontSize = FONT_LIST,
+                            modifier = rowClick
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        }
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderBrowser(
@@ -1524,6 +1656,10 @@ private fun FolderBrowser(
     playingDocId: String?,
     visitedPathIds: Set<String>,
     rescanTick: Int,
+    favorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    isChildFavorite: (Node) -> Boolean,
+    onToggleChildFavorite: (Node) -> Unit,
     onUp: () -> Unit,
     onDescend: (Node) -> Unit,
     onDeleteBook: (Node) -> Unit,
@@ -1537,6 +1673,8 @@ private fun FolderBrowser(
     modifier: Modifier = Modifier
 ) {
     var pendingDelete by remember { mutableStateOf<Node?>(null) }
+    // Folder long-pressed in the list: opens a small actions menu (pin/unpin, delete).
+    var pendingMenu by remember { mutableStateOf<Node?>(null) }
     var showSleepDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -1612,6 +1750,8 @@ private fun FolderBrowser(
             title = title,
             onAdd = null,
             onSettings = onOpenSettings,
+            onFavorite = onToggleFavorite,
+            favoriteOn = favorite,
             onSleep = { showSleepDialog = true },
             sleepArmed = sleepMode != 0,
         )
@@ -1663,7 +1803,7 @@ private fun FolderBrowser(
                             .background(background)
                             .combinedClickable(
                                 onClick = { onDescend(folder) },
-                                onLongClick = { pendingDelete = folder }
+                                onLongClick = { pendingMenu = folder }
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             // The highlighted row scrolls its full name into view instead of clipping.
@@ -1702,6 +1842,55 @@ private fun FolderBrowser(
                     )
                 }
             }
+        }
+
+        pendingMenu?.let { folder ->
+            // Read once per open; the menu leaves composition on dismiss, so reopening re-reads.
+            val pinned = remember(folder) { isChildFavorite(folder) }
+            AlertDialog(
+                onDismissRequest = { pendingMenu = null },
+                containerColor = SurfaceTint,
+                textContentColor = MaterialTheme.colorScheme.onSurface,
+                title = {
+                    Text(folder.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+                text = {
+                    Column {
+                        Text(
+                            stringResource(
+                                if (pinned) R.string.remove_from_favorites
+                                else R.string.add_to_favorites
+                            ),
+                            fontSize = FONT_LIST,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    onToggleChildFavorite(folder)
+                                    pendingMenu = null
+                                }
+                                .padding(vertical = 10.dp, horizontal = 4.dp)
+                        )
+                        Text(
+                            stringResource(R.string.delete_book),
+                            fontSize = FONT_LIST,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    pendingDelete = folder
+                                    pendingMenu = null
+                                }
+                                .padding(vertical = 10.dp, horizontal = 4.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { pendingMenu = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
         }
 
         pendingDelete?.let { folder ->

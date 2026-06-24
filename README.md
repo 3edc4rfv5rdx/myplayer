@@ -18,17 +18,22 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - Browse subfolders in-app; listings are cached per folder. Folders and files are in natural order
   (`Chapter 2` before `Chapter 10`). 📁 folder, 📖 audiobook, 🎵 music file, 📄 track inside a book.
   The browser title reads **Music** or **AudioBook** for the folder's mode.
-- **History**: the home list has a **History** button listing the last few folders you played (📖 for
-  books, 🎵 for music); tapping one jumps the browser straight back to that folder.
-- **Delete a folder**: long-press and confirm — permanently removes it and its files from storage
-  (and forgets its audiobook state); playback is adjusted first if affected.
+- **History**: the home list has a **History** button (bottom-right) listing the last few folders you
+  played (📖 for books, 🎵 for music); tapping one jumps the browser straight back to that folder.
+- **Favorites**: pin a folder with the **★** in the browser top bar (or long-press it → **Add to
+  favorites**); open pinned folders from the **★** button (bottom-left) on the home screen. Unpin
+  from the top-bar star or by long-pressing a row in the Favorites dialog. Up to 15, never auto-evicted.
+- **Folder long-press menu**: long-press a folder in the browser for **Add/Remove favorite** and
+  **Delete** — the latter permanently removes the folder and its files from storage (and forgets its
+  audiobook state); playback is adjusted first if affected.
 - **Tap a file** to select it, then press the big **Play** to start (selected track first, then the
   rest of the folder).
 - **Play this folder** plays everything under the current folder (recursively).
 - **Play** with nothing selected plays the current folder; the same paused folder resumes.
 - **Shuffle** switch (main screen, on by default, not persisted): toggles the play order live. With
   shuffle on, starting a folder begins at a random track; off starts from the top.
-- **Previous / Next** skip tracks, and **−30s / +30s** buttons step within the current track.
+- **Previous / Next** skip tracks, and the **−/+** buttons step within the current track by the
+  configurable seek step (Settings, default 30s).
 - **Playback bar** shows the elapsed time and, at the right edge, the track duration (or the
   remaining time, per the Track-time setting); tap or drag it to seek within the track.
 - **Sleep timer** (⏳ in the top bar): minutes slider (10–60) or **Until end of track**; pauses
@@ -38,8 +43,9 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **Volume leveling**
   (Off / Tags / Auto — music only, see below), **Skip silence** (drop silent gaps during playback),
   **Follow playing track**, **Track time** (rightmost readout shows total or remaining time),
-  **Auto backup**, **Abook default speed** (the speed new audiobooks start at), and an About dialog
-  (ℹ️ in the top bar) with version/build. Theme and Volume leveling are compact dropdowns.
+  **Auto backup**, **Seek step** (the −/+ jump, 10/20/30/45/60s), **Abook default speed** (the speed
+  new audiobooks start at), and an About dialog (ℹ️ in the top bar) with version/build. Theme, Volume
+  leveling, and Seek step are compact dropdowns.
 - **Follow playing track** (on by default): on each track change the browser jumps to the playing
   file's folder and centers it.
 - **Auto backup** (off by default): includes settings and book progress in Android Auto Backup; the

@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Added Favorites: pin folders via the browser top-bar star or a folder's long-press menu, open them from a star button next to History on the home screen (up to 15).
+
 - Seek step (rewind/forward buttons) is now configurable in Settings (10/20/30/45/60s, default 30).
 
 - Settings dropdowns (Theme, Volume leveling, Seek step) now share one width and align.
