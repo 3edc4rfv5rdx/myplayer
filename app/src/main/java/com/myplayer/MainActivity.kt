@@ -1407,7 +1407,11 @@ private fun RootsList(
                                 color = if (selected) foreground else Color.Unspecified,
                                 modifier = Modifier.weight(1f)
                             )
-                            IconButton(onClick = { pendingRemoval = uri }) {
+                            IconButton(
+                                onClick = { pendingRemoval = uri },
+                                // Shrink from the 48dp default so the selected row stays compact.
+                                modifier = Modifier.size(32.dp)
+                            ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_close),
                                     contentDescription = stringResource(R.string.remove_folder),
@@ -1645,7 +1649,7 @@ private fun FolderBrowser(
                                 onClick = { onDescend(folder) },
                                 onLongClick = { pendingDelete = folder }
                             )
-                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                             // The highlighted row scrolls its full name into view instead of clipping.
                             .then(if (highlighted) Modifier.basicMarquee() else Modifier)
                     )
@@ -1672,7 +1676,7 @@ private fun FolderBrowser(
                             .clip(RoundedCornerShape(8.dp))
                             .background(background)
                             .clickable { onSelectFile(index) }
-                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                             // The highlighted (playing/selected) row scrolls its full name into view.
                             .then(if (highlighted) Modifier.basicMarquee() else Modifier)
                     )

@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Shrank the row height of the folder list and browser so selected rows are less bulky.
+
 - Theme and Volume leveling are now compact dropdowns instead of full-width button rows.
 
 - Volume leveling now has three modes (Off / Tags / Auto), music only; Auto evens out loudness in real time for untagged music too.
