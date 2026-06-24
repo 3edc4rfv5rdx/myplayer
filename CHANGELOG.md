@@ -3,6 +3,13 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Seek step (rewind/forward buttons) is now configurable in Settings (10/20/30/45/60s, default 30).
+
+- Settings dropdowns (Theme, Volume leveling, Seek step) now share one width and align.
+
+- Made the prev/next icons larger and the seek buttons' −/+ labels bigger and bold.
+
 ## v0.5.20260624+184
 
 - Docs: document Volume leveling (Tags/Auto) and Skip silence in the README.

@@ -1,3 +1,3 @@
 base_version=0.5
-build=184
+build=192
 version=0.5.20260624

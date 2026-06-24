@@ -53,6 +53,7 @@ object Settings {
     private const val KEY_REPLAYGAIN = "replaygain" // legacy boolean, migrated into KEY_VOLUME_NORM
     private const val KEY_VOLUME_NORM = "volume_norm"
     private const val KEY_SKIP_SILENCE = "skip_silence"
+    private const val KEY_SEEK_STEP = "seek_step"
     private const val KEY_THEME = "theme"
     private const val KEY_ACCENT = "accent"
     private const val KEY_FOLLOW = "follow"
@@ -81,6 +82,10 @@ object Settings {
     const val SPEED_MAX = 3.0f
     const val SPEED_STEP = 0.05f
     const val SPEED_DEFAULT = 1.0f
+
+    // Seek step (seconds) for the rewind/forward buttons; coarse options, current default 30.
+    val SEEK_STEP_OPTIONS = listOf(10, 20, 30, 45, 60)
+    const val SEEK_STEP_DEFAULT = 30
 
     // Sleep-timer slider bounds and granularity (minutes), shared by the player and its dialog.
     const val SLEEP_MIN = 10f
@@ -213,6 +218,13 @@ object Settings {
     fun isSkipSilenceEnabled(context: Context): Boolean = get(context, KEY_SKIP_SILENCE) == "true"
     fun setSkipSilenceEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_SKIP_SILENCE, enabled.toString())
+
+    /** Rewind/forward seek step in seconds; falls back to [SEEK_STEP_DEFAULT] when unset or invalid. */
+    fun getSeekStepSeconds(context: Context): Int =
+        get(context, KEY_SEEK_STEP)?.toIntOrNull()?.takeIf { it in SEEK_STEP_OPTIONS }
+            ?: SEEK_STEP_DEFAULT
+    fun setSeekStepSeconds(context: Context, seconds: Int) =
+        set(context, KEY_SEEK_STEP, seconds.toString())
 
     fun getThemeMode(context: Context): ThemeMode = ThemeMode.from(get(context, KEY_THEME))
     fun setThemeMode(context: Context, mode: ThemeMode) = set(context, KEY_THEME, mode.name)

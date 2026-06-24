@@ -28,8 +28,10 @@
     <string name="next">Next</string>
     <string name="previous">Previous</string>
     <string name="shuffle">Shuffle</string>
-    <string name="rewind_30">−30s</string>
-    <string name="forward_30">+30s</string>
+    <string name="rewind_step">−%ds</string>
+    <string name="forward_step">+%ds</string>
+    <string name="seconds_short">%ds</string>
+    <string name="seek_step">Seek step</string>
     <string name="playback_speed">Playback speed</string>
     <string name="default_speed">Abook default speed</string>
     <string name="audiobook_mode">abook</string>

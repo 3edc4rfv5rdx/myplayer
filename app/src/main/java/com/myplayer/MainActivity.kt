@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -119,13 +120,12 @@ private const val STATE_PLAYING_ABOOK = "playing_abook"
 private const val STATE_PLAYING_DOC_ID = "playing_doc_id"
 private const val STATE_VISITED_PATH_IDS = "visited_path_ids"
 
-// Fixed jump for the rewind/fast-forward buttons.
-private const val SEEK_STEP_MS = 30_000L
-
 // Shared geometry for the control grid: every button is the same width/height, the play rectangle
 // is exactly two buttons plus the gap tall, and rows/stacks are spaced by half a button.
 private val CONTROL_BTN_WIDTH = 88.dp
 private val CONTROL_BTN_HEIGHT = 36.dp
+// Uniform width for the Settings dropdowns (Theme / Volume leveling / Seek step) so they align.
+private val SETTING_DROPDOWN_WIDTH = 100.dp
 private val CONTROL_GAP = 18.dp
 private val PLAY_HEIGHT = CONTROL_BTN_HEIGHT * 2 + CONTROL_GAP
 
@@ -284,6 +284,7 @@ class MainActivity : ComponentActivity() {
                     var remaining by remember { mutableStateOf(Settings.isRemainingTime(this)) }
                     var backup by remember { mutableStateOf(Settings.isBackupEnabled(this)) }
                     var defaultSpeed by remember { mutableStateOf(Settings.getDefaultSpeed(this)) }
+                    var seekStep by remember { mutableStateOf(Settings.getSeekStepSeconds(this)) }
 
                     BackHandler(enabled = screen == Screen.Settings || path.isNotEmpty()) {
                         if (screen == Screen.Settings) screenState.value = Screen.Browser else goUp()
@@ -301,6 +302,7 @@ class MainActivity : ComponentActivity() {
                             remainingEnabled = remaining,
                             backupEnabled = backup,
                             defaultSpeed = defaultSpeed,
+                            seekStepSec = seekStep,
                             onThemeChange = {
                                 themeState.value = it
                                 Settings.setThemeMode(this, it)
@@ -339,6 +341,10 @@ class MainActivity : ComponentActivity() {
                             onDefaultSpeedChange = {
                                 defaultSpeed = it
                                 Settings.setDefaultSpeed(this, it)
+                            },
+                            onSeekStepChange = {
+                                seekStep = it
+                                Settings.setSeekStepSeconds(this, it)
                             },
                             onRescan = {
                                 FolderCache.clear(this)
@@ -437,6 +443,7 @@ class MainActivity : ComponentActivity() {
                             onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() },
+                            seekStepSec = seekStep,
                             sleepMode = sleepMode,
                             sleepDeadline = sleepDeadline,
                             onSleepMinutes = { sendSleepCommand("minutes", it) },
@@ -1142,6 +1149,7 @@ private fun PlayerScreen(
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onPlayPause: () -> Unit,
+    seekStepSec: Int,
     sleepMode: Int,
     sleepDeadline: Long,
     onSleepMinutes: (Int) -> Unit,
@@ -1208,6 +1216,7 @@ private fun PlayerScreen(
                 shuffleEnabled, onShuffleToggle,
                 abookEnabled, abookVisible, abookLocked, onAbookToggle,
                 playingAbook, remainingTime, onPlayPause,
+                seekStepSec,
                 speed, speedEnabled, speedLive, onSpeedChange
             )
         }
@@ -1844,11 +1853,13 @@ private fun NowPlaying(
     playingAbook: Boolean,
     remainingTime: Boolean,
     onPlayPause: () -> Unit,
+    seekStepSec: Int,
     speed: Float,
     speedEnabled: Boolean,
     speedLive: Boolean,
     onSpeedChange: (Float) -> Unit
 ) {
+    val seekStepMs = seekStepSec * 1000L
     var isPlaying by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
@@ -2111,20 +2122,26 @@ private fun NowPlaying(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_skip_previous),
-                    contentDescription = stringResource(R.string.previous)
+                    contentDescription = stringResource(R.string.previous),
+                    modifier = Modifier.size(30.dp)
                 )
             }
-            // Rewind by a fixed step. Always available (no-op without a track).
+            // Rewind by the configured step. Always available (no-op without a track).
             Button(
                 onClick = {
-                    val target = (positionMs - SEEK_STEP_MS).coerceAtLeast(0L)
+                    val target = (positionMs - seekStepMs).coerceAtLeast(0L)
                     controller?.seekTo(target)
                     positionMs = target
                 },
                 enabled = controller != null,
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
-            ) { Text(stringResource(R.string.rewind_30)) }
+            ) {
+                Text(
+                    stringResource(R.string.rewind_step, seekStepSec),
+                    fontSize = FONT_LIST, fontWeight = FontWeight.Bold
+                )
+            }
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -2191,15 +2208,16 @@ private fun NowPlaying(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_skip_next),
-                    contentDescription = stringResource(R.string.next)
+                    contentDescription = stringResource(R.string.next),
+                    modifier = Modifier.size(30.dp)
                 )
             }
-            // Fast-forward by a fixed step. Always available (no-op without a track).
+            // Fast-forward by the configured step. Always available (no-op without a track).
             Button(
                 onClick = {
                     // No-op until the duration is known, so it can't clamp to 0 and jump to the start.
                     if (durationMs > 0L) {
-                        val target = (positionMs + SEEK_STEP_MS).coerceAtMost(durationMs)
+                        val target = (positionMs + seekStepMs).coerceAtMost(durationMs)
                         controller?.seekTo(target)
                         positionMs = target
                     }
@@ -2207,7 +2225,12 @@ private fun NowPlaying(
                 enabled = controller != null,
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
-            ) { Text(stringResource(R.string.forward_30)) }
+            ) {
+                Text(
+                    stringResource(R.string.forward_step, seekStepSec),
+                    fontSize = FONT_LIST, fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
     if (showSpeedDialog) {
@@ -2342,6 +2365,7 @@ private fun SettingsScreen(
     remainingEnabled: Boolean,
     backupEnabled: Boolean,
     defaultSpeed: Float,
+    seekStepSec: Int,
     onThemeChange: (ThemeMode) -> Unit,
     onAccentChange: (AccentColor) -> Unit,
     onVolumeNormChange: (VolumeNorm) -> Unit,
@@ -2350,6 +2374,7 @@ private fun SettingsScreen(
     onRemainingChange: (Boolean) -> Unit,
     onBackupChange: (Boolean) -> Unit,
     onDefaultSpeedChange: (Float) -> Unit,
+    onSeekStepChange: (Int) -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -2495,6 +2520,18 @@ private fun SettingsScreen(
                 onDismiss = { showSpeedDialog = false }
             )
         }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.seek_step), fontSize = FONT_TITLE)
+            Spacer(Modifier.weight(1f))
+            SettingDropdown(
+                options = Settings.SEEK_STEP_OPTIONS,
+                selected = seekStepSec,
+                label = { stringResource(R.string.seconds_short, it) },
+                onSelect = onSeekStepChange
+            )
+        }
     }
 
     if (showAbout) {
@@ -2551,10 +2588,15 @@ private fun <T> SettingDropdown(
         Button(
             onClick = { expanded = true },
             contentPadding = PaddingValues(start = 14.dp, end = 8.dp),
-            modifier = Modifier.height(36.dp)
+            modifier = Modifier.width(SETTING_DROPDOWN_WIDTH).height(36.dp)
         ) {
-            Text(label(selected), fontSize = FONT_TITLE, maxLines = 1, softWrap = false)
-            Text(" ▾", fontSize = FONT_TITLE)
+            // Label takes the slack and centers within it, so the ▾ sits flush right and every
+            // dropdown reads identically.
+            Text(
+                label(selected), fontSize = FONT_TITLE, maxLines = 1, softWrap = false,
+                textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
+            )
+            Text("▾", fontSize = FONT_TITLE)
         }
         DropdownMenu(
             expanded = expanded,
