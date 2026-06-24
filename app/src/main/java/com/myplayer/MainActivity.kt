@@ -137,6 +137,11 @@ private val FONT_TITLE = 18.sp     // headings (top-bar title, current folder) +
 private val FONT_LIST = 20.sp      // tappable list rows + compact control glyphs (speed −/+)
 private val FONT_DISPLAY = 24.sp   // single emphasised value (speed dialog)
 
+/** Shared container tint for dialogs, dropdown menus, and highlighted rows — one source so the
+ *  raised-surface tone changes in a single place (kept distinct from the root window background). */
+private val SurfaceTint: Color
+    @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+
 // Shared size for the plain top-bar icons (back/close, settings) so the bar reads evenly.
 private val TOP_BAR_ICON = 30.dp
 // The add (+) action is deliberately larger to stand out as the primary action.
@@ -1367,7 +1372,7 @@ private fun RootsList(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                .background(SurfaceTint, RoundedCornerShape(12.dp))
         ) {
             if (labeled.isEmpty()) {
                 Text(
@@ -1431,7 +1436,7 @@ private fun RootsList(
             val entries = remember { Settings.getHistory(context) }
             AlertDialog(
                 onDismissRequest = { showHistory = false },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = SurfaceTint,
                 textContentColor = MaterialTheme.colorScheme.onSurface,
                 title = { Text(stringResource(R.string.history)) },
                 text = {
@@ -1471,7 +1476,7 @@ private fun RootsList(
             val name = labeled.firstOrNull { it.first == uri }?.second ?: uri.toString()
             AlertDialog(
                 onDismissRequest = { pendingRemoval = null },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = SurfaceTint,
                 textContentColor = MaterialTheme.colorScheme.onSurface,
                 title = { Text(stringResource(R.string.remove_folder)) },
                 text = { Text(stringResource(R.string.remove_folder_message, name) + "?") },
@@ -1679,7 +1684,7 @@ private fun FolderBrowser(
             var confirmed by remember(folder) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { pendingDelete = null },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = SurfaceTint,
                 textContentColor = MaterialTheme.colorScheme.onSurface,
                 title = { Text(stringResource(R.string.delete_book)) },
                 text = {
@@ -1762,7 +1767,7 @@ private fun SleepTimerDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = SurfaceTint,
         textContentColor = MaterialTheme.colorScheme.onSurface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2234,7 +2239,7 @@ private fun SpeedDialog(
     var sliderSpeed by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = { onConfirm(sliderSpeed); onDismiss() },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = SurfaceTint,
         textContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text(stringResource(R.string.playback_speed)) },
         text = {
@@ -2355,26 +2360,15 @@ private fun SettingsScreen(
         }
 
         Spacer(Modifier.height(20.dp))
-        Text(stringResource(R.string.theme), fontSize = FONT_TITLE)
-        Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            ThemeOption(
-                stringResource(R.string.theme_system),
-                themeMode == ThemeMode.System,
-                Modifier.weight(1f)
-            ) { onThemeChange(ThemeMode.System) }
-            Spacer(Modifier.width(8.dp))
-            ThemeOption(
-                stringResource(R.string.theme_light),
-                themeMode == ThemeMode.Light,
-                Modifier.weight(1f)
-            ) { onThemeChange(ThemeMode.Light) }
-            Spacer(Modifier.width(8.dp))
-            ThemeOption(
-                stringResource(R.string.theme_dark),
-                themeMode == ThemeMode.Dark,
-                Modifier.weight(1f)
-            ) { onThemeChange(ThemeMode.Dark) }
+            Text(stringResource(R.string.theme), fontSize = FONT_TITLE)
+            Spacer(Modifier.weight(1f))
+            SettingDropdown(
+                options = ThemeMode.entries,
+                selected = themeMode,
+                label = { themeModeLabel(it) },
+                onSelect = onThemeChange
+            )
         }
 
         Spacer(Modifier.height(20.dp))
@@ -2385,37 +2379,28 @@ private fun SettingsScreen(
         }
 
         Spacer(Modifier.height(20.dp))
-        Text(stringResource(R.string.volume_leveling), fontSize = FONT_TITLE)
-        Text(
-            stringResource(
-                when (volumeNorm) {
-                    VolumeNorm.Off -> R.string.norm_off_hint
-                    VolumeNorm.ReplayGain -> R.string.norm_tags_hint
-                    VolumeNorm.AutoLevel -> R.string.norm_auto_hint
-                }
-            ),
-            fontSize = FONT_CAPTION,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            ThemeOption(
-                stringResource(R.string.norm_off),
-                volumeNorm == VolumeNorm.Off,
-                Modifier.weight(1f)
-            ) { onVolumeNormChange(VolumeNorm.Off) }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.volume_leveling), fontSize = FONT_TITLE)
+                Text(
+                    stringResource(
+                        when (volumeNorm) {
+                            VolumeNorm.Off -> R.string.norm_off_hint
+                            VolumeNorm.ReplayGain -> R.string.norm_tags_hint
+                            VolumeNorm.AutoLevel -> R.string.norm_auto_hint
+                        }
+                    ),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Spacer(Modifier.width(8.dp))
-            ThemeOption(
-                stringResource(R.string.norm_tags),
-                volumeNorm == VolumeNorm.ReplayGain,
-                Modifier.weight(1f)
-            ) { onVolumeNormChange(VolumeNorm.ReplayGain) }
-            Spacer(Modifier.width(8.dp))
-            ThemeOption(
-                stringResource(R.string.norm_auto),
-                volumeNorm == VolumeNorm.AutoLevel,
-                Modifier.weight(1f)
-            ) { onVolumeNormChange(VolumeNorm.AutoLevel) }
+            SettingDropdown(
+                options = VolumeNorm.entries,
+                selected = volumeNorm,
+                label = { volumeNormLabel(it) },
+                onSelect = onVolumeNormChange
+            )
         }
 
         Spacer(Modifier.height(10.dp))
@@ -2500,7 +2485,7 @@ private fun SettingsScreen(
     if (showAbout) {
         AlertDialog(
             onDismissRequest = { showAbout = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = SurfaceTint,
             textContentColor = MaterialTheme.colorScheme.onSurface,
             title = { Text(stringResource(R.string.about)) },
             text = {
@@ -2520,26 +2505,57 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun ThemeOption(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+private fun themeModeLabel(mode: ThemeMode): String = stringResource(
+    when (mode) {
+        ThemeMode.System -> R.string.theme_system
+        ThemeMode.Light -> R.string.theme_light
+        ThemeMode.Dark -> R.string.theme_dark
+    }
+)
+
+@Composable
+private fun volumeNormLabel(mode: VolumeNorm): String = stringResource(
+    when (mode) {
+        VolumeNorm.Off -> R.string.norm_off
+        VolumeNorm.ReplayGain -> R.string.norm_tags
+        VolumeNorm.AutoLevel -> R.string.norm_auto
+    }
+)
+
+/** Compact filled dropdown for a small enum setting: shows the current choice and opens a menu of
+ *  all [options]. Saves the vertical room a full row of buttons would take. */
+@Composable
+private fun <T> SettingDropdown(
+    options: List<T>,
+    selected: T,
+    label: @Composable (T) -> String,
+    onSelect: (T) -> Unit
 ) {
-    // Both filled; selected is primary (colored), unselected is a clearly different grey fill.
-    val colors = if (selected) ButtonDefaults.buttonColors()
-    else ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Button(
-        onClick = onClick,
-        colors = colors,
-        modifier = modifier,
-        // Trim the wide default side padding so labels like "System" stay on one line in the row.
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-    ) {
-        Text(label, fontSize = FONT_TITLE, maxLines = 1, softWrap = false)
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Button(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(start = 14.dp, end = 8.dp),
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(label(selected), fontSize = FONT_TITLE, maxLines = 1, softWrap = false)
+            Text(" ▾", fontSize = FONT_TITLE)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = SurfaceTint
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(label(option), fontSize = FONT_TITLE) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -2585,7 +2601,11 @@ private fun AccentPicker(selected: AccentColor, onSelect: (AccentColor) -> Unit)
             selected = false,
             onClick = { expanded = true }
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = SurfaceTint
+        ) {
             AccentColor.entries.forEach { accent ->
                 DropdownMenuItem(
                     leadingIcon = {

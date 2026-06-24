@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Theme and Volume leveling are now compact dropdowns instead of full-width button rows.
+
 - Volume leveling now has three modes (Off / Tags / Auto), music only; Auto evens out loudness in real time for untagged music too.
 
 - Added a Skip silence setting that drops silent gaps during playback.
