@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.5.20260624+184
 
 - Docs: document Volume leveling (Tags/Auto) and Skip silence in the README.
 
