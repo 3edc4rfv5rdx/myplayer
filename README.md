@@ -20,12 +20,10 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
   The browser title reads **Music** or **AudioBook** for the folder's mode.
 - **History**: the home list has a **History** button (bottom-right) listing the last few folders you
   played (📖 for books, 🎵 for music); tapping one jumps the browser straight back to that folder.
-- **Favorites**: pin a folder with the **★** in the browser top bar (or long-press it → **Add to
-  favorites**); open pinned folders from the **★** button (bottom-left) on the home screen. Unpin
-  from the top-bar star or by long-pressing a row in the Favorites dialog. Up to 15, never auto-evicted.
-- **Folder long-press menu**: long-press a folder in the browser for **Add/Remove favorite** and
-  **Delete** — the latter permanently removes the folder and its files from storage (and forgets its
-  audiobook state); playback is adjusted first if affected.
+- **Favorites**: pin a folder with the **★** in the browser top bar; open pinned folders from the
+  **★** button (bottom-left) on the home screen (up to 15). Unpin from the same star.
+- **Folder long-press menu**: pin/unpin a favorite, or **Delete folder** — permanently removes it and
+  its files from storage (forgets its audiobook state; playback adjusted first if affected).
 - **Tap a file** to select it, then press the big **Play** to start (selected track first, then the
   rest of the folder).
 - **Play this folder** plays everything under the current folder (recursively).

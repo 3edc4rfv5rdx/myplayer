@@ -1546,23 +1546,19 @@ private fun RootsList(
                 emptyText = stringResource(R.string.no_history),
                 entries = entries,
                 onPick = { showHistory = false; onOpenHistoryEntry(it) },
-                onRemove = null,
                 onDismiss = { showHistory = false }
             )
         }
 
         if (showFavorites) {
-            // Mutable so unpinning a row (long-press) updates the open list in place.
-            var favorites by remember { mutableStateOf(Settings.getFavorites(context)) }
+            // Read once per open; removal happens elsewhere (top-bar star / folder long-press menu),
+            // so reopening re-reads the current list.
+            val entries = remember { Settings.getFavorites(context) }
             FolderEntryDialog(
                 title = stringResource(R.string.favorites),
                 emptyText = stringResource(R.string.no_favorites),
-                entries = favorites,
+                entries = entries,
                 onPick = { showFavorites = false; onOpenHistoryEntry(it) },
-                onRemove = { entry ->
-                    Settings.removeFavorite(context, entry.key)
-                    favorites = favorites.filter { it.key != entry.key }
-                },
                 onDismiss = { showFavorites = false }
             )
         }
@@ -1592,15 +1588,13 @@ private fun RootsList(
 }
 
 /** A tappable list of saved folders, shared by the History and Favorites dialogs. Each row opens the
- *  folder via [onPick]; when [onRemove] is non-null (favorites) a long-press removes the row. */
-@OptIn(ExperimentalFoundationApi::class)
+ *  folder via [onPick]. Removal is handled elsewhere (root removal / the folder long-press menu). */
 @Composable
 private fun FolderEntryDialog(
     title: String,
     emptyText: String,
     entries: List<Settings.HistoryEntry>,
     onPick: (Settings.HistoryEntry) -> Unit,
-    onRemove: ((Settings.HistoryEntry) -> Unit)?,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1615,24 +1609,16 @@ private fun FolderEntryDialog(
                 Column {
                     entries.forEach { entry ->
                         val icon = if (entry.isBook) "📖" else "🎵"
-                        val rowClick = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .then(
-                                if (onRemove != null)
-                                    Modifier.combinedClickable(
-                                        onClick = { onPick(entry) },
-                                        onLongClick = { onRemove(entry) }
-                                    )
-                                else Modifier.clickable { onPick(entry) }
-                            )
-                            .padding(vertical = 10.dp, horizontal = 4.dp)
                         Text(
                             text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             fontSize = FONT_LIST,
-                            modifier = rowClick
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onPick(entry) }
+                                .padding(vertical = 10.dp, horizontal = 4.dp)
                         )
                     }
                 }
@@ -1872,7 +1858,7 @@ private fun FolderBrowser(
                                 .padding(vertical = 10.dp, horizontal = 4.dp)
                         )
                         Text(
-                            stringResource(R.string.delete_book),
+                            stringResource(R.string.delete_folder),
                             fontSize = FONT_LIST,
                             modifier = Modifier
                                 .fillMaxWidth()
