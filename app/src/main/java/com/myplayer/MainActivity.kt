@@ -1391,13 +1391,16 @@ private fun RootsList(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                // Outer transparent margin keeps the row spacing; the highlight
+                                // colour fills only the inner area, so the selected bar stays short.
+                                .padding(vertical = 6.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(
                                     if (selected) MaterialTheme.colorScheme.primary
                                     else Color.Transparent
                                 )
                                 .clickable { onEnterRoot(uri) }
-                                .padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
+                                .padding(start = 8.dp)
                         ) {
                             Text(
                                 text = "📁  $name",
@@ -1643,6 +1646,10 @@ private fun FolderBrowser(
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
+                            // Outer transparent margin sets the row spacing; the highlight colour is
+                            // painted only on the inner padded area, so the selected bar is short
+                            // rather than row-tall — spacing unchanged.
+                            .padding(vertical = 8.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(background)
                             .combinedClickable(
@@ -1673,6 +1680,10 @@ private fun FolderBrowser(
                         color = foreground,
                         modifier = Modifier
                             .fillMaxWidth()
+                            // Outer transparent margin sets the row spacing; the highlight colour is
+                            // painted only on the inner padded area, so the selected bar is short
+                            // rather than row-tall — spacing unchanged.
+                            .padding(vertical = 8.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(background)
                             .clickable { onSelectFile(index) }

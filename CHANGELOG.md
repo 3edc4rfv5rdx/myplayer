@@ -4,7 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
-- Shrank the row height of the folder list and browser so selected rows are less bulky.
+- Made the selected/highlight bar in the folder list and browser shorter without changing row spacing.
 
 - Theme and Volume leveling are now compact dropdowns instead of full-width button rows.
 
