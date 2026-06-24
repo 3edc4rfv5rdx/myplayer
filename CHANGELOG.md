@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs: document Volume leveling (Tags/Auto) and Skip silence in the README.
+
 - Made the selected/highlight bar in the folder list and browser shorter without changing row spacing.
 
 - Theme and Volume leveling are now compact dropdowns instead of full-width button rows.

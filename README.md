@@ -35,10 +35,11 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
   playback (a book keeps its resume point), works with the screen off, not persisted.
 - The now-playing name, path, and bar stay visible while playing as you browse; leaving a stopped or
   paused track (or going home) clears them, and resuming brings them back.
-- **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **ReplayGain**,
+- **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **Volume leveling**
+  (Off / Tags / Auto — music only, see below), **Skip silence** (drop silent gaps during playback),
   **Follow playing track**, **Track time** (rightmost readout shows total or remaining time),
   **Auto backup**, **Abook default speed** (the speed new audiobooks start at), and an About dialog
-  (ℹ️ in the top bar) with version/build.
+  (ℹ️ in the top bar) with version/build. Theme and Volume leveling are compact dropdowns.
 - **Follow playing track** (on by default): on each track change the browser jumps to the playing
   file's folder and centers it.
 - **Auto backup** (off by default): includes settings and book progress in Android Auto Backup; the
@@ -84,5 +85,9 @@ Release-only workflow. Requires Android SDK and JDK 17/21.
   service periodically saves the current file + offset as the book's resume point.
 - **Sleep timer:** lives in the service (fires with the screen off), driven by a custom session
   command; pauses at a deadline or on the next auto track transition. Not persisted.
-- **ReplayGain:** optional rough loudness leveling from `REPLAYGAIN_TRACK_GAIN` tags (only tagged
-  files) — attenuation via player volume, boost via `LoudnessEnhancer`. Not exact, just even-ish.
+- **Volume leveling:** music only — a book queue always plays raw, and the mode applies live to the
+  current track. **Tags** uses `REPLAYGAIN_TRACK_GAIN` tags (only tagged files) — attenuation via
+  player volume, boost via `LoudnessEnhancer`; even-ish, not exact. **Auto** runs a real-time
+  `DynamicsProcessing` compressor + limiter on the audio session, so every track is leveled
+  regardless of tags — the trade-off is squashed dynamics rather than precise track-to-track matching.
+- **Skip silence:** drops silent stretches via ExoPlayer's `skipSilenceEnabled` (global toggle).
