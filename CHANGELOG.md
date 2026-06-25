@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Added UI language selection in Settings (English, Russian, Ukrainian); strings now come from a runtime translations file.
+
 - Settings: the default-speed button now matches the dropdowns' width.
 
 - Added a configurable gap between files (0–5 s, default 2; music and books), chosen in Settings.

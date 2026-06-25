@@ -66,6 +66,8 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -175,6 +177,11 @@ class MainActivity : ComponentActivity() {
     private val clearTitleTickState = mutableStateOf(0)
     private val themeState = mutableStateOf(ThemeMode.System)
     private val accentState = mutableStateOf(AccentColor.Default)
+    private val languageState = mutableStateOf(AppLocalizer.DEFAULT_LANGUAGE)
+
+    /** Localizes [key] for non-Compose call sites (toasts, error state) using the current language.
+     *  Compose code uses the [lw] CompositionLocal instead, so it recomposes when the language flips. */
+    private fun loc(key: String): String = AppLocalizer.lw(key, languageState.value)
 
     // Random playback order, on by default; intentionally not persisted (resets each launch).
     private val shuffleState = mutableStateOf(true)
@@ -243,6 +250,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
+        AppLocalizer.ensureLoaded(this)
+        languageState.value = Settings.getLanguage(this)
         themeState.value = Settings.getThemeMode(this)
         accentState.value = Settings.getAccentColor(this)
         followEnabled = Settings.isFollowEnabled(this)
@@ -265,6 +274,9 @@ class MainActivity : ComponentActivity() {
                     onPrimary = Color(accent.onPrimary)
                 )
             }
+            val lang by languageState
+            val provideLw: (String) -> String = { key -> AppLocalizer.lw(key, lang) }
+            CompositionLocalProvider(LocalLw provides provideLw) {
             MaterialTheme(colorScheme = colorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -303,6 +315,8 @@ class MainActivity : ComponentActivity() {
                         Screen.Settings -> SettingsScreen(
                             version = appVersionName(),
                             build = appVersionCode(),
+                            language = lang,
+                            languages = remember { AppLocalizer.languageOptions() },
                             themeMode = theme,
                             accentColor = accent,
                             volumeNorm = volumeNorm,
@@ -313,6 +327,10 @@ class MainActivity : ComponentActivity() {
                             backupEnabled = backup,
                             defaultSpeed = defaultSpeed,
                             seekStepSec = seekStep,
+                            onLanguageChange = {
+                                languageState.value = it
+                                Settings.setLanguage(this, it)
+                            },
                             onThemeChange = {
                                 themeState.value = it
                                 Settings.setThemeMode(this, it)
@@ -508,7 +526,7 @@ class MainActivity : ComponentActivity() {
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
                             textContentColor = MaterialTheme.colorScheme.onPrimary,
-                            title = { Text(stringResource(R.string.error)) },
+                            title = { Text(lw("Error")) },
                             text = { Text(msg) },
                             confirmButton = {
                                 Button(
@@ -517,11 +535,12 @@ class MainActivity : ComponentActivity() {
                                         containerColor = MaterialTheme.colorScheme.onPrimary,
                                         contentColor = MaterialTheme.colorScheme.primary
                                     )
-                                ) { Text(stringResource(R.string.ok)) }
+                                ) { Text(lw("OK")) }
                             }
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -744,7 +763,7 @@ class MainActivity : ComponentActivity() {
                 tree.toString(), targetPath.map { it.documentId }, targetPath.map { it.name }, isBook
             )
         )
-        Toast.makeText(this, R.string.added_to_favorites, Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, loc("Added to favorites"), Toast.LENGTH_SHORT).show()
         return true
     }
 
@@ -903,12 +922,12 @@ class MainActivity : ComponentActivity() {
                     MusicScanner.collectAudio(this@MainActivity, tree, queuePath, abook)
                 }
             } catch (e: ScanException) {
-                if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
+                if (liveController() != null) errorState.value = loc("Cannot read this folder") + ". " + loc("The storage may be unavailable or its permission was revoked")
                 return@launch
             }
             val controller = liveController() ?: return@launch
             if (items.isEmpty()) {
-                errorState.value = getString(R.string.nothing_to_play)
+                errorState.value = loc("Nothing to play here")
                 return@launch
             }
             // Playing a folder strictly inside the book jumps to its first track (falls through to
@@ -1064,13 +1083,13 @@ class MainActivity : ComponentActivity() {
                     files to items
                 }
             } catch (e: ScanException) {
-                if (liveController() != null) errorState.value = getString(R.string.folder_unreadable)
+                if (liveController() != null) errorState.value = loc("Cannot read this folder") + ". " + loc("The storage may be unavailable or its permission was revoked")
                 return@launch
             }
             val (files, items) = loaded
             val controller = liveController() ?: return@launch
             if (index !in files.indices || items.isEmpty()) {
-                errorState.value = getString(R.string.nothing_to_play)
+                errorState.value = loc("Nothing to play here")
                 return@launch
             }
             val queueRoot = bookPath?.last() ?: folder
@@ -1136,7 +1155,7 @@ class MainActivity : ComponentActivity() {
                 deleted
             }
             if (!ok) {
-                errorState.value = getString(R.string.delete_failed)
+                errorState.value = loc("Could not delete the folder")
                 return@launch
             }
             rescanTickState.value++
@@ -1250,8 +1269,8 @@ private fun PlayerScreen(
                     controller = controller,
                     treeUri = treeUri,
                     current = current,
-                    title = stringResource(
-                        if (abookEnabled) R.string.mode_audiobook else R.string.mode_music
+                    title = lw(
+                        if (abookEnabled) "Book" else "Music"
                     ),
                     filesAreBook = abookEnabled,
                     selectedIndex = selectedIndex,
@@ -1358,7 +1377,7 @@ private fun TopBar(
             IconButton(onClick = onAdd) {
                 Icon(
                     painter = painterResource(R.drawable.ic_add_circle),
-                    contentDescription = stringResource(R.string.add_folder),
+                    contentDescription = lw("Add folder"),
                     modifier = Modifier.size(TOP_BAR_ADD_ICON)
                 )
             }
@@ -1367,7 +1386,7 @@ private fun TopBar(
             IconButton(onClick = onAbout) {
                 Icon(
                     painter = painterResource(R.drawable.ic_info),
-                    contentDescription = stringResource(R.string.about),
+                    contentDescription = lw("About"),
                     modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
@@ -1378,8 +1397,8 @@ private fun TopBar(
                     painter = painterResource(
                         if (favoriteOn) R.drawable.ic_star else R.drawable.ic_star_outline
                     ),
-                    contentDescription = stringResource(
-                        if (favoriteOn) R.string.remove_from_favorites else R.string.add_to_favorites
+                    contentDescription = lw(
+                        if (favoriteOn) "Remove from favorites" else "Add to favorites"
                     ),
                     tint = if (favoriteOn) MaterialTheme.colorScheme.primary
                     else LocalContentColor.current,
@@ -1402,7 +1421,7 @@ private fun TopBar(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_hourglass),
-                        contentDescription = stringResource(R.string.sleep_timer),
+                        contentDescription = lw("Sleep timer"),
                         tint = if (sleepArmed) MaterialTheme.colorScheme.onPrimary
                         else LocalContentColor.current,
                         modifier = Modifier.size(TOP_BAR_ICON)
@@ -1414,7 +1433,7 @@ private fun TopBar(
             IconButton(onClick = onSettings) {
                 Icon(
                     painter = painterResource(R.drawable.ic_settings),
-                    contentDescription = stringResource(R.string.settings),
+                    contentDescription = lw("Settings"),
                     modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
@@ -1457,9 +1476,9 @@ private fun RootsList(
     Column(modifier = modifier) {
         TopBar(
             leadingIcon = painterResource(R.drawable.ic_close),
-            leadingDesc = stringResource(R.string.exit),
+            leadingDesc = lw("Exit"),
             onLeading = onExit,
-            title = stringResource(R.string.folders),
+            title = lw("Folders"),
             onAdd = onAddRoot,
             onSettings = onOpenSettings,
         )
@@ -1473,7 +1492,7 @@ private fun RootsList(
         ) {
             if (labeled.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.no_folders),
+                    text = lw("No folders yet"),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.align(Alignment.Center).padding(16.dp)
                 )
@@ -1514,7 +1533,7 @@ private fun RootsList(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_close),
-                                    contentDescription = stringResource(R.string.remove_folder),
+                                    contentDescription = lw("Remove folder"),
                                     tint = foreground
                                 )
                             }
@@ -1536,7 +1555,7 @@ private fun RootsList(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_star),
-                    contentDescription = stringResource(R.string.favorites),
+                    contentDescription = lw("Favorites"),
                     modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
@@ -1544,7 +1563,7 @@ private fun RootsList(
                 onClick = { showHistory = true },
                 contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp)
             ) {
-                Text(stringResource(R.string.history))
+                Text(lw("History"))
             }
         }
 
@@ -1553,8 +1572,8 @@ private fun RootsList(
             // re-reads the up-to-date list.
             val entries = remember { Settings.getHistory(context) }
             FolderEntryDialog(
-                title = stringResource(R.string.history),
-                emptyText = stringResource(R.string.no_history),
+                title = lw("History"),
+                emptyText = lw("No history yet"),
                 entries = entries,
                 onPick = { showHistory = false; onOpenHistoryEntry(it) },
                 onDismiss = { showHistory = false }
@@ -1566,8 +1585,8 @@ private fun RootsList(
             // so reopening re-reads the current list.
             val entries = remember { Settings.getFavorites(context) }
             FolderEntryDialog(
-                title = stringResource(R.string.favorites),
-                emptyText = stringResource(R.string.no_favorites),
+                title = lw("Favorites"),
+                emptyText = lw("No favorites yet"),
                 entries = entries,
                 onPick = { showFavorites = false; onOpenHistoryEntry(it) },
                 onDismiss = { showFavorites = false }
@@ -1580,17 +1599,17 @@ private fun RootsList(
                 onDismissRequest = { pendingRemoval = null },
                 containerColor = SurfaceTint,
                 textContentColor = MaterialTheme.colorScheme.onSurface,
-                title = { Text(stringResource(R.string.remove_folder)) },
-                text = { Text(stringResource(R.string.remove_folder_message, name) + "?") },
+                title = { Text(lw("Remove folder")) },
+                text = { Text(lw("Remove from the list") + "?\n" + name) },
                 confirmButton = {
                     Button(onClick = {
                         onRemoveRoot(uri)
                         pendingRemoval = null
-                    }) { Text(stringResource(R.string.remove)) }
+                    }) { Text(lw("Remove")) }
                 },
                 dismissButton = {
                     Button(onClick = { pendingRemoval = null }) {
-                        Text(stringResource(R.string.cancel))
+                        Text(lw("Cancel"))
                     }
                 }
             )
@@ -1636,7 +1655,7 @@ private fun FolderEntryDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            Button(onClick = onDismiss) { Text(lw("Cancel")) }
         }
     )
 }
@@ -1742,7 +1761,7 @@ private fun FolderBrowser(
     Column(modifier = modifier) {
         TopBar(
             leadingIcon = painterResource(R.drawable.ic_arrow_back),
-            leadingDesc = stringResource(R.string.back),
+            leadingDesc = lw("Back"),
             onLeading = onUp,
             title = title,
             onAdd = null,
@@ -1768,11 +1787,11 @@ private fun FolderBrowser(
 
         val c = contents
         if (loadFailed) {
-            Text(stringResource(R.string.folder_unreadable))
+            Text(lw("Cannot read this folder") + ". " + lw("The storage may be unavailable or its permission was revoked"))
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { retryTick++ }) { Text(stringResource(R.string.retry)) }
+            Button(onClick = { retryTick++ }) { Text(lw("Retry")) }
         } else if (c != null && c.first.isEmpty() && c.second.isEmpty()) {
-            Text(stringResource(R.string.empty_folder))
+            Text(lw("Empty folder"))
         } else if (c != null) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
@@ -1854,9 +1873,9 @@ private fun FolderBrowser(
                 text = {
                     Column {
                         Text(
-                            stringResource(
-                                if (pinned) R.string.remove_from_favorites
-                                else R.string.add_to_favorites
+                            lw(
+                                if (pinned) "Remove from favorites"
+                                else "Add to favorites"
                             ),
                             fontSize = FONT_LIST,
                             modifier = Modifier
@@ -1869,7 +1888,7 @@ private fun FolderBrowser(
                                 .padding(vertical = 10.dp, horizontal = 4.dp)
                         )
                         Text(
-                            stringResource(R.string.delete_folder),
+                            lw("Delete folder"),
                             fontSize = FONT_LIST,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1884,7 +1903,7 @@ private fun FolderBrowser(
                 },
                 confirmButton = {
                     Button(onClick = { pendingMenu = null }) {
-                        Text(stringResource(R.string.cancel))
+                        Text(lw("Cancel"))
                     }
                 }
             )
@@ -1896,10 +1915,10 @@ private fun FolderBrowser(
                 onDismissRequest = { pendingDelete = null },
                 containerColor = SurfaceTint,
                 textContentColor = MaterialTheme.colorScheme.onSurface,
-                title = { Text(stringResource(R.string.delete_book)) },
+                title = { Text(lw("Delete folder")) },
                 text = {
                     Column {
-                        Text(stringResource(R.string.delete_book_message, "[ ${folder.name} ]") + "?")
+                        Text(lw("Permanently delete this folder and all its files from storage") + "?\n[ ${folder.name} ]")
                         Spacer(Modifier.height(12.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1907,7 +1926,7 @@ private fun FolderBrowser(
                         ) {
                             // Delete stays disabled until this is checked, so it can't be a one-tap mistake.
                             Checkbox(checked = confirmed, onCheckedChange = null)
-                            Text(stringResource(R.string.delete_book_confirm))
+                            Text(lw("Confirm"))
                         }
                     }
                 },
@@ -1918,11 +1937,11 @@ private fun FolderBrowser(
                             onDeleteBook(folder)
                             pendingDelete = null
                         }
-                    ) { Text(stringResource(R.string.delete)) }
+                    ) { Text(lw("Delete")) }
                 },
                 dismissButton = {
                     Button(onClick = { pendingDelete = null }) {
-                        Text(stringResource(R.string.cancel))
+                        Text(lw("Cancel"))
                     }
                 }
             )
@@ -1981,7 +2000,7 @@ private fun SleepTimerDialog(
         textContentColor = MaterialTheme.colorScheme.onSurface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.sleep_timer))
+                Text(lw("Sleep timer"))
                 if (remaining != null) {
                     Spacer(Modifier.weight(1f))
                     // The running remaining reads as large as the title so it's the focal value.
@@ -1992,7 +2011,7 @@ private fun SleepTimerDialog(
         text = {
             Column {
                 Text(
-                    stringResource(R.string.sleep_minutes, minutes.roundToInt()),
+                    "${minutes.roundToInt()} ${lw("min")}",
                     textAlign = TextAlign.Center,
                     fontSize = FONT_DISPLAY,
                     modifier = Modifier.fillMaxWidth()
@@ -2008,18 +2027,18 @@ private fun SleepTimerDialog(
                 Button(
                     onClick = { onChapter(); onDismiss() },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.sleep_until_track)) }
+                ) { Text(lw("Until end of track")) }
             }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = mode != 0, onClick = { onStop(); onDismiss() }) {
-                    Text(stringResource(R.string.sleep_stop))
+                    Text(lw("Stop"))
                 }
-                Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                Button(onClick = onDismiss) { Text(lw("Cancel")) }
                 Button(
                     onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() }
-                ) { Text(stringResource(R.string.sleep_start)) }
+                ) { Text(lw("Start")) }
             }
         }
     )
@@ -2231,7 +2250,7 @@ private fun NowPlaying(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        "${stringResource(R.string.file_label)} ${mediaIndex + 1}/$mediaCount",
+                        "${lw("File")} ${mediaIndex + 1}/$mediaCount",
                         fontSize = FONT_CAPTION
                     )
                     Text(
@@ -2296,7 +2315,7 @@ private fun NowPlaying(
                             )
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.audiobook_mode), color = onPill)
+                        Text(lw("book"), color = onPill)
                     }
                 }
             }
@@ -2308,7 +2327,7 @@ private fun NowPlaying(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_skip_previous),
-                    contentDescription = stringResource(R.string.previous),
+                    contentDescription = lw("Previous"),
                     modifier = Modifier.size(30.dp)
                 )
             }
@@ -2324,7 +2343,7 @@ private fun NowPlaying(
                 modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
             ) {
                 Text(
-                    stringResource(R.string.rewind_step, seekStepSec),
+                    "−$seekStepSec${lw("s")}",
                     fontSize = FONT_LIST, fontWeight = FontWeight.Bold
                 )
             }
@@ -2342,7 +2361,7 @@ private fun NowPlaying(
             ) {
                 Icon(
                     painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                    contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+                    contentDescription = lw(if (isPlaying) "Pause" else "Play"),
                     modifier = Modifier.size(if (isPlaying) 40.dp else 56.dp)
                 )
             }
@@ -2360,7 +2379,7 @@ private fun NowPlaying(
                     Spacer(Modifier.width(4.dp))
                     Icon(
                         painter = painterResource(R.drawable.ic_shuffle),
-                        contentDescription = stringResource(R.string.shuffle),
+                        contentDescription = lw("Shuffle"),
                         // Dimmed like the disabled switch while a book locks shuffle off.
                         tint = when {
                             playingAbook -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
@@ -2394,7 +2413,7 @@ private fun NowPlaying(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_skip_next),
-                    contentDescription = stringResource(R.string.next),
+                    contentDescription = lw("Next"),
                     modifier = Modifier.size(30.dp)
                 )
             }
@@ -2413,7 +2432,7 @@ private fun NowPlaying(
                 modifier = Modifier.width(CONTROL_BTN_WIDTH).height(CONTROL_BTN_HEIGHT)
             ) {
                 Text(
-                    stringResource(R.string.forward_step, seekStepSec),
+                    "+$seekStepSec${lw("s")}",
                     fontSize = FONT_LIST, fontWeight = FontWeight.Bold
                 )
             }
@@ -2465,7 +2484,7 @@ private fun SpeedDialog(
         onDismissRequest = { onConfirm(sliderSpeed); onDismiss() },
         containerColor = SurfaceTint,
         textContentColor = MaterialTheme.colorScheme.onSurface,
-        title = { Text(stringResource(R.string.playback_speed)) },
+        title = { Text(lw("Playback speed")) },
         text = {
             Column {
                 Text(
@@ -2485,7 +2504,7 @@ private fun SpeedDialog(
         },
         confirmButton = {
             Button(onClick = { onConfirm(sliderSpeed); onDismiss() }) {
-                Text(stringResource(R.string.ok))
+                Text(lw("OK"))
             }
         }
     )
@@ -2543,6 +2562,8 @@ private fun snapStep(raw: Float, step: Float): Float = (raw / step).roundToInt()
 private fun SettingsScreen(
     version: String,
     build: Long,
+    language: String,
+    languages: List<LanguageOption>,
     themeMode: ThemeMode,
     accentColor: AccentColor,
     volumeNorm: VolumeNorm,
@@ -2563,6 +2584,7 @@ private fun SettingsScreen(
     onBackupChange: (Boolean) -> Unit,
     onDefaultSpeedChange: (Float) -> Unit,
     onSeekStepChange: (Int) -> Unit,
+    onLanguageChange: (String) -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -2574,9 +2596,9 @@ private fun SettingsScreen(
     ) {
         TopBar(
             leadingIcon = painterResource(R.drawable.ic_arrow_back),
-            leadingDesc = stringResource(R.string.back),
+            leadingDesc = lw("Back"),
             onLeading = onBack,
-            title = stringResource(R.string.settings),
+            title = lw("Settings"),
             onAdd = null,
             onSettings = null,
             onAbout = { showAbout = true },
@@ -2592,12 +2614,24 @@ private fun SettingsScreen(
         ) {
         Spacer(Modifier.height(24.dp))
         Button(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.rescan), fontSize = FONT_TITLE)
+            Text(lw("Rescan folders"), fontSize = FONT_TITLE)
         }
 
         Spacer(Modifier.height(20.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.theme), fontSize = FONT_TITLE)
+            Text(lw("Language"), fontSize = FONT_TITLE)
+            Spacer(Modifier.weight(1f))
+            SettingDropdown(
+                options = languages.map { it.code },
+                selected = language,
+                label = { code -> lw(languages.first { it.code == code }.labelKey) },
+                onSelect = onLanguageChange
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(lw("Theme"), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             SettingDropdown(
                 options = ThemeMode.entries,
@@ -2609,7 +2643,7 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.accent_color), fontSize = FONT_TITLE)
+            Text(lw("Accent color"), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             AccentPicker(selected = accentColor, onSelect = onAccentChange)
         }
@@ -2617,13 +2651,13 @@ private fun SettingsScreen(
         Spacer(Modifier.height(20.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.volume_leveling), fontSize = FONT_TITLE)
+                Text(lw("Volume leveling"), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(
+                    lw(
                         when (volumeNorm) {
-                            VolumeNorm.Off -> R.string.norm_off_hint
-                            VolumeNorm.ReplayGain -> R.string.norm_tags_hint
-                            VolumeNorm.AutoLevel -> R.string.norm_auto_hint
+                            VolumeNorm.Off -> "Original volume"
+                            VolumeNorm.ReplayGain -> "ReplayGain tags only"
+                            VolumeNorm.AutoLevel -> "Levels every track live"
                         }
                     ),
                     fontSize = FONT_CAPTION,
@@ -2642,9 +2676,9 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.skip_silence), fontSize = FONT_TITLE)
+                Text(lw("Skip silence"), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(R.string.skip_silence_hint),
+                    lw("Drop silent gaps"),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2656,9 +2690,9 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.track_gap), fontSize = FONT_TITLE)
+                Text(lw("Gap between tracks"), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(R.string.track_gap_hint),
+                    lw("Silent pause between files"),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2668,8 +2702,8 @@ private fun SettingsScreen(
                 options = Settings.TRACK_GAP_OPTIONS,
                 selected = trackGapSec,
                 label = {
-                    if (it == 0) stringResource(R.string.norm_off)
-                    else stringResource(R.string.seconds_short, it)
+                    if (it == 0) lw("Off")
+                    else "$it${lw("s")}"
                 },
                 onSelect = onTrackGapChange
             )
@@ -2678,9 +2712,9 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.follow_playing), fontSize = FONT_TITLE)
+                Text(lw("Follow playing track"), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(R.string.follow_playing_hint),
+                    lw("Jump to playing folder"),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2692,10 +2726,10 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column {
-                Text(stringResource(R.string.track_time), fontSize = FONT_TITLE)
+                Text(lw("Track time"), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(
-                        if (remainingEnabled) R.string.remaining_time else R.string.total_time
+                    lw(
+                        if (remainingEnabled) "Remaining time" else "Total time"
                     ),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2708,9 +2742,9 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.auto_backup), fontSize = FONT_TITLE)
+                Text(lw("Auto backup"), fontSize = FONT_TITLE)
                 Text(
-                    stringResource(R.string.auto_backup_hint),
+                    lw("To your Google account"),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2722,7 +2756,7 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         var showSpeedDialog by remember { mutableStateOf(false) }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.default_speed), fontSize = FONT_TITLE)
+            Text(lw("Book default speed"), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             SpeedButton(
                 label = formatSpeed(defaultSpeed),
@@ -2742,12 +2776,12 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.seek_step), fontSize = FONT_TITLE)
+            Text(lw("Seek step"), fontSize = FONT_TITLE)
             Spacer(Modifier.weight(1f))
             SettingDropdown(
                 options = Settings.SEEK_STEP_OPTIONS,
                 selected = seekStepSec,
-                label = { stringResource(R.string.seconds_short, it) },
+                label = { "$it${lw("s")}" },
                 onSelect = onSeekStepChange
             )
         }
@@ -2759,38 +2793,48 @@ private fun SettingsScreen(
             onDismissRequest = { showAbout = false },
             containerColor = SurfaceTint,
             textContentColor = MaterialTheme.colorScheme.onSurface,
-            title = { Text(stringResource(R.string.about)) },
+            title = { Text(lw("About")) },
             text = {
                 Column {
                     Text(stringResource(R.string.app_name))
-                    Text("${stringResource(R.string.version)} $version")
-                    Text("${stringResource(R.string.build)} $build")
+                    Text("${lw("Version")} $version")
+                    Text("${lw("Build")} $build")
                 }
             },
             confirmButton = {
                 Button(onClick = { showAbout = false }) {
-                    Text(stringResource(R.string.ok))
+                    Text(lw("OK"))
                 }
             }
         )
     }
 }
 
+/** UI-text localizer for Compose, provided in [MainActivity.onCreate] from the selected language.
+ *  The default identity function keeps previews and any out-of-provider use rendering the English
+ *  key verbatim. */
+val LocalLw = compositionLocalOf<(String) -> String> { { it } }
+
+/** Shorthand for the current [LocalLw]: `lw("English text")` returns the localized string and
+ *  recomposes when the language changes. */
 @Composable
-private fun themeModeLabel(mode: ThemeMode): String = stringResource(
+private fun lw(key: String): String = LocalLw.current(key)
+
+@Composable
+private fun themeModeLabel(mode: ThemeMode): String = lw(
     when (mode) {
-        ThemeMode.System -> R.string.theme_system
-        ThemeMode.Light -> R.string.theme_light
-        ThemeMode.Dark -> R.string.theme_dark
+        ThemeMode.System -> "System"
+        ThemeMode.Light -> "Light"
+        ThemeMode.Dark -> "Dark"
     }
 )
 
 @Composable
-private fun volumeNormLabel(mode: VolumeNorm): String = stringResource(
+private fun volumeNormLabel(mode: VolumeNorm): String = lw(
     when (mode) {
-        VolumeNorm.Off -> R.string.norm_off
-        VolumeNorm.ReplayGain -> R.string.norm_tags
-        VolumeNorm.AutoLevel -> R.string.norm_auto
+        VolumeNorm.Off -> "Off"
+        VolumeNorm.ReplayGain -> "Tags"
+        VolumeNorm.AutoLevel -> "Auto"
     }
 )
 
@@ -2842,16 +2886,16 @@ private fun accentDisplayColor(accent: AccentColor): Color =
     if (accent == AccentColor.Default) Color(0xFFD0BCFF) else Color(accent.primary)
 
 @Composable
-private fun accentLabel(accent: AccentColor): String = stringResource(
+private fun accentLabel(accent: AccentColor): String = lw(
     when (accent) {
-        AccentColor.Default -> R.string.accent_default
-        AccentColor.Yellow -> R.string.accent_yellow
-        AccentColor.Teal -> R.string.accent_teal
-        AccentColor.Pink -> R.string.accent_pink
-        AccentColor.Green -> R.string.accent_green
-        AccentColor.Orange -> R.string.accent_orange
-        AccentColor.Blue -> R.string.accent_blue
-        AccentColor.Beige -> R.string.accent_beige
+        AccentColor.Default -> "Lilac"
+        AccentColor.Yellow -> "Yellow"
+        AccentColor.Teal -> "Teal"
+        AccentColor.Pink -> "Pink"
+        AccentColor.Green -> "Green"
+        AccentColor.Orange -> "Orange"
+        AccentColor.Blue -> "Blue"
+        AccentColor.Beige -> "Beige"
     }
 )
 

@@ -61,6 +61,7 @@ object Settings {
     private const val KEY_REMAINING = "remaining"
     private const val KEY_BACKUP = "backup"
     private const val KEY_DEFAULT_SPEED = "default_speed"
+    private const val KEY_LANGUAGE = "language"
     private const val KEY_HISTORY = "history"
     private const val KEY_FAVORITES = "favorites"
     // Per-folder book state lives under these prefixes, keyed by a stable (treeUri, docId) folder key.
@@ -268,6 +269,11 @@ object Settings {
     fun isBackupEnabled(context: Context): Boolean = get(context, KEY_BACKUP) == "true"
     fun setBackupEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_BACKUP, enabled.toString())
+
+    /** Selected UI language code (see [AppLocalizer]); defaults to English. */
+    fun getLanguage(context: Context): String =
+        get(context, KEY_LANGUAGE) ?: AppLocalizer.DEFAULT_LANGUAGE
+    fun setLanguage(context: Context, code: String) = set(context, KEY_LANGUAGE, code)
 
     /** Default playback speed applied to folders without a saved speed of their own. */
     fun getDefaultSpeed(context: Context): Float =
