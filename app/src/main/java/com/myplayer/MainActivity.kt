@@ -2727,7 +2727,8 @@ private fun SettingsScreen(
             SpeedButton(
                 label = formatSpeed(defaultSpeed),
                 enabled = true,
-                onClick = { showSpeedDialog = true }
+                onClick = { showSpeedDialog = true },
+                width = SETTING_DROPDOWN_WIDTH
             )
         }
         if (showSpeedDialog) {

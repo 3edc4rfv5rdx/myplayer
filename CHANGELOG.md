@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Settings: the default-speed button now matches the dropdowns' width.
+
 - Added a configurable gap between files (0–5 s, default 2; music and books), chosen in Settings.
 
 - Settings screen now scrolls, so the bottom rows are no longer hidden behind the system navigation bar.
