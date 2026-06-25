@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Settings screen now scrolls, so the bottom rows are no longer hidden behind the system navigation bar.
+
 ## v0.6.20260624+197
 
 - Added Favorites: pin folders via the browser top-bar star or a folder's long-press menu, open them from a star button next to History on the home screen (up to 15).

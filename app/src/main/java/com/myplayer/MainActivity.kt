@@ -42,6 +42,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -2569,6 +2572,14 @@ private fun SettingsScreen(
             onAbout = { showAbout = true },
         )
 
+        // The settings list can outgrow the screen; scroll it, keeping the TopBar fixed above.
+        // navigationBarsPadding clears the system nav bar so the last row isn't hidden behind it.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+        ) {
         Spacer(Modifier.height(24.dp))
         Button(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.rescan), fontSize = FONT_TITLE)
@@ -2706,6 +2717,7 @@ private fun SettingsScreen(
                 label = { stringResource(R.string.seconds_short, it) },
                 onSelect = onSeekStepChange
             )
+        }
         }
     }
 
