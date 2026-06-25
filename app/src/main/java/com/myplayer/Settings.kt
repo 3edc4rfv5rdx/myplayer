@@ -89,6 +89,10 @@ object Settings {
     val SEEK_STEP_OPTIONS = listOf(10, 20, 30, 45, 60)
     const val SEEK_STEP_DEFAULT = 30
 
+    // Inter-track gap (seconds) inserted between consecutive files; 0 = off, default 2.
+    val TRACK_GAP_OPTIONS = listOf(0, 1, 2, 3, 4, 5)
+    const val TRACK_GAP_DEFAULT = 2
+
     // Sleep-timer slider bounds and granularity (minutes), shared by the player and its dialog.
     const val SLEEP_MIN = 10f
     const val SLEEP_MAX = 60f
@@ -228,10 +232,12 @@ object Settings {
     fun setSkipSilenceEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_SKIP_SILENCE, enabled.toString())
 
-    /** Track gap: insert a short silent pause between consecutive files in a folder/book (default off). */
-    fun isTrackGapEnabled(context: Context): Boolean = get(context, KEY_TRACK_GAP) == "true"
-    fun setTrackGapEnabled(context: Context, enabled: Boolean) =
-        set(context, KEY_TRACK_GAP, enabled.toString())
+    /** Inter-track gap in seconds (0 = off); silent pause between consecutive files in a folder/book. */
+    fun getTrackGapSeconds(context: Context): Int =
+        get(context, KEY_TRACK_GAP)?.toIntOrNull()?.takeIf { it in TRACK_GAP_OPTIONS }
+            ?: TRACK_GAP_DEFAULT
+    fun setTrackGapSeconds(context: Context, seconds: Int) =
+        set(context, KEY_TRACK_GAP, seconds.toString())
 
     /** Rewind/forward seek step in seconds; falls back to [SEEK_STEP_DEFAULT] when unset or invalid. */
     fun getSeekStepSeconds(context: Context): Int =

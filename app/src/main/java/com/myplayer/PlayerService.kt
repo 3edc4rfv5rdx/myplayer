@@ -54,9 +54,6 @@ class PlayerService : MediaSessionService() {
 
         // How often the playing book's position is persisted, so a process kill loses at most this.
         private const val SAVE_INTERVAL_MS = 10_000L
-
-        // Silent pause inserted between consecutive files when the track-gap setting is on.
-        private const val TRACK_GAP_MS = 1_000L
     }
 
     private var session: MediaSession? = null
@@ -137,15 +134,17 @@ class PlayerService : MediaSessionService() {
                 if (sleepEndOfChapter &&
                     reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) fireSleep()
                 // Inter-track gap: when a file ends and the queue auto-advances (not on a manual
-                // skip), pause at the start of the next file and resume after TRACK_GAP_MS. Skipped
-                // when a sleep timer just fired so it stays paused. Applies to music and books alike.
-                else if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
-                    Settings.isTrackGapEnabled(this@PlayerService)) {
-                    player?.let { p ->
-                        p.pause()
-                        p.seekTo(0)
+                // skip), pause at the start of the next file and resume after the configured gap
+                // (0 = off). Skipped when a sleep timer just fired so it stays paused. Applies to
+                // music and books alike. No seek here: seekTo(0) would flush the audio buffer right
+                // at the boundary, clipping the previous track's tail with an audible click — the
+                // next file is already at position ~0, so a plain pause is enough.
+                else if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    val gapSec = Settings.getTrackGapSeconds(this@PlayerService)
+                    if (gapSec > 0) {
+                        player.pause()
                         saveHandler.removeCallbacks(gapResume)
-                        saveHandler.postDelayed(gapResume, TRACK_GAP_MS)
+                        saveHandler.postDelayed(gapResume, gapSec * 1_000L)
                     }
                 }
                 // A real move to another file (auto-advance or skip) makes it the book's new resume
