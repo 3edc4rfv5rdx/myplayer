@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Settings: split the book-speed row into title plus a "default" caption so the speed button no longer clips in translated locales.
+
 - Added UI language selection in Settings (English, Russian, Ukrainian); strings now come from a runtime translations file.
 
 - Settings: the default-speed button now matches the dropdowns' width.

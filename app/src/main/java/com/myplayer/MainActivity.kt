@@ -2756,8 +2756,15 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         var showSpeedDialog by remember { mutableStateOf(false) }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(lw("Book default speed"), fontSize = FONT_TITLE)
-            Spacer(Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(lw("Book speed"), fontSize = FONT_TITLE)
+                Text(
+                    lw("Default"),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
             SpeedButton(
                 label = formatSpeed(defaultSpeed),
                 enabled = true,
