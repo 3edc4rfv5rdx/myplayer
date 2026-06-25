@@ -23,7 +23,8 @@ Build config and scripts are shared with the sibling `../memlists` project. Use 
 
 Conventions:
 - Never hand-edit or bump `build_number.txt`; `10-MakeRelease.sh` owns it. Stage it if it shows as
-  modified so the repo version stays in sync with the built artifact.
+  modified so the repo version stays in sync with the built artifact. Always check `build_number.txt`'s
+  status before every commit and stage it if modified, so it never drifts out of sync.
 - Do not auto-build or auto-install; the user runs the scripts.
 - Toolchain: AGP 9.1.1 (built-in Kotlin, no separate kotlin-android plugin), Kotlin 2.3.0,
   Gradle 9.3.1, JDK 17/21, compileSdk 36, minSdk 31. Versions live in `gradle/libs.versions.toml`.
