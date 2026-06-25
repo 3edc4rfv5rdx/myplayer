@@ -53,6 +53,7 @@ object Settings {
     private const val KEY_REPLAYGAIN = "replaygain" // legacy boolean, migrated into KEY_VOLUME_NORM
     private const val KEY_VOLUME_NORM = "volume_norm"
     private const val KEY_SKIP_SILENCE = "skip_silence"
+    private const val KEY_TRACK_GAP = "track_gap"
     private const val KEY_SEEK_STEP = "seek_step"
     private const val KEY_THEME = "theme"
     private const val KEY_ACCENT = "accent"
@@ -226,6 +227,11 @@ object Settings {
     fun isSkipSilenceEnabled(context: Context): Boolean = get(context, KEY_SKIP_SILENCE) == "true"
     fun setSkipSilenceEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_SKIP_SILENCE, enabled.toString())
+
+    /** Track gap: insert a short silent pause between consecutive files in a folder/book (default off). */
+    fun isTrackGapEnabled(context: Context): Boolean = get(context, KEY_TRACK_GAP) == "true"
+    fun setTrackGapEnabled(context: Context, enabled: Boolean) =
+        set(context, KEY_TRACK_GAP, enabled.toString())
 
     /** Rewind/forward seek step in seconds; falls back to [SEEK_STEP_DEFAULT] when unset or invalid. */
     fun getSeekStepSeconds(context: Context): Int =

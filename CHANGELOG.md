@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Added an optional one-second gap between files (music and books), toggled in Settings.
+
 - Settings screen now scrolls, so the bottom rows are no longer hidden behind the system navigation bar.
 
 ## v0.6.20260624+197

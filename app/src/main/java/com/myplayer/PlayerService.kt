@@ -54,6 +54,9 @@ class PlayerService : MediaSessionService() {
 
         // How often the playing book's position is persisted, so a process kill loses at most this.
         private const val SAVE_INTERVAL_MS = 10_000L
+
+        // Silent pause inserted between consecutive files when the track-gap setting is on.
+        private const val TRACK_GAP_MS = 1_000L
     }
 
     private var session: MediaSession? = null
@@ -87,6 +90,9 @@ class PlayerService : MediaSessionService() {
     private var sleepDeadlineMs = 0L
     private var sleepEndOfChapter = false
     private val sleepRunnable = Runnable { fireSleep() }
+
+    // Resumes playback after the inter-track silent gap (see onMediaItemTransition).
+    private val gapResume = Runnable { player?.play() }
 
     override fun onCreate() {
         super.onCreate()
@@ -130,6 +136,18 @@ class PlayerService : MediaSessionService() {
                 // point cleanly at the start of the next chapter.
                 if (sleepEndOfChapter &&
                     reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) fireSleep()
+                // Inter-track gap: when a file ends and the queue auto-advances (not on a manual
+                // skip), pause at the start of the next file and resume after TRACK_GAP_MS. Skipped
+                // when a sleep timer just fired so it stays paused. Applies to music and books alike.
+                else if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                    Settings.isTrackGapEnabled(this@PlayerService)) {
+                    player?.let { p ->
+                        p.pause()
+                        p.seekTo(0)
+                        saveHandler.removeCallbacks(gapResume)
+                        saveHandler.postDelayed(gapResume, TRACK_GAP_MS)
+                    }
+                }
                 // A real move to another file (auto-advance or skip) makes it the book's new resume
                 // point; the initial setMediaItems (PLAYLIST_CHANGED) must not overwrite the restore.
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) saveBookPosition()
@@ -153,8 +171,10 @@ class PlayerService : MediaSessionService() {
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
-                    // The queue is over; a pending sleep timer has nothing left to pause.
+                    // The queue is over; a pending sleep timer has nothing left to pause, and any
+                    // armed inter-track gap must not resume the cleared queue.
                     cancelSleep()
+                    saveHandler.removeCallbacks(gapResume)
                     bookFolderKey?.let {
                         Settings.clearBookPos(this@PlayerService, it)
                         // The finished book's cached durations go with the resume point; a

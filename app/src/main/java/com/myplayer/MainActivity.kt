@@ -288,6 +288,7 @@ class MainActivity : ComponentActivity() {
                     val playingAbook by playingAbookState
                     var volumeNorm by remember { mutableStateOf(Settings.getVolumeNorm(this)) }
                     var skipSilence by remember { mutableStateOf(Settings.isSkipSilenceEnabled(this)) }
+                    var trackGap by remember { mutableStateOf(Settings.isTrackGapEnabled(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
                     var remaining by remember { mutableStateOf(Settings.isRemainingTime(this)) }
                     var backup by remember { mutableStateOf(Settings.isBackupEnabled(this)) }
@@ -306,6 +307,7 @@ class MainActivity : ComponentActivity() {
                             accentColor = accent,
                             volumeNorm = volumeNorm,
                             skipSilenceEnabled = skipSilence,
+                            trackGapEnabled = trackGap,
                             followEnabled = follow,
                             remainingEnabled = remaining,
                             backupEnabled = backup,
@@ -328,6 +330,12 @@ class MainActivity : ComponentActivity() {
                                 skipSilence = it
                                 Settings.setSkipSilenceEnabled(this, it)
                                 sendSkipSilenceChanged()
+                            },
+                            onTrackGapChange = {
+                                trackGap = it
+                                // PlayerService reads the flag live at each track transition, so no
+                                // session command is needed to push it.
+                                Settings.setTrackGapEnabled(this, it)
                             },
                             onFollowChange = {
                                 follow = it
@@ -2539,6 +2547,7 @@ private fun SettingsScreen(
     accentColor: AccentColor,
     volumeNorm: VolumeNorm,
     skipSilenceEnabled: Boolean,
+    trackGapEnabled: Boolean,
     followEnabled: Boolean,
     remainingEnabled: Boolean,
     backupEnabled: Boolean,
@@ -2548,6 +2557,7 @@ private fun SettingsScreen(
     onAccentChange: (AccentColor) -> Unit,
     onVolumeNormChange: (VolumeNorm) -> Unit,
     onSkipSilenceChange: (Boolean) -> Unit,
+    onTrackGapChange: (Boolean) -> Unit,
     onFollowChange: (Boolean) -> Unit,
     onRemainingChange: (Boolean) -> Unit,
     onBackupChange: (Boolean) -> Unit,
@@ -2641,6 +2651,20 @@ private fun SettingsScreen(
             }
             Spacer(Modifier.width(8.dp))
             Switch(checked = skipSilenceEnabled, onCheckedChange = onSkipSilenceChange)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.track_gap), fontSize = FONT_TITLE)
+                Text(
+                    stringResource(R.string.track_gap_hint),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = trackGapEnabled, onCheckedChange = onTrackGapChange)
         }
 
         Spacer(Modifier.height(10.dp))

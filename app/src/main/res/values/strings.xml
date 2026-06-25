@@ -56,6 +56,8 @@
     <string name="delete_failed">Couldn\'t delete the folder</string>
     <string name="skip_silence">Skip silence</string>
     <string name="skip_silence_hint">Drop silent gaps in playback</string>
+    <string name="track_gap">Gap between tracks</string>
+    <string name="track_gap_hint">Pause one second between files</string>
     <string name="volume_leveling">Volume leveling</string>
     <string name="norm_off">Off</string>
     <string name="norm_tags">Tags</string>
