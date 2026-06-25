@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.7.20260625+208
 
 - Settings: split the book-speed row into title plus a "default" caption so the speed button no longer clips in translated locales.
 
