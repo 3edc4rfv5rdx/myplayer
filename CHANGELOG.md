@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Delete-folder dialog now shows a red warning when the folder is pinned to favorites.
+
 ## v0.7.20260625+208
 
 - Settings: split the book-speed row into title plus a "default" caption so the speed button no longer clips in translated locales.

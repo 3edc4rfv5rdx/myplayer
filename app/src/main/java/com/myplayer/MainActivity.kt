@@ -1911,14 +1911,25 @@ private fun FolderBrowser(
 
         pendingDelete?.let { folder ->
             var confirmed by remember(folder) { mutableStateOf(false) }
+            // Deleting a pinned folder silently drops its star too, so warn in red before confirming.
+            val pinned = remember(folder) { isChildFavorite(folder) }
             AlertDialog(
                 onDismissRequest = { pendingDelete = null },
                 containerColor = SurfaceTint,
                 textContentColor = MaterialTheme.colorScheme.onSurface,
-                title = { Text(lw("Delete folder")) },
+                title = { Text(lw("Delete folder") + if (pinned) "  ⭐" else "") },
                 text = {
                     Column {
                         Text(lw("Permanently delete this folder and all its files from storage") + "?\n[ ${folder.name} ]")
+                        if (pinned) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "⭐ " + lw("This folder is in favorites"),
+                                color = Color.Red,
+                                fontSize = FONT_TITLE,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Spacer(Modifier.height(12.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
