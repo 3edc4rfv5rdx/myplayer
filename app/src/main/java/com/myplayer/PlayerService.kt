@@ -62,6 +62,10 @@ class PlayerService : MediaSessionService() {
     // they're recreated whenever the session id changes and toggled by the active [normMode].
     private var enhancer: LoudnessEnhancer? = null
     private var leveler: android.media.audiofx.DynamicsProcessing? = null
+    // The current output audio session id, so effects can be (re)created lazily by [applyNorm] only
+    // for the mode that needs them. A disabled effect left attached to the session still perturbs the
+    // audio path and caused random stops, so an unused mode keeps nothing attached.
+    private var audioSessionId: Int? = null
     private var currentTrackGainDb: Float? = null
     // Cached so applyNorm() (called on every metadata/transition/session callback) needn't hit the DB.
     // Loaded from Settings in onCreate, before the player or any listener exists.
@@ -113,15 +117,10 @@ class PlayerService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             @UnstableApi
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                enhancer?.release()
-                enhancer = try {
-                    LoudnessEnhancer(audioSessionId)
-                } catch (e: Exception) {
-                    Log.w(TAG, "LoudnessEnhancer unavailable; ReplayGain boost is a no-op", e)
-                    null
-                }
-                leveler?.release()
-                leveler = AutoLevel.create(audioSessionId)
+                this@PlayerService.audioSessionId = audioSessionId
+                // Drop effects bound to the old session; applyNorm re-creates only what the mode needs.
+                releaseEnhancer()
+                releaseLeveler()
                 applyNorm()
             }
 
@@ -363,19 +362,49 @@ class PlayerService : MediaSessionService() {
             VolumeNorm.AutoLevel -> {
                 // Tag-based path off; the audio-session effect does the work, leaving player volume flat.
                 p.volume = 1f
-                enhancer?.enabled = false
+                releaseEnhancer()
+                ensureLeveler()
                 leveler?.enabled = true
             }
             VolumeNorm.ReplayGain -> {
-                leveler?.enabled = false
+                // The compressor isn't used here; detach it so nothing extra sits on the session.
+                releaseLeveler()
                 applyReplayGain(p, currentTrackGainDb)
             }
             VolumeNorm.Off -> {
+                // Attach nothing: a disabled-but-attached effect still perturbs the output.
                 p.volume = 1f
-                enhancer?.enabled = false
-                leveler?.enabled = false
+                releaseEnhancer()
+                releaseLeveler()
             }
         }
+    }
+
+    /** Lazily creates the real-time leveler on the current session (no-op until a session exists). */
+    private fun ensureLeveler() {
+        if (leveler == null) audioSessionId?.let { leveler = AutoLevel.create(it) }
+    }
+
+    private fun releaseLeveler() {
+        leveler?.release()
+        leveler = null
+    }
+
+    /** Lazily creates the loudness effect used for positive ReplayGain boost. */
+    private fun ensureEnhancer() {
+        if (enhancer == null) audioSessionId?.let {
+            enhancer = try {
+                LoudnessEnhancer(it)
+            } catch (e: Exception) {
+                Log.w(TAG, "LoudnessEnhancer unavailable; ReplayGain boost is a no-op", e)
+                null
+            }
+        }
+    }
+
+    private fun releaseEnhancer() {
+        enhancer?.release()
+        enhancer = null
     }
 
     /** Applies the current track's ReplayGain (capped at +12 dB), or resets to unity when [db] is
@@ -393,6 +422,7 @@ class PlayerService : MediaSessionService() {
         } else {
             // Boost via the loudness effect (player volume can't exceed 1.0).
             p.volume = 1f
+            ensureEnhancer()
             enhancer?.let {
                 runCatching {
                     it.setTargetGain(ReplayGain.boostMillibels(db))

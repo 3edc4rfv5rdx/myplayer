@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix playback randomly stopping (and stopping on notifications): the auto-level compressor was left attached to the audio session even when leveling was off; effects are now created only for the active mode.
 - Delete-folder dialog now shows a red warning when the folder is pinned to favorites.
 
 ## v0.7.20260625+208
