@@ -53,6 +53,7 @@ object Settings {
     private const val KEY_REPLAYGAIN = "replaygain" // legacy boolean, migrated into KEY_VOLUME_NORM
     private const val KEY_VOLUME_NORM = "volume_norm"
     private const val KEY_SKIP_SILENCE = "skip_silence"
+    private const val KEY_TRACK_GAP = "track_gap"
     private const val KEY_SEEK_STEP = "seek_step"
     private const val KEY_THEME = "theme"
     private const val KEY_ACCENT = "accent"
@@ -88,6 +89,10 @@ object Settings {
     // Seek step (seconds) for the rewind/forward buttons; coarse options, current default 30.
     val SEEK_STEP_OPTIONS = listOf(10, 20, 30, 45, 60)
     const val SEEK_STEP_DEFAULT = 30
+
+    // Inter-track gap (seconds) inserted as silent audio; 0 = off, default 2.
+    val TRACK_GAP_OPTIONS = listOf(0, 1, 2, 3, 4, 5)
+    const val TRACK_GAP_DEFAULT = 2
 
     // Sleep-timer slider bounds and granularity (minutes), shared by the player and its dialog.
     const val SLEEP_MIN = 10f
@@ -227,6 +232,13 @@ object Settings {
     fun isSkipSilenceEnabled(context: Context): Boolean = get(context, KEY_SKIP_SILENCE) == "true"
     fun setSkipSilenceEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_SKIP_SILENCE, enabled.toString())
+
+    /** Inter-track gap in seconds (0 = off); generated as audio silence, not a player pause. */
+    fun getTrackGapSeconds(context: Context): Int =
+        get(context, KEY_TRACK_GAP)?.toIntOrNull()?.takeIf { it in TRACK_GAP_OPTIONS }
+            ?: TRACK_GAP_DEFAULT
+    fun setTrackGapSeconds(context: Context, seconds: Int) =
+        set(context, KEY_TRACK_GAP, seconds.toString())
 
     /** Rewind/forward seek step in seconds; falls back to [SEEK_STEP_DEFAULT] when unset or invalid. */
     fun getSeekStepSeconds(context: Context): Int =

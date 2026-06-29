@@ -14,7 +14,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.source.ShuffleOrder
+import androidx.media3.exoplayer.source.ConcatenatingMediaSource2
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.SilenceMediaSource
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
@@ -37,6 +43,9 @@ class PlayerService : MediaSessionService() {
         /** Custom session command: re-apply the skip-silence setting to the player live. */
         const val CMD_SKIP_SILENCE = "com.myplayer.SKIP_SILENCE_CHANGED"
 
+        /** Custom session command: re-apply settings affected by the generated inter-track gap. */
+        const val CMD_TRACK_GAP = "com.myplayer.TRACK_GAP_CHANGED"
+
         /** Custom session command: declare the active queue's book key (empty = plain music, no
          *  position tracking). Sent by the activity whenever it installs a new queue. */
         const val CMD_BOOK_MODE = "com.myplayer.BOOK_MODE"
@@ -54,6 +63,7 @@ class PlayerService : MediaSessionService() {
 
         // How often the playing book's position is persisted, so a process kill loses at most this.
         private const val SAVE_INTERVAL_MS = 10_000L
+        private const val US_PER_SECOND = 1_000_000L
     }
 
     private var session: MediaSession? = null
@@ -97,6 +107,7 @@ class PlayerService : MediaSessionService() {
         normMode = Settings.getVolumeNorm(this)
 
         val player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(GapMediaSourceFactory(this))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -109,7 +120,7 @@ class PlayerService : MediaSessionService() {
 
         player.repeatMode =
             if (Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
-        player.skipSilenceEnabled = Settings.isSkipSilenceEnabled(this)
+        player.skipSilenceEnabled = effectiveSkipSilenceEnabled()
 
         player.addListener(object : Player.Listener {
             @UnstableApi
@@ -277,6 +288,7 @@ class PlayerService : MediaSessionService() {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(CMD_VOLUME_NORM, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SKIP_SILENCE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_TRACK_GAP, Bundle.EMPTY))
                 .add(SessionCommand(CMD_BOOK_MODE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SLEEP_TIMER, Bundle.EMPTY))
                 .build()
@@ -297,7 +309,11 @@ class PlayerService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_SKIP_SILENCE) {
-                player?.skipSilenceEnabled = Settings.isSkipSilenceEnabled(this@PlayerService)
+                applySkipSilence()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == CMD_TRACK_GAP) {
+                applySkipSilence()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_BOOK_MODE) {
@@ -354,6 +370,13 @@ class PlayerService : MediaSessionService() {
             }
         }
     }
+
+    private fun applySkipSilence() {
+        player?.skipSilenceEnabled = effectiveSkipSilenceEnabled()
+    }
+
+    private fun effectiveSkipSilenceEnabled(): Boolean =
+        Settings.isSkipSilenceEnabled(this) && Settings.getTrackGapSeconds(this) == 0
 
     /** Lazily creates the real-time leveler on the current session (no-op until a session exists). */
     private fun ensureLeveler() {
@@ -425,5 +448,44 @@ class PlayerService : MediaSessionService() {
         session = null
         player = null
         super.onDestroy()
+    }
+
+    /** Adds the configured inter-track gap as actual silent audio inside each media item.
+     *
+     *  The old implementations paused the player between files. A pause can make
+     *  MediaSessionService leave foreground playback, which lets Android kill the service while the
+     *  screen is off. Keeping the player continuously playing silent samples preserves the lock-screen
+     *  session and avoids rebuilding the visible queue with synthetic items. */
+    private class GapMediaSourceFactory(context: android.content.Context) : MediaSource.Factory {
+        private val app = context.applicationContext
+        private val delegate = DefaultMediaSourceFactory(app)
+
+        override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+            val source = delegate.createMediaSource(mediaItem)
+            val gapSec = Settings.getTrackGapSeconds(app)
+            if (gapSec <= 0) return source
+            val silence = SilenceMediaSource(gapSec * US_PER_SECOND)
+            return ConcatenatingMediaSource2.Builder()
+                .setMediaItem(mediaItem)
+                .add(source)
+                .add(silence)
+                .build()
+        }
+
+        override fun getSupportedTypes(): IntArray = delegate.supportedTypes
+
+        override fun setDrmSessionManagerProvider(
+            drmSessionManagerProvider: DrmSessionManagerProvider
+        ): MediaSource.Factory {
+            delegate.setDrmSessionManagerProvider(drmSessionManagerProvider)
+            return this
+        }
+
+        override fun setLoadErrorHandlingPolicy(
+            loadErrorHandlingPolicy: LoadErrorHandlingPolicy
+        ): MediaSource.Factory {
+            delegate.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+            return this
+        }
     }
 }
