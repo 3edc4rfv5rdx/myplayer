@@ -41,10 +41,9 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - **Settings**: Rescan (refresh the cache), theme (System/Light/Dark), **Volume leveling**
   (Off / Tags / Auto — music only, see below), **Skip silence** (drop silent gaps during playback),
   **Follow playing track**, **Track time** (rightmost readout shows total or remaining time),
-  **Auto backup**, **Seek step** (the −/+ jump, 10/20/30/45/60s), **Gap between tracks** (silence
-  inserted between files, 0–5s, default 2; music and books), **Abook default speed** (the speed
+  **Auto backup**, **Seek step** (the −/+ jump, 10/20/30/45/60s), **Abook default speed** (the speed
   new audiobooks start at), **UI language** (English / Russian / Ukrainian), and an About dialog
-  (ℹ️ in the top bar) with version/build. Theme, Volume leveling, Seek step, and Gap are compact
+  (ℹ️ in the top bar) with version/build. Theme, Volume leveling, and Seek step are compact
   dropdowns. The screen scrolls so the bottom rows stay reachable.
 - **Follow playing track** (on by default): on each track change the browser jumps to the playing
   file's folder and centers it.
@@ -97,7 +96,5 @@ Release-only workflow. Requires Android SDK and JDK 17/21.
   `DynamicsProcessing` compressor + limiter on the audio session, so every track is leveled
   regardless of tags — the trade-off is squashed dynamics rather than precise track-to-track matching.
 - **Skip silence:** drops silent stretches via ExoPlayer's `skipSilenceEnabled` (global toggle).
-- **Gap between tracks:** an optional silence (0–5s) the service waits out at each auto track
-  transition (`pauseAtEndOfMediaItems`), for music and books alike.
 - **UI language:** English, Russian, or Ukrainian; strings come from a runtime translations file
   read via a `lw()` lookup, switchable in Settings without reinstalling.

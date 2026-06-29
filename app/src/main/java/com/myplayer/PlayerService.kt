@@ -92,9 +92,6 @@ class PlayerService : MediaSessionService() {
     private var sleepEndOfChapter = false
     private val sleepRunnable = Runnable { fireSleep() }
 
-    // Resumes playback after the inter-track silent gap (see onMediaItemTransition).
-    private val gapResume = Runnable { player?.play() }
-
     override fun onCreate() {
         super.onCreate()
         normMode = Settings.getVolumeNorm(this)
@@ -127,34 +124,14 @@ class PlayerService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 currentTrackGainDb = null
                 applyNorm()
-                // Keep pauseAtEndOfMediaItems in sync with the gap setting: when a gap is configured
-                // the player pauses cleanly at the end of each file (handled in onPlayWhenReadyChanged)
-                // instead of us cutting into the next track mid-stream, which clicked. Set it during
-                // the current file so it takes effect at that file's end.
-                player.pauseAtEndOfMediaItems =
-                    Settings.getTrackGapSeconds(this@PlayerService) > 0
                 // "Until end of chapter" fires when the current track finishes on its own: the queue
                 // auto-advances to the next file (position ~0), so pausing here leaves the resume
-                // point cleanly at the start of the next chapter. With a gap on, the end-of-chapter
-                // stop is caught in onPlayWhenReadyChanged instead (no AUTO transition until resume).
+                // point cleanly at the start of the next chapter.
                 if (sleepEndOfChapter &&
                     reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) fireSleep()
                 // A real move to another file (auto-advance or skip) makes it the book's new resume
                 // point; the initial setMediaItems (PLAYLIST_CHANGED) must not overwrite the restore.
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) saveBookPosition()
-            }
-
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                // pauseAtEndOfMediaItems stopped us cleanly at the end of a file (gap configured).
-                if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) return
-                // End-of-chapter sleep wins: stay paused at the boundary instead of resuming.
-                if (sleepEndOfChapter) { fireSleep(); return }
-                // Last file: let onPlaybackStateChanged(STATE_ENDED) finish the queue, don't resume.
-                if (!player.hasNextMediaItem()) return
-                // Resume into the next file after the configured silent gap.
-                val gapSec = Settings.getTrackGapSeconds(this@PlayerService)
-                saveHandler.removeCallbacks(gapResume)
-                saveHandler.postDelayed(gapResume, gapSec * 1_000L)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -175,10 +152,8 @@ class PlayerService : MediaSessionService() {
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
-                    // The queue is over; a pending sleep timer has nothing left to pause, and any
-                    // armed inter-track gap must not resume the cleared queue.
+                    // The queue is over; a pending sleep timer has nothing left to pause.
                     cancelSleep()
-                    saveHandler.removeCallbacks(gapResume)
                     bookFolderKey?.let {
                         Settings.clearBookPos(this@PlayerService, it)
                         // The finished book's cached durations go with the resume point; a

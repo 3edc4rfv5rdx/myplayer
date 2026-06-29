@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fix playback dying mid-song (and vanishing from the lock screen): removed the inter-track gap, whose end-of-track pause dropped the service out of the foreground so the system killed it ~60s later, especially with the screen off.
 - Fix playback randomly stopping (and stopping on notifications): the auto-level compressor was left attached to the audio session even when leveling was off; effects are now created only for the active mode.
 - Delete-folder dialog now shows a red warning when the folder is pinned to favorites.
 
