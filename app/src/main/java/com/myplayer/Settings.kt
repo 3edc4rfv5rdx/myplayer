@@ -90,9 +90,10 @@ object Settings {
     val SEEK_STEP_OPTIONS = listOf(10, 20, 30, 45, 60)
     const val SEEK_STEP_DEFAULT = 30
 
-    // Inter-track gap (seconds) inserted as silent audio; 0 = off, default 2.
+    // Inter-track gap (seconds) inserted as silent audio; 0 = off (default), mutually exclusive with
+    // skip-silence (which would cut the generated silence away).
     val TRACK_GAP_OPTIONS = listOf(0, 1, 2, 3, 4, 5)
-    const val TRACK_GAP_DEFAULT = 2
+    const val TRACK_GAP_DEFAULT = 0
 
     // Sleep-timer slider bounds and granularity (minutes), shared by the player and its dialog.
     const val SLEEP_MIN = 10f

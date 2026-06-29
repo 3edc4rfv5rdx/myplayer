@@ -2704,7 +2704,14 @@ private fun SettingsScreen(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Switch(checked = skipSilenceEnabled, onCheckedChange = onSkipSilenceChange)
+            // The gap and skip-silence are mutually exclusive (skip-silence would cut the generated
+            // gap away): while a gap is set, show this off and lock it.
+            val gapOn = trackGapSec > 0
+            Switch(
+                checked = skipSilenceEnabled && !gapOn,
+                onCheckedChange = onSkipSilenceChange,
+                enabled = !gapOn
+            )
         }
 
         Spacer(Modifier.height(10.dp))

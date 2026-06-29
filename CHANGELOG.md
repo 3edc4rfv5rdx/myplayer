@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Gap between tracks now defaults to off, and while a gap is set the Skip silence toggle is shown off and locked (the two are mutually exclusive).
 - Gap between tracks is now generated silence appended to each track (given a placeholder duration so ConcatenatingMediaSource2 accepts it) instead of an end-of-track pause, so it no longer drops the service from the foreground or stops playback from starting.
 - Fix playback randomly stopping (and stopping on notifications): the auto-level compressor was left attached to the audio session even when leveling was off; effects are now created only for the active mode.
 - Delete-folder dialog now shows a red warning when the folder is pinned to favorites.
