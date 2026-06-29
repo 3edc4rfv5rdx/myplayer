@@ -52,6 +52,13 @@ object DurationCache {
         }
     }
 
+    /** Synchronous single-file cache lookup (no MediaMetadataRetriever fill): the cached duration in
+     *  ms, or null when not cached yet or stored as unreadable (0). Cheap enough to call on the
+     *  playback thread; used to give ConcatenatingMediaSource2 an accurate placeholder duration. */
+    fun peek(context: Context, uri: String): Long? =
+        AppDb.db(context).rawQuery("SELECT ms FROM durations WHERE uri = ? LIMIT 1", arrayOf(uri))
+            .use { c -> if (c.moveToNext()) c.getLong(0).takeIf { it > 0L } else null }
+
     /** Drops the cached durations of [uris] — the shared cleanup for the cases where the rows
      *  would only sit as dirt: the book finished (PlayerService) or its files were deleted from
      *  storage (FolderCache.invalidateSubtree). A re-listen just re-resolves lazily. */

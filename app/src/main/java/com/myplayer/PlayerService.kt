@@ -64,6 +64,9 @@ class PlayerService : MediaSessionService() {
         // How often the playing book's position is persisted, so a process kill loses at most this.
         private const val SAVE_INTERVAL_MS = 10_000L
         private const val US_PER_SECOND = 1_000_000L
+        // Initial placeholder duration for a track whose real length isn't cached yet, kept far longer
+        // than any file so a resume seek is never clamped before the actual duration replaces it.
+        private const val GAP_PLACEHOLDER_MS = 24L * 60 * 60 * 1000
     }
 
     private var session: MediaSession? = null
@@ -455,7 +458,13 @@ class PlayerService : MediaSessionService() {
      *  The old implementations paused the player between files. A pause can make
      *  MediaSessionService leave foreground playback, which lets Android kill the service while the
      *  screen is off. Keeping the player continuously playing silent samples preserves the lock-screen
-     *  session and avoids rebuilding the visible queue with synthetic items. */
+     *  session and avoids rebuilding the visible queue with synthetic items.
+     *
+     *  The silence is appended after the track. ConcatenatingMediaSource2 refuses a progressive
+     *  (mp3/flac) source whose duration it doesn't yet know ("must define an initial placeholder
+     *  duration"), so the track is added with a placeholder: the cached duration when known
+     *  (accurate, no timeline jump), else a large fallback so a book's resume seek is never clamped
+     *  short before the real duration arrives and replaces the placeholder. */
     private class GapMediaSourceFactory(context: android.content.Context) : MediaSource.Factory {
         private val app = context.applicationContext
         private val delegate = DefaultMediaSourceFactory(app)
@@ -465,9 +474,10 @@ class PlayerService : MediaSessionService() {
             val gapSec = Settings.getTrackGapSeconds(app)
             if (gapSec <= 0) return source
             val silence = SilenceMediaSource(gapSec * US_PER_SECOND)
+            val placeholderMs = DurationCache.peek(app, mediaItem.mediaId) ?: GAP_PLACEHOLDER_MS
             return ConcatenatingMediaSource2.Builder()
                 .setMediaItem(mediaItem)
-                .add(source)
+                .add(source, placeholderMs)
                 .add(silence)
                 .build()
         }
