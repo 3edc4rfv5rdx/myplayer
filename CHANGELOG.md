@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.7.20260629+216
 
 - Gap between tracks now defaults to off, and while a gap is set the Skip silence toggle is shown off and locked (the two are mutually exclusive).
 - Gap between tracks is now generated silence appended to each track (given a placeholder duration so ConcatenatingMediaSource2 accepts it) instead of an end-of-track pause, so it no longer drops the service from the foreground or stops playback from starting.
