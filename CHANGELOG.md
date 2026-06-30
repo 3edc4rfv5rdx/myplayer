@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.7.20260630+224
 
 - Audiobook files in the browser are now marked by progress: an orange ▶ on the resume file and a filled dot on each already-played file.
 - Browser top bar gains a home button that jumps straight back to the roots screen.
