@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Recently played history now keeps 7 folders instead of 5.
 - Highlighted row's scrolling name now repeats 50 times before settling instead of stopping after a few passes.
 
 ## v0.7.20260629+216

@@ -102,7 +102,7 @@ object Settings {
     const val SLEEP_DEFAULT = 20f
 
     // How many recently played folders the history dialog keeps.
-    const val HISTORY_MAX = 5
+    const val HISTORY_MAX = 7
 
     // How many manually pinned folders the favorites dialog keeps.
     const val FAVORITES_MAX = 15
