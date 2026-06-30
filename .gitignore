@@ -14,4 +14,6 @@ local.properties
 key.properties
 *.jks
 *.keystore
+*.apk
+*.apkx
 /tmp
