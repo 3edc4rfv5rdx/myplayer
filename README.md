@@ -16,12 +16,14 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - **Exit** (✕, top-left of the home list) stops playback, tears down the player service and its
   notification, and closes the app.
 - Browse subfolders in-app; listings are cached per folder. Folders and files are in natural order
-  (`Chapter 2` before `Chapter 10`). 📁 folder, 📖 audiobook, 🎵 music file, 📄 track inside a book.
-  The browser title reads **Music** or **AudioBook** for the folder's mode.
+  (`Chapter 2` before `Chapter 10`). 📁 folder, 📖 audiobook, 🎵 music file, 📄 track inside a book;
+  a pinned folder shows ⭐ in place of its icon. The browser title reads **Music** or **AudioBook**
+  for the folder's mode. A **🏠 home** button in the top bar jumps straight back to the roots list.
 - **History**: the home list has a **History** button (bottom-right) listing the last few folders you
   played (📖 for books, 🎵 for music); tapping one jumps the browser straight back to that folder.
-- **Favorites**: pin a folder with the **★** in the browser top bar; open pinned folders from the
-  **★** button (bottom-left) on the home screen (up to 15). Unpin from the same star.
+- **Favorites**: pin a folder with the **★** in the browser top bar; pinned folders show a ⭐ in the
+  browser list and open from the **★** button (bottom-left) on the home screen (up to 15). Unpin from
+  the same star.
 - **Folder long-press menu**: pin/unpin a favorite, or **Delete folder** — permanently removes it and
   its files from storage (forgets its audiobook state; playback adjusted first if affected).
 - **Tap a file** to select it, then press the big **Play** to start (selected track first, then the
@@ -67,6 +69,9 @@ No equalizer, no internet, no media library — just folders, shuffle, and audio
 - While a book plays, a **progress readout** shows the current file (N/M) and a **time-based** percent
   (elapsed / total or remaining), backed by a per-file duration cache that refines it in the
   background; until any duration is known it estimates by file count.
+- In the browser the book's files are **marked by progress**: an enlarged orange **▶** on the resume
+  file and a filled **●** on each already-played file before it (the rest keep 📄). Derived from the
+  saved resume point, so it's exact for chapters kept in one folder.
 
 ## Build
 

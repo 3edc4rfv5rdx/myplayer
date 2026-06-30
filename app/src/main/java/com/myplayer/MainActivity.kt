@@ -84,8 +84,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -145,6 +148,11 @@ private val FONT_DISPLAY = 24.sp   // single emphasised value (speed dialog)
 
 // How many times the highlighted row's name scrolls before settling — enough passes to read a long name.
 private const val MARQUEE_ITERATIONS = 50
+
+// The ▶ resume-file marker in a book listing: an enlarged orange triangle that stands out from the
+// played-dot/page glyphs.
+private val ResumeOrange = Color(0xFFFF9800)
+private val RESUME_GLYPH_SIZE = 30.sp
 
 /** Shared container tint for dialogs, dropdown menus, and highlighted rows — one source so the
  *  raised-surface tone changes in a single place (kept distinct from the root window background). */
@@ -443,6 +451,7 @@ class MainActivity : ComponentActivity() {
                             playingDocId = playingDocId,
                             visitedPathIds = visitedPathIds,
                             rescanTick = rescanTick,
+                            bookKey = browsedBookKey,
                             clearTitleTick = clearTitleTick,
                             shuffleEnabled = shuffle,
                             onShuffleToggle = {
@@ -1223,6 +1232,7 @@ private fun PlayerScreen(
     playingDocId: String?,
     visitedPathIds: Set<String>,
     rescanTick: Int,
+    bookKey: String?,
     clearTitleTick: Int,
     shuffleEnabled: Boolean,
     onShuffleToggle: (Boolean) -> Unit,
@@ -1287,6 +1297,7 @@ private fun PlayerScreen(
                         if (abookEnabled) "Book" else "Music"
                     ),
                     filesAreBook = abookEnabled,
+                    bookKey = bookKey,
                     selectedIndex = selectedIndex,
                     playingDocId = playingDocId,
                     visitedPathIds = visitedPathIds,
@@ -1693,6 +1704,7 @@ private fun FolderBrowser(
     current: Node,
     title: String,
     filesAreBook: Boolean,
+    bookKey: String?,
     selectedIndex: Int?,
     playingDocId: String?,
     visitedPathIds: Set<String>,
@@ -1744,6 +1756,26 @@ private fun FolderBrowser(
         } catch (e: ScanException) {
             loadFailed = true
         }
+    }
+
+    // Index of the book's resume file within this listing, or null when not a book / the resume file
+    // lives in another folder. Files before it are "played" (✔), the resume file itself "current" (▶);
+    // books play sequentially so this listing's natural order matches the playback order. One cheap DB
+    // read off-thread — no recursive walk.
+    var resumeFileIndex by remember(current.documentId) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(contents, bookKey, filesAreBook) {
+        val files = contents?.second
+        if (!filesAreBook || bookKey == null || files == null) {
+            resumeFileIndex = null
+            return@LaunchedEffect
+        }
+        val resumeDocId = withContext(Dispatchers.IO) {
+            Settings.getBookPos(context, bookKey)?.fileUri?.let {
+                runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull()
+            }
+        }
+        resumeFileIndex =
+            resumeDocId?.let { rd -> files.indexOfFirst { it.documentId == rd }.takeIf { it >= 0 } }
     }
 
     // Scroll the playing track into the middle of the list (not flush against an edge).
@@ -1865,10 +1897,28 @@ private fun FolderBrowser(
                     // The highlighted (scrolling) row appends its track duration after the name.
                     val durationSuffix = rowDurations[file.documentId]
                         ?.takeIf { highlighted }?.let { "  ${formatTime(it)}" } ?: ""
+                    // In a book: ▶ marks the resume file, ● the already-played files before it; plain
+                    // 📄 for the rest. Music files keep the 🎵 note.
+                    val isCurrent = resumeFileIndex != null && index == resumeFileIndex
+                    val glyph = when {
+                        isCurrent -> "▶"
+                        resumeFileIndex != null && index < resumeFileIndex!! -> "●"
+                        filesAreBook -> "📄"
+                        else -> "🎵"
+                    }
+                    // The resume ▶ gets its own enlarged orange span; everything else is one plain run.
+                    val label = buildAnnotatedString {
+                        if (isCurrent) {
+                            withStyle(SpanStyle(color = ResumeOrange, fontSize = RESUME_GLYPH_SIZE)) {
+                                append(glyph)
+                            }
+                            append("  ${file.name}$durationSuffix")
+                        } else {
+                            append("$glyph  ${file.name}$durationSuffix")
+                        }
+                    }
                     Text(
-                        // Inside an audiobook the tracks are its pages, so mark them with a page
-                        // glyph instead of the music note used for plain music files.
-                        text = "${if (filesAreBook) "📄" else "🎵"}  ${file.name}$durationSuffix",
+                        text = label,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = FONT_LIST,
