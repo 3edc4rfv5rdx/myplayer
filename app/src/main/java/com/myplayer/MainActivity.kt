@@ -143,6 +143,9 @@ private val FONT_TITLE = 18.sp     // headings (top-bar title, current folder) +
 private val FONT_LIST = 20.sp      // tappable list rows + compact control glyphs (speed −/+)
 private val FONT_DISPLAY = 24.sp   // single emphasised value (speed dialog)
 
+// How many times the highlighted row's name scrolls before settling — enough passes to read a long name.
+private const val MARQUEE_ITERATIONS = 50
+
 /** Shared container tint for dialogs, dropdown menus, and highlighted rows — one source so the
  *  raised-surface tone changes in a single place (kept distinct from the root window background). */
 private val SurfaceTint: Color
@@ -1832,7 +1835,7 @@ private fun FolderBrowser(
                             )
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             // The highlighted row scrolls its full name into view instead of clipping.
-                            .then(if (highlighted) Modifier.basicMarquee() else Modifier)
+                            .then(if (highlighted) Modifier.basicMarquee(iterations = MARQUEE_ITERATIONS) else Modifier)
                     )
                 }
                 itemsIndexed(c.second, key = { _, file -> file.documentId }) { index, file ->
@@ -1863,7 +1866,7 @@ private fun FolderBrowser(
                             .clickable { onSelectFile(index) }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             // The highlighted (playing/selected) row scrolls its full name into view.
-                            .then(if (highlighted) Modifier.basicMarquee() else Modifier)
+                            .then(if (highlighted) Modifier.basicMarquee(iterations = MARQUEE_ITERATIONS) else Modifier)
                     )
                 }
             }

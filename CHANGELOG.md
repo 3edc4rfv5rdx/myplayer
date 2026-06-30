@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Highlighted row's scrolling name now repeats 50 times before settling instead of stopping after a few passes.
+
 ## v0.7.20260629+216
 
 - Gap between tracks now defaults to off, and while a gap is set the Skip silence toggle is shown off and locked (the two are mutually exclusive).
