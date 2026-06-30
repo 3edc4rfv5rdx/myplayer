@@ -82,13 +82,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -157,6 +160,9 @@ private const val MARQUEE_ITERATIONS = 50
 // height (FONT_LIST), so the larger glyph overflows without stretching the row.
 private val ResumeOrange = Color(0xFFFF9800)
 private val RESUME_GLYPH_SIZE = 34.sp
+// Total stroke width of the ▶ outline. The orange fill covers the inner half, so ~2 dp of black
+// shows around the triangle — enough to stand out on the orange highlight bar.
+private val RESUME_OUTLINE = 4.dp
 
 /** Shared container tint for dialogs, dropdown menus, and highlighted rows — one source so the
  *  raised-surface tone changes in a single place (kept distinct from the root window background). */
@@ -1676,7 +1682,8 @@ private fun FolderEntryDialog(
             if (entries.isEmpty()) {
                 Text(emptyText)
             } else {
-                Column {
+                // Scrolls so a full favorites list (up to FAVORITES_MAX) stays reachable.
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     entries.forEach { entry ->
                         val icon = if (entry.isBook) "📖" else "🎵"
                         Text(
@@ -1764,22 +1771,26 @@ private fun FolderBrowser(
 
     // Index of the book's resume file within this listing, or null when not a book / the resume file
     // lives in another folder. Files before it are "played" (●), the resume file itself "current" (▶);
-    // books play sequentially so this listing's natural order matches the playback order. One cheap DB
-    // read off-thread — no recursive walk.
+    // books play sequentially so this listing's natural order matches the playback order. While this
+    // book is the one playing, the live track is the current file so the markers advance with it;
+    // otherwise we fall back to the saved resume point (one cheap DB read off-thread).
     var resumeFileIndex by remember(current.documentId) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(contents, bookKey, filesAreBook) {
+    LaunchedEffect(contents, bookKey, filesAreBook, playingDocId) {
         val files = contents?.second
         if (!filesAreBook || bookKey == null || files == null) {
             resumeFileIndex = null
             return@LaunchedEffect
         }
-        val resumeDocId = withContext(Dispatchers.IO) {
-            Settings.getBookPos(context, bookKey)?.fileUri?.let {
-                runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull()
+        val liveIndex =
+            playingDocId?.let { p -> files.indexOfFirst { it.documentId == p }.takeIf { it >= 0 } }
+        resumeFileIndex = liveIndex ?: run {
+            val resumeDocId = withContext(Dispatchers.IO) {
+                Settings.getBookPos(context, bookKey)?.fileUri?.let {
+                    runCatching { DocumentsContract.getDocumentId(Uri.parse(it)) }.getOrNull()
+                }
             }
-        }
-        resumeFileIndex =
             resumeDocId?.let { rd -> files.indexOfFirst { it.documentId == rd }.takeIf { it >= 0 } }
+        }
     }
 
     // Scroll the playing track into the middle of the list (not flush against an edge).
@@ -1933,6 +1944,17 @@ private fun FolderBrowser(
                             Box(
                                 Modifier.wrapContentSize(Alignment.CenterStart, unbounded = true)
                             ) {
+                                // A black stroke layer under the orange fill gives the triangle a
+                                // contour so it stays visible on the orange highlight bar.
+                                val outlinePx = with(LocalDensity.current) { RESUME_OUTLINE.toPx() }
+                                Text(
+                                    "▶",
+                                    fontSize = RESUME_GLYPH_SIZE,
+                                    style = TextStyle(
+                                        color = Color.Black,
+                                        drawStyle = Stroke(width = outlinePx)
+                                    )
+                                )
                                 Text("▶", color = ResumeOrange, fontSize = RESUME_GLYPH_SIZE)
                             }
                         }

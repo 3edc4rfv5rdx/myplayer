@@ -104,8 +104,8 @@ object Settings {
     // How many recently played folders the history dialog keeps.
     const val HISTORY_MAX = 7
 
-    // How many manually pinned folders the favorites dialog keeps.
-    const val FAVORITES_MAX = 15
+    // How many manually pinned folders the favorites dialog keeps (the dialog scrolls).
+    const val FAVORITES_MAX = 33
 
     // In-memory cache so reads (after warm-up) and read-modify-write on roots stay off disk and
     // race-free; the single-thread writer persists changes in order, in the background.
@@ -124,6 +124,10 @@ object Settings {
 
     // Serializes the read-modify-write of the favorites list, like historyLock for history.
     private val favoritesLock = Any()
+
+    // Parsed favorite keys, cached so the per-folder-row isFavorite() check doesn't re-parse the
+    // whole favorites JSON on every (re)composition. Invalidated (null) whenever favorites change.
+    @Volatile private var favoriteKeysCache: Set<String>? = null
 
     private fun get(context: Context, key: String): String? {
         synchronized(lock) { if (key in loaded) return cache[key] }
@@ -322,29 +326,38 @@ object Settings {
         }
 
     // ---- Favorites (manually pinned folders) -----------------------------------------------------
-    // Same shape and navigation as history, but pinned by hand (never auto-evicted) and capped higher.
+    // Same shape and navigation as history, but pinned by hand and capped high enough (FAVORITES_MAX,
+    // the dialog scrolls) that the oldest-out eviction is not hit in practice.
 
     fun getFavorites(context: Context): List<HistoryEntry> = readEntries(context, KEY_FAVORITES)
 
-    /** Whether the folder with this [HistoryEntry.key] is pinned. */
-    fun isFavorite(context: Context, key: String): Boolean =
-        getFavorites(context).any { it.key == key }
+    /** Whether the folder with this [HistoryEntry.key] is pinned. Reads the cached key set
+     *  (rebuilt once after each change) so it is cheap to call per list row. */
+    fun isFavorite(context: Context, key: String): Boolean {
+        favoriteKeysCache?.let { return key in it }
+        return getFavorites(context).map { it.key }.toSet()
+            .also { favoriteKeysCache = it }
+            .let { key in it }
+    }
 
     /** Pins [entry] at the front, de-duped by folder, capped at [FAVORITES_MAX]. */
     fun addFavorite(context: Context, entry: HistoryEntry) = synchronized(favoritesLock) {
         val updated = (listOf(entry) + getFavorites(context).filter { it.key != entry.key })
             .take(FAVORITES_MAX)
         writeEntries(context, KEY_FAVORITES, updated)
+        favoriteKeysCache = null
     }
 
     /** Unpins the folder with this [HistoryEntry.key]. */
     fun removeFavorite(context: Context, key: String) = synchronized(favoritesLock) {
         writeEntries(context, KEY_FAVORITES, getFavorites(context).filter { it.key != key })
+        favoriteKeysCache = null
     }
 
     /** Drops every favorite under [treeUri] (used when a root is removed). */
     fun removeFavoritesForTree(context: Context, treeUri: String) = synchronized(favoritesLock) {
         writeEntries(context, KEY_FAVORITES, getFavorites(context).filter { it.treeUri != treeUri })
+        favoriteKeysCache = null
     }
 
     /** Drops the favorite for [folderId] and any entry whose path runs through it (used when a
@@ -354,6 +367,7 @@ object Settings {
             writeEntries(context, KEY_FAVORITES, getFavorites(context).filter {
                 it.treeUri != treeUri || folderId !in it.ids
             })
+            favoriteKeysCache = null
         }
 
     // ---- Shared folder-entry (history/favorites) JSON --------------------------------------------

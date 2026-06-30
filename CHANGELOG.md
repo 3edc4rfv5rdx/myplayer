@@ -4,7 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
-- The resume ▶ marker in book listings is now bigger and no longer stretches its row.
+- The resume ▶ marker in book listings is now bigger, outlined in black so it stays visible on the highlight bar, and no longer stretches its row.
+- Book progress markers (▶/●) now advance live as the playing book crosses files, not only on re-opening the folder.
+- Favorites limit raised to 33 and the favorites/history dialog now scrolls.
+- Favorite-folder check is now cached so it no longer re-parses the favorites list on every browser row.
 
 ## v0.7.20260630+224
 

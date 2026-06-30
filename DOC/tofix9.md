@@ -13,7 +13,7 @@ minor/cosmetic.
 
 ---
 
-## Finding 1 — `isChildFavorite` parses the whole favorites list on every folder-row composition
+## Finding 1 — `isChildFavorite` parses the whole favorites list on every folder-row composition — FIXED
 **Confidence: High. Severity: Low (efficiency; main thread, scales with favorites count × rows).**
 
 **Problem:**
@@ -34,9 +34,12 @@ favorites change, and have the per-row glyph test membership against that set in
 alongside the string cache and invalidate it in `addFavorite`/`removeFavorite`/`removeFavoritesFor*`.
 Keep the existing keying so a pin/unpin still refreshes the visible stars.
 
+**FIXED:** `Settings` now caches the parsed favorite-key set (`favoriteKeysCache`), rebuilt once on a
+miss and invalidated on every favorites change; `isFavorite` reads the set instead of re-parsing.
+
 ---
 
-## Finding 2 — ▶/● book-progress markers are a snapshot from folder entry; they don't track live playback
+## Finding 2 — ▶/● book-progress markers are a snapshot from folder entry; they don't track live playback — FIXED
 **Confidence: High. Severity: Low (cosmetic staleness, only inside the playing book's open folder).**
 
 **Problem:**
@@ -55,9 +58,13 @@ If live markers are wanted, add `playingDocId` (and/or a low-frequency resume-po
 intentional, leave a one-line comment at `MainActivity.kt:1758-1766` stating the markers reflect the
 last-saved resume point at folder-entry time, not live playback, so it isn't mistaken for a bug.
 
+**FIXED:** the resume index now keys on `playingDocId` too — while this book is the one playing, the
+live track is taken as the current file (markers advance with playback); otherwise it falls back to
+the saved resume point.
+
 ---
 
-## Finding 3 — Adding a 16th favorite silently drops the oldest, despite the "never auto-evicted" comment
+## Finding 3 — Adding a 16th favorite silently drops the oldest, despite the "never auto-evicted" comment — FIXED
 **Confidence: High (behavior). Severity: Low (surprising for manually pinned items, no feedback).**
 
 **Problem:**
@@ -74,6 +81,10 @@ something like "Favorites full (15)" instead of silently evicting, keeping the "
 promise true; or (b) keep the FIFO eviction but fix the comment at `Settings.kt:325` to say the
 oldest pin is dropped at the cap, and consider surfacing that in the toast. Pick whichever matches
 the intended UX; do not leave the comment claiming an invariant the code breaks.
+
+**FIXED:** raised `FAVORITES_MAX` to 33 (eviction now unreachable in practice) and made the
+favorites/history dialog scroll so the full list stays reachable; the section comment no longer
+overstates the guarantee.
 
 ---
 
@@ -118,8 +129,8 @@ glyph was enlarged to 34.sp so it reads bigger than the page/note emoji.
 
 | # | Finding | File(s) | Severity |
 |---|---------|---------|----------|
-| 1 | `isChildFavorite` re-parses favorites JSON per folder row | MainActivity.kt / Settings.kt | Low |
-| 2 | ▶/● markers snapshot at folder entry, don't track live playback | MainActivity.kt | Low |
-| 3 | 16th favorite silently evicts oldest vs "never auto-evicted" comment | Settings.kt | Low |
+| 1 | `isChildFavorite` re-parses favorites JSON per folder row — FIXED | MainActivity.kt / Settings.kt | Low |
+| 2 | ▶/● markers snapshot at folder entry, don't track live playback — FIXED | MainActivity.kt | Low |
+| 3 | 16th favorite silently evicts oldest vs "never auto-evicted" comment — FIXED | Settings.kt | Low |
 | 4 | Comment says ✔ for played files, code renders ● — FIXED | MainActivity.kt | Trivial |
 | 5 | 30.sp resume ▶ in a 20.sp single-line row may inflate/clip the row — FIXED | MainActivity.kt | Low |
