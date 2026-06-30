@@ -17,6 +17,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -84,11 +87,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -150,9 +153,10 @@ private val FONT_DISPLAY = 24.sp   // single emphasised value (speed dialog)
 private const val MARQUEE_ITERATIONS = 50
 
 // The ▶ resume-file marker in a book listing: an enlarged orange triangle that stands out from the
-// played-dot/page glyphs.
+// played-dot/page glyphs. Drawn via an inline placeholder whose box only reserves a normal line's
+// height (FONT_LIST), so the larger glyph overflows without stretching the row.
 private val ResumeOrange = Color(0xFFFF9800)
-private val RESUME_GLYPH_SIZE = 30.sp
+private val RESUME_GLYPH_SIZE = 34.sp
 
 /** Shared container tint for dialogs, dropdown menus, and highlighted rows — one source so the
  *  raised-surface tone changes in a single place (kept distinct from the root window background). */
@@ -1759,7 +1763,7 @@ private fun FolderBrowser(
     }
 
     // Index of the book's resume file within this listing, or null when not a book / the resume file
-    // lives in another folder. Files before it are "played" (✔), the resume file itself "current" (▶);
+    // lives in another folder. Files before it are "played" (●), the resume file itself "current" (▶);
     // books play sequentially so this listing's natural order matches the playback order. One cheap DB
     // read off-thread — no recursive walk.
     var resumeFileIndex by remember(current.documentId) { mutableStateOf<Int?>(null) }
@@ -1897,8 +1901,8 @@ private fun FolderBrowser(
                     // The highlighted (scrolling) row appends its track duration after the name.
                     val durationSuffix = rowDurations[file.documentId]
                         ?.takeIf { highlighted }?.let { "  ${formatTime(it)}" } ?: ""
-                    // In a book: ▶ marks the resume file, ● the already-played files before it; plain
-                    // 📄 for the rest. Music files keep the 🎵 note.
+                    // In a book: ▶ marks the resume file, ● (a filled dot) the already-played files
+                    // before it; plain 📄 for the rest. Music files keep the 🎵 note.
                     val isCurrent = resumeFileIndex != null && index == resumeFileIndex
                     val glyph = when {
                         isCurrent -> "▶"
@@ -1906,19 +1910,36 @@ private fun FolderBrowser(
                         filesAreBook -> "📄"
                         else -> "🎵"
                     }
-                    // The resume ▶ gets its own enlarged orange span; everything else is one plain run.
+                    // The resume row uses an inline placeholder for ▶: the placeholder reserves only a
+                    // normal line's height so the row keeps its spacing, while the bigger triangle is
+                    // drawn unbounded (start-aligned, overflowing right into the gap before the name).
+                    val resumeSlot = "resume"
                     val label = buildAnnotatedString {
                         if (isCurrent) {
-                            withStyle(SpanStyle(color = ResumeOrange, fontSize = RESUME_GLYPH_SIZE)) {
-                                append(glyph)
-                            }
+                            appendInlineContent(resumeSlot, glyph)
                             append("  ${file.name}$durationSuffix")
                         } else {
                             append("$glyph  ${file.name}$durationSuffix")
                         }
                     }
+                    val inlineContent = mapOf(
+                        resumeSlot to InlineTextContent(
+                            Placeholder(
+                                width = FONT_LIST,
+                                height = FONT_LIST,
+                                placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                            )
+                        ) {
+                            Box(
+                                Modifier.wrapContentSize(Alignment.CenterStart, unbounded = true)
+                            ) {
+                                Text("▶", color = ResumeOrange, fontSize = RESUME_GLYPH_SIZE)
+                            }
+                        }
+                    )
                     Text(
                         text = label,
+                        inlineContent = inlineContent,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = FONT_LIST,

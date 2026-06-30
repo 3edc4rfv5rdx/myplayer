@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- The resume ▶ marker in book listings is now bigger and no longer stretches its row.
+
 ## v0.7.20260630+224
 
 - Audiobook files in the browser are now marked by progress: an orange ▶ on the resume file and a filled dot on each already-played file.
