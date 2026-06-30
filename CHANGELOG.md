@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- Browser top bar gains a home button that jumps straight back to the roots screen.
+- Favorite folders in the browser now show a star glyph in place of their folder/book icon.
+- Delete button turns red when the folder being deleted is a favorite.
 - Recently played history now keeps 7 folders instead of 5.
 - Highlighted row's scrolling name now repeats 50 times before settling instead of stopping after a few passes.
 

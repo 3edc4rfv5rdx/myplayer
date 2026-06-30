@@ -493,6 +493,7 @@ class MainActivity : ComponentActivity() {
                                     (path + it).map { n -> n.documentId }.toSet()
                             },
                             onUp = { goUp() },
+                            onHome = { goHome() },
                             onDeleteBook = { deleteBook(it) },
                             onSelectFile = { selectedIndexState.value = it },
                             onPlayPause = { togglePlay() },
@@ -1243,6 +1244,7 @@ private fun PlayerScreen(
     onOpenSettings: () -> Unit,
     onDescend: (Node) -> Unit,
     onUp: () -> Unit,
+    onHome: () -> Unit,
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
     onPlayPause: () -> Unit,
@@ -1294,6 +1296,7 @@ private fun PlayerScreen(
                     isChildFavorite = isChildFavorite,
                     onToggleChildFavorite = onToggleChildFavorite,
                     onUp = onUp,
+                    onHome = onHome,
                     onDescend = onDescend,
                     onDeleteBook = onDeleteBook,
                     onSelectFile = onSelectFile,
@@ -1353,6 +1356,7 @@ private fun TopBar(
     onAdd: (() -> Unit)?,
     onSettings: (() -> Unit)?,
     onAbout: (() -> Unit)? = null,
+    onHome: (() -> Unit)? = null,
     onFavorite: (() -> Unit)? = null,
     favoriteOn: Boolean = false,
     onSleep: (() -> Unit)? = null,
@@ -1399,6 +1403,15 @@ private fun TopBar(
                 Icon(
                     painter = painterResource(R.drawable.ic_info),
                     contentDescription = lw("About"),
+                    modifier = Modifier.size(TOP_BAR_ICON)
+                )
+            }
+        }
+        if (onHome != null) {
+            IconButton(onClick = onHome) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_home),
+                    contentDescription = lw("Home"),
                     modifier = Modifier.size(TOP_BAR_ICON)
                 )
             }
@@ -1689,6 +1702,7 @@ private fun FolderBrowser(
     isChildFavorite: (Node) -> Boolean,
     onToggleChildFavorite: (Node) -> Unit,
     onUp: () -> Unit,
+    onHome: () -> Unit,
     onDescend: (Node) -> Unit,
     onDeleteBook: (Node) -> Unit,
     onSelectFile: (Int) -> Unit,
@@ -1778,6 +1792,7 @@ private fun FolderBrowser(
             title = title,
             onAdd = null,
             onSettings = onOpenSettings,
+            onHome = onHome,
             onFavorite = onToggleFavorite,
             favoriteOn = favorite,
             onSleep = { showSleepDialog = true },
@@ -1811,12 +1826,15 @@ private fun FolderBrowser(
                     // The visited path (last entered folder or the playing track's ancestors) is
                     // highlighted like the track's own file row, visible from any level.
                     val highlighted = folder.documentId in visitedPathIds
+                    // Pinned folders swap their folder/book glyph for a star (no extra width),
+                    // matching the favorites button's star.
+                    val glyph = if (isChildFavorite(folder)) "⭐" else if (isBook) "📖" else "📁"
                     val background =
                         if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent
                     val foreground =
                         if (highlighted) MaterialTheme.colorScheme.onPrimary else Color.Unspecified
                     Text(
-                        text = "${if (isBook) "📖" else "📁"}  ${folder.name}",
+                        text = "$glyph  ${folder.name}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = FONT_LIST,
@@ -1956,6 +1974,10 @@ private fun FolderBrowser(
                 confirmButton = {
                     Button(
                         enabled = confirmed,
+                        // Deleting a favorite is destructive of a pinned item — paint the button red.
+                        colors = if (pinned)
+                            ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        else ButtonDefaults.buttonColors(),
                         onClick = {
                             onDeleteBook(folder)
                             pendingDelete = null
