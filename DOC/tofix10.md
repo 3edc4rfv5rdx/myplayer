@@ -138,7 +138,7 @@ second guard.
 
 ---
 
-## Finding 5 — 100 dp `SettingDropdown` clips long Russian/Ukrainian labels (Theme: "Системная"/"Системна")
+## FIXED — Finding 5 — 100 dp `SettingDropdown` clips long Russian/Ukrainian labels (Theme: "Системная"/"Системна")
 **Confidence: Medium-high (measured estimate, not run on device). Severity: Low (cosmetic, ru/ua only).**
 
 **Problem:**
@@ -157,6 +157,10 @@ Theme options in `i18n.json` as "Система"/"Светлая"/"Тёмная"
 similar ≤7-character forms. Alternatively add `overflow = TextOverflow.Ellipsis` plus
 `textAlign = TextAlign.Start` as a safety net, or derive the button width from the widest option
 label. Verify the result in all three languages on device.
+
+**FIXED:** `SETTING_DROPDOWN_WIDTH` raised to 118 dp, the "System" translations shortened to
+"Система" (ru and ua), and the collapsed label got `overflow = Ellipsis` as a safety net for any
+future over-long translation. Worth an on-device eyeball in ru/ua.
 
 ---
 
@@ -235,6 +239,6 @@ book resume seeks are never clamped.
 | 2 | FIXED — Gapped queue install: per-track synchronous DB peek on the main thread | PlayerService.kt / DurationCache.kt | Low-medium |
 | 3 | FIXED — Gap applies to books and globally locks out Skip silence | PlayerService.kt / MainActivity.kt | Low (design) |
 | 4 | FIXED — Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
-| 5 | 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |
+| 5 | FIXED — 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |
 | 6 | ReplayGain keeps a disabled LoudnessEnhancer attached (vs. the random-stops diagnosis) | PlayerService.kt | Low |
 | 7 | 24 h gap placeholder briefly shown as track duration / seek scale | PlayerService.kt / MainActivity.kt | Low |

@@ -140,7 +140,8 @@ private const val STATE_VISITED_PATH_IDS = "visited_path_ids"
 private val CONTROL_BTN_WIDTH = 88.dp
 private val CONTROL_BTN_HEIGHT = 36.dp
 // Uniform width for the Settings dropdowns (Theme / Volume leveling / Seek step) so they align.
-private val SETTING_DROPDOWN_WIDTH = 100.dp
+// Sized for the widest localized option label (ru/ua theme names run long at FONT_TITLE).
+private val SETTING_DROPDOWN_WIDTH = 118.dp
 private val CONTROL_GAP = 18.dp
 private val PLAY_HEIGHT = CONTROL_BTN_HEIGHT * 2 + CONTROL_GAP
 
@@ -3024,9 +3025,10 @@ private fun <T> SettingDropdown(
             modifier = Modifier.width(SETTING_DROPDOWN_WIDTH).height(36.dp)
         ) {
             // Label takes the slack and centers within it, so the ▾ sits flush right and every
-            // dropdown reads identically.
+            // dropdown reads identically. Ellipsis is a safety net for an over-long translation.
             Text(
                 label(selected), fontSize = FONT_TITLE, maxLines = 1, softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
             )
             Text("▾", fontSize = FONT_TITLE)
