@@ -96,6 +96,11 @@ object Settings {
     val TRACK_GAP_OPTIONS = listOf(0, 1, 2, 3, 4, 5)
     const val TRACK_GAP_DEFAULT = 0
 
+    // Upper bound for a believable track duration. A gapped queue reports PlayerService's 24h
+    // placeholder until a track's real length is prepared; the UI treats anything at or above
+    // this as "duration unknown" instead of showing (or seeking against) a bogus 24h scale.
+    const val MAX_TRACK_DURATION_MS = 20L * 60 * 60 * 1000
+
     // Sleep-timer slider bounds and granularity (minutes), shared by the player and its dialog.
     const val SLEEP_MIN = 10f
     const val SLEEP_MAX = 60f

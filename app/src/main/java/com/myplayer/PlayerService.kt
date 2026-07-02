@@ -66,6 +66,8 @@ class PlayerService : MediaSessionService() {
         private const val US_PER_SECOND = 1_000_000L
         // Initial placeholder duration for a track whose real length isn't cached yet, kept far longer
         // than any file so a resume seek is never clamped before the actual duration replaces it.
+        // Must stay above Settings.MAX_TRACK_DURATION_MS, which is how the UI recognizes it as a
+        // placeholder and shows "unknown" instead of a 24h track.
         private const val GAP_PLACEHOLDER_MS = 24L * 60 * 60 * 1000
     }
 

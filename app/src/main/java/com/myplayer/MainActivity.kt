@@ -1370,6 +1370,12 @@ private fun fallbackRootLabel(uri: Uri): String {
     return seg.substringAfterLast(':').substringAfterLast('/').ifEmpty { seg }
 }
 
+/** The controller's current duration filtered to plausible values: 0 when unknown *or* when it is
+ *  a gap placeholder (a gapped, not-yet-prepared track reports PlayerService's 24 h stand-in), so
+ *  the UI never shows — or lets the user seek against — a bogus 24 h scale. */
+private fun knownDurationMs(controller: MediaController?): Long =
+    controller?.duration?.takeIf { it in 1 until Settings.MAX_TRACK_DURATION_MS } ?: 0L
+
 /** Formats a millisecond position as m:ss (or h:mm:ss for tracks an hour or longer). */
 private fun formatTime(ms: Long): String {
     val totalSec = ms.coerceAtLeast(0L) / 1000
@@ -2141,7 +2147,7 @@ private fun SleepTimerDialog(
         while (true) {
             now = SystemClock.elapsedRealtime()
             positionMs = controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
-            durationMs = controller?.duration?.takeIf { it > 0L } ?: 0L
+            durationMs = knownDurationMs(controller)
             delay(500)
         }
     }
@@ -2247,7 +2253,7 @@ private fun NowPlaying(
     LaunchedEffect(controller) {
         while (controller != null) {
             positionMs = controller.currentPosition.coerceAtLeast(0L)
-            durationMs = controller.duration.takeIf { it > 0L } ?: 0L
+            durationMs = knownDurationMs(controller)
             mediaIndex = controller.currentMediaItemIndex
             mediaCount = controller.mediaItemCount
             delay(500)

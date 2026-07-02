@@ -192,7 +192,7 @@ from the rule stated at `PlayerService.kt:78-81`, so the asymmetry reads as deli
 
 ---
 
-## Finding 7 — The 24 h gap placeholder can surface in the UI as the track duration
+## FIXED — Finding 7 — The 24 h gap placeholder can surface in the UI as the track duration
 **Confidence: Medium (window depends on prepare latency). Severity: Low (transient cosmetic).**
 
 **Problem:**
@@ -215,6 +215,11 @@ so the bar stays hidden (`showBar` already requires `durationMs > 0`) until the 
 arrives; seek gestures are then inert against it too. A threshold like 12 h is safely above any
 real audio file. Don't shrink `GAP_PLACEHOLDER_MS` itself — it must stay longer than any file so
 book resume seeks are never clamped.
+
+**FIXED:** `Settings.MAX_TRACK_DURATION_MS` (20 h) is the shared threshold; a `knownDurationMs`
+helper filters `controller.duration` in both the NowPlaying poll and the sleep-timer dialog, so
+the bar stays hidden (and seek gestures inert) until the real duration replaces the placeholder.
+`GAP_PLACEHOLDER_MS` (24 h) documents that it must stay above the threshold.
 
 ---
 
@@ -245,4 +250,4 @@ book resume seeks are never clamped.
 | 4 | FIXED — Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
 | 5 | FIXED — 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |
 | 6 | FIXED — ReplayGain keeps a disabled LoudnessEnhancer attached (vs. the random-stops diagnosis) | PlayerService.kt | Low |
-| 7 | 24 h gap placeholder briefly shown as track duration / seek scale | PlayerService.kt / MainActivity.kt | Low |
+| 7 | FIXED — 24 h gap placeholder briefly shown as track duration / seek scale | PlayerService.kt / MainActivity.kt | Low |
