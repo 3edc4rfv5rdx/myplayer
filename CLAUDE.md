@@ -75,8 +75,10 @@ unchanged. Computing loudness ourselves (analysis) is intentionally out of scope
 
 ## Conventions
 
-- All code identifiers/comments in English. UI strings live in `res/values/strings.xml`, read with
-  `stringResource` — no hardcoded UI text. UI is English-only.
+- All code identifiers/comments in English. UI strings are localized at runtime via `lw()`/`loc()`
+  with the English text as the key and translations in `assets/i18n.json` (see `AppLocalizer`) —
+  no hardcoded UI text. After changing any UI string or `i18n.json`, run `tools/check-i18n.py`;
+  it must pass (nothing checks code ↔ json consistency at compile time).
 - Every commit must update `CHANGELOG.md` in the same commit. Newest entries go on top
   (prepend to `## Unreleased`), not appended at the bottom.
 - Keep shared values/functions centralized (e.g. `Settings`); no duplication across files.
