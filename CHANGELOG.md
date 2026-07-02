@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Removed the fully resolved logic.md analysis; its last open note lives on in nottofix.md.
 - Docs refreshed: README notes the rename trade-off, music-only gap and language default; DOC statuses brought up to date.
 - Language code aliases (ISO uk to internal ua) moved from code into i18n.json, so adding a language stays a data-only change.
 - First launch now uses the device language for the UI when a translation exists, English otherwise.

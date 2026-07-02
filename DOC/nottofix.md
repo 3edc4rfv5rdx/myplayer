@@ -59,9 +59,27 @@ already closes.
 
 ---
 
+## Non-issue 3 — `togglePlay` compares the play target by documentId only, without the tree
+**Confidence: High. Verdict: not a real bug — a collision is either benign or unreachable.**
+
+`togglePlay` decides "this folder is already playing" via `playTargetId != playingFolderId`
+(`MainActivity.kt:896`), both bare documentIds without the tree uri — unlike `Settings.bookKey`,
+which guards against exactly this. Carried over from the retired `logic.md` (§4, last open item).
+Two ways ids could match across roots: (a) overlapping roots (a root added inside another root) —
+then both ids name the *same* physical folder, and "already playing → just resume" is the correct
+outcome; (b) equal ids under genuinely different storages — SAF document ids embed the
+volume/provider prefix (`primary:`, `XXXX-XXXX:`), so distinct storages cannot produce equal ids
+in practice.
+
+**Decision:** leave as-is. Comparing full folder keys would defend against a case that is either
+already handled correctly or cannot occur.
+
+---
+
 ## Summary
 
 | # | Item | File(s) | Verdict |
 |---|------|---------|---------|
 | 1 | Sleep timer arm clock (elapsedRealtime) vs fire clock (uptime) | PlayerService.kt | Not a bug — unreachable while playing |
 | 2 | `dataChanged()` right after the async backup-flag write | MainActivity.kt, MyBackupAgent.kt | Not a bug — no race given backup scheduling |
+| 3 | `togglePlay` compares play target by documentId only | MainActivity.kt | Not a bug — collision benign or unreachable |
