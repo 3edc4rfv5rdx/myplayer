@@ -414,17 +414,19 @@ class PlayerService : MediaSessionService() {
     }
 
     /** Applies the current track's ReplayGain (capped at +12 dB), or resets to unity when [db] is
-     *  null (untagged track). */
+     *  null (untagged track). Tracks that need no boost *release* the enhancer rather than disable
+     *  it — the attach-nothing rule (see [audioSessionId]) applies within a mode too; it is
+     *  recreated lazily on the next boosted track. */
     private fun applyReplayGain(p: ExoPlayer, db: Float?) {
         if (db == null) {
             p.volume = 1f
-            enhancer?.enabled = false
+            releaseEnhancer()
             return
         }
         if (db <= 0f) {
             // Attenuate quietly and precisely via the player volume.
             p.volume = ReplayGain.attenuationVolume(db)
-            enhancer?.enabled = false
+            releaseEnhancer()
         } else {
             // Boost via the loudness effect (player volume can't exceed 1.0).
             p.volume = 1f

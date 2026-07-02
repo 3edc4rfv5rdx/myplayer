@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- ReplayGain now detaches its loudness effect on untagged/attenuated tracks instead of leaving it disabled on the audio session (same precaution that fixed the random playback stops).
 - Settings dropdowns widened (and translations trimmed) so Russian/Ukrainian option labels no longer clip.
 - A stale stored UI-language code now falls back to English instead of crashing the Settings screen.
 - The track gap is now music-only: audiobooks keep their natural chapter flow and Skip silence keeps working for them even while a gap is set.

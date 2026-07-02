@@ -164,7 +164,7 @@ future over-long translation. Worth an on-device eyeball in ru/ua.
 
 ---
 
-## Finding 6 — In ReplayGain mode a disabled-but-attached LoudnessEnhancer persists across untagged/attenuated tracks
+## FIXED — Finding 6 — In ReplayGain mode a disabled-but-attached LoudnessEnhancer persists across untagged/attenuated tracks
 **Confidence: Medium (consistency argument; no repro). Severity: Low (only matters if the random-stop theory holds for LoudnessEnhancer too).**
 
 **Problem:**
@@ -185,6 +185,10 @@ boosted track, so the only cost is an effect create/release per gain-sign change
 to track transitions. Alternatively, if disabled-but-attached is now believed harmless for
 `LoudnessEnhancer` specifically, add a comment at `PlayerService.kt:413` saying why it is exempt
 from the rule stated at `PlayerService.kt:78-81`, so the asymmetry reads as deliberate.
+
+**FIXED:** both non-boost branches of `applyReplayGain` now call `releaseEnhancer()` instead of
+`enabled = false`; the enhancer is recreated lazily by `ensureEnhancer` on the next boosted track
+(one cheap create/release per gain-sign change).
 
 ---
 
@@ -240,5 +244,5 @@ book resume seeks are never clamped.
 | 3 | FIXED — Gap applies to books and globally locks out Skip silence | PlayerService.kt / MainActivity.kt | Low (design) |
 | 4 | FIXED — Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
 | 5 | FIXED — 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |
-| 6 | ReplayGain keeps a disabled LoudnessEnhancer attached (vs. the random-stops diagnosis) | PlayerService.kt | Low |
+| 6 | FIXED — ReplayGain keeps a disabled LoudnessEnhancer attached (vs. the random-stops diagnosis) | PlayerService.kt | Low |
 | 7 | 24 h gap placeholder briefly shown as track duration / seek scale | PlayerService.kt / MainActivity.kt | Low |
