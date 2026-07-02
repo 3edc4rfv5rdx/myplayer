@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- The track gap is now music-only: audiobooks keep their natural chapter flow and Skip silence keeps working for them even while a gap is set.
 - Starting a queue with a track gap no longer runs one database query per track on the main thread (durations are pre-warmed into memory).
 - Book ▶/● markers no longer follow a music queue that happens to play files inside the book; they track only the book itself.
 

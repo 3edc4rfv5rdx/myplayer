@@ -77,7 +77,7 @@ drop it via `clearMem()`.
 
 ---
 
-## Finding 3 — The inter-track gap also applies to audiobook queues and globally locks out Skip silence
+## FIXED — Finding 3 — The inter-track gap also applies to audiobook queues and globally locks out Skip silence
 **Confidence: High (behavior). Severity: Low (design/UX; decide intent).**
 
 **Problem:**
@@ -101,6 +101,12 @@ well as `CMD_SKIP_SILENCE`/`CMD_TRACK_GAP`; unlock the Settings switch according
 would only describe music). If instead the gap is deliberately universal (a chapter pause), leave
 the code and instead state that in the Settings subtitle and in `README.md`, so the skip-silence
 lockout for books is documented rather than surprising.
+
+**FIXED:** the gap is now music-only — `GapMediaSourceFactory` passes items stamped
+`EXTRA_IS_BOOK` through untouched; `effectiveSkipSilenceEnabled` keeps skip-silence live for a
+book queue regardless of the gap (re-applied on `CMD_BOOK_MODE`); the Settings switch is no
+longer locked, its caption says "Books only while a gap is set" while a gap is active, and the
+gap subtitle now reads "Silent pause between music files".
 
 ---
 
@@ -222,7 +228,7 @@ book resume seeks are never clamped.
 |---|---------|---------|----------|
 | 1 | FIXED — Live ▶/● book markers follow any queue's `playingDocId`, not just this book's | MainActivity.kt | Medium-low |
 | 2 | FIXED — Gapped queue install: per-track synchronous DB peek on the main thread | PlayerService.kt / DurationCache.kt | Low-medium |
-| 3 | Gap applies to books and globally locks out Skip silence | PlayerService.kt / MainActivity.kt | Low (design) |
+| 3 | FIXED — Gap applies to books and globally locks out Skip silence | PlayerService.kt / MainActivity.kt | Low (design) |
 | 4 | Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
 | 5 | 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |
 | 6 | ReplayGain keeps a disabled LoudnessEnhancer attached (vs. the random-stops diagnosis) | PlayerService.kt | Low |

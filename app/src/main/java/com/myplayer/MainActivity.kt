@@ -2831,23 +2831,20 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // The gap is music-only and supersedes skip-silence for music (it would cut the
+            // generated silence away); books keep skip-silence regardless, so the switch stays
+            // live and only the caption flags the reduced scope while a gap is set.
+            val gapOn = trackGapSec > 0
             Column(modifier = Modifier.weight(1f)) {
                 Text(lw("Skip silence"), fontSize = FONT_TITLE)
                 Text(
-                    lw("Drop silent gaps"),
+                    lw(if (gapOn) "Books only while a gap is set" else "Drop silent gaps"),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(Modifier.width(8.dp))
-            // The gap and skip-silence are mutually exclusive (skip-silence would cut the generated
-            // gap away): while a gap is set, show this off and lock it.
-            val gapOn = trackGapSec > 0
-            Switch(
-                checked = skipSilenceEnabled && !gapOn,
-                onCheckedChange = onSkipSilenceChange,
-                enabled = !gapOn
-            )
+            Switch(checked = skipSilenceEnabled, onCheckedChange = onSkipSilenceChange)
         }
 
         Spacer(Modifier.height(10.dp))
@@ -2855,7 +2852,7 @@ private fun SettingsScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(lw("Gap between tracks"), fontSize = FONT_TITLE)
                 Text(
-                    lw("Silent pause between files"),
+                    lw("Silent pause between music files"),
                     fontSize = FONT_CAPTION,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

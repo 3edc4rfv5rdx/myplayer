@@ -326,8 +326,10 @@ class PlayerService : MediaSessionService() {
                 // item still belongs to the old book here. No-op when no book was tracked.
                 if (newKey != bookFolderKey) saveBookPosition()
                 bookFolderKey = newKey
-                // Switching between a music and a book queue flips whether leveling applies.
+                // Switching between a music and a book queue flips whether leveling applies —
+                // and whether skip-silence does (books keep it even while a music gap is set).
                 applyNorm()
+                applySkipSilence()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_SLEEP_TIMER) {
@@ -378,8 +380,11 @@ class PlayerService : MediaSessionService() {
         player?.skipSilenceEnabled = effectiveSkipSilenceEnabled()
     }
 
+    // The gap is music-only, so it only supersedes skip-silence for music queues (where it would
+    // cut the generated silence away); a book queue keeps skip-silence regardless of the gap.
     private fun effectiveSkipSilenceEnabled(): Boolean =
-        Settings.isSkipSilenceEnabled(this) && Settings.getTrackGapSeconds(this) == 0
+        Settings.isSkipSilenceEnabled(this) &&
+            (bookFolderKey != null || Settings.getTrackGapSeconds(this) == 0)
 
     /** Lazily creates the real-time leveler on the current session (no-op until a session exists). */
     private fun ensureLeveler() {
@@ -453,7 +458,8 @@ class PlayerService : MediaSessionService() {
         super.onDestroy()
     }
 
-    /** Adds the configured inter-track gap as actual silent audio inside each media item.
+    /** Adds the configured inter-track gap as actual silent audio inside each music media item
+     *  (book items pass through untouched — the gap is music-only).
      *
      *  The old implementations paused the player between files. A pause can make
      *  MediaSessionService leave foreground playback, which lets Android kill the service while the
@@ -473,6 +479,10 @@ class PlayerService : MediaSessionService() {
             val source = delegate.createMediaSource(mediaItem)
             val gapSec = Settings.getTrackGapSeconds(app)
             if (gapSec <= 0) return source
+            // The gap is a music feature: book items (stamped at scan time) keep their natural
+            // chapter flow — and their skip-silence, see effectiveSkipSilenceEnabled.
+            if (mediaItem.mediaMetadata.extras
+                    ?.getBoolean(MusicScanner.EXTRA_IS_BOOK) == true) return source
             val silence = SilenceMediaSource(gapSec * US_PER_SECOND)
             val placeholderMs = DurationCache.peek(app, mediaItem.mediaId) ?: GAP_PLACEHOLDER_MS
             return ConcatenatingMediaSource2.Builder()

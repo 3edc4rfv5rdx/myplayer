@@ -90,8 +90,9 @@ object Settings {
     val SEEK_STEP_OPTIONS = listOf(10, 20, 30, 45, 60)
     const val SEEK_STEP_DEFAULT = 30
 
-    // Inter-track gap (seconds) inserted as silent audio; 0 = off (default), mutually exclusive with
-    // skip-silence (which would cut the generated silence away).
+    // Inter-track gap (seconds) inserted as silent audio between music files; 0 = off (default).
+    // Music-only: books never get a gap. While set, it supersedes skip-silence for music (which
+    // would cut the generated silence away); books keep skip-silence regardless.
     val TRACK_GAP_OPTIONS = listOf(0, 1, 2, 3, 4, 5)
     const val TRACK_GAP_DEFAULT = 0
 
@@ -238,7 +239,8 @@ object Settings {
     fun setSkipSilenceEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_SKIP_SILENCE, enabled.toString())
 
-    /** Inter-track gap in seconds (0 = off); generated as audio silence, not a player pause. */
+    /** Inter-track gap in seconds (0 = off); generated as audio silence, not a player pause.
+     *  Applies to music queues only (see [PlayerService.GapMediaSourceFactory]). */
     fun getTrackGapSeconds(context: Context): Int =
         get(context, KEY_TRACK_GAP)?.toIntOrNull()?.takeIf { it in TRACK_GAP_OPTIONS }
             ?: TRACK_GAP_DEFAULT
