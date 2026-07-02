@@ -110,7 +110,7 @@ gap subtitle now reads "Silent pause between music files".
 
 ---
 
-## Finding 4 — Unknown persisted language code crashes the Settings screen (`languages.first {}`)
+## FIXED — Finding 4 — Unknown persisted language code crashes the Settings screen (`languages.first {}`)
 **Confidence: High (code path). Severity: Low (needs a stale/foreign stored value to trigger).**
 
 **Problem:**
@@ -130,6 +130,11 @@ Sanitize at the source, matching the pattern used by the other settings: make
 first read in `MainActivity.onCreate`, so the options are available. Optionally also harden the
 dropdown label with `firstOrNull { ... }?.labelKey ?: code` so the UI can never throw on a bad
 value. Keep `lw()` behavior unchanged (unknown codes already fall back to English text).
+
+**FIXED:** `Settings.getLanguage` now validates the stored code against
+`AppLocalizer.languageOptions()` (falling back to `DEFAULT_LANGUAGE`; validation skipped only if
+the options aren't loaded yet), and the dropdown label uses `firstOrNull { … } ?: code` as a
+second guard.
 
 ---
 
@@ -229,7 +234,7 @@ book resume seeks are never clamped.
 | 1 | FIXED — Live ▶/● book markers follow any queue's `playingDocId`, not just this book's | MainActivity.kt | Medium-low |
 | 2 | FIXED — Gapped queue install: per-track synchronous DB peek on the main thread | PlayerService.kt / DurationCache.kt | Low-medium |
 | 3 | FIXED — Gap applies to books and globally locks out Skip silence | PlayerService.kt / MainActivity.kt | Low (design) |
-| 4 | Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
+| 4 | FIXED — Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
 | 5 | 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |
 | 6 | ReplayGain keeps a disabled LoudnessEnhancer attached (vs. the random-stops diagnosis) | PlayerService.kt | Low |
 | 7 | 24 h gap placeholder briefly shown as track duration / seek scale | PlayerService.kt / MainActivity.kt | Low |

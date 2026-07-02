@@ -2780,7 +2780,9 @@ private fun SettingsScreen(
             SettingDropdown(
                 options = languages.map { it.code },
                 selected = language,
-                label = { code -> lw(languages.first { it.code == code }.labelKey) },
+                // firstOrNull as a belt-and-braces guard: getLanguage already validates the stored
+                // code, so an unknown one (shown as its raw code) should be unreachable.
+                label = { code -> lw(languages.firstOrNull { it.code == code }?.labelKey ?: code) },
                 onSelect = onLanguageChange
             )
         }
