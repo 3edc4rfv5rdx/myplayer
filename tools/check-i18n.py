@@ -12,7 +12,8 @@ Checks:
   3. every key is translated into every language declared in the "_lang" block,
      and carries no unknown language codes;
   4. values are clean: no leading/trailing whitespace, no trailing punctuation
-     (punctuation is added in code, per convention).
+     (punctuation is added in code, per convention);
+  5. every "_alias" entry (system ISO code -> internal code) maps to a declared language.
 
 Known limitation: a brand-new string passed to lw() through a when/if branch and never added to
 i18n.json is not detected here (it just renders as untranslated English in the app); check 2
@@ -38,8 +39,9 @@ def strip_comments(src: str) -> str:
 
 def main() -> int:
     data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+    special = {"_lang", "_alias"}
     langs = set(data["_lang"])
-    keys = {k for k in data if k != "_lang"}
+    keys = {k for k in data if k not in special}
     sources = {p: p.read_text(encoding="utf-8") for p in sorted(SRC_DIR.rglob("*.kt"))}
     all_src = "\n".join(sources.values())
     problems = []
@@ -71,6 +73,13 @@ def main() -> int:
                 problems.append(f'"{key}" [{lang}]: leading/trailing whitespace')
             elif value and value[-1] in ".!?:;,":
                 problems.append(f'"{key}" [{lang}]: trailing punctuation: "{value}"')
+
+    # 5. Alias targets must be declared languages (and not alias a declared code away).
+    for iso, code in data.get("_alias", {}).items():
+        if code not in langs:
+            problems.append(f'_alias: "{iso}" maps to undeclared language "{code}"')
+        if iso in langs:
+            problems.append(f'_alias: "{iso}" is itself a declared language; alias would shadow it')
 
     if problems:
         print(f"{len(problems)} problem(s):")

@@ -4,6 +4,9 @@
     "ru": "Ru",
     "ua": "Ua"
   },
+  "_alias": {
+    "uk": "ua"
+  },
 
   "OK": { "ru": "OK", "ua": "OK" },
   "Folders": { "ru": "Папки", "ua": "Папки" },
