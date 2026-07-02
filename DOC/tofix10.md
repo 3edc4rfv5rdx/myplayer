@@ -14,7 +14,7 @@ findings there. Each finding below is a self-contained prompt.
 
 ---
 
-## Finding 1 — Live ▶/● book markers trust the global `playingDocId` without checking that the playing queue is this book — FIXED
+## FIXED — Finding 1 — Live ▶/● book markers trust the global `playingDocId` without checking that the playing queue is this book
 **Confidence: High (logic verified). Severity: Medium-low (misleading UI, no data damage).**
 
 **Problem:**
@@ -45,7 +45,7 @@ markers fall back to the saved resume point.
 
 ---
 
-## Finding 2 — With a gap set, queue install runs one synchronous SQLite query per track on the main thread
+## FIXED — Finding 2 — With a gap set, queue install runs one synchronous SQLite query per track on the main thread
 **Confidence: High (call path verified). Severity: Low-medium (main-thread I/O, scales with queue size).**
 
 **Problem:**
@@ -68,6 +68,12 @@ hits memory; or (b) have `MainActivity` pre-resolve the cached durations for the
 the main thread (it already has the item list before `setMediaItems`) and hand them to the service,
 falling back to `GAP_PLACEHOLDER_MS` for misses. Keep `peek`'s semantics (null for missing/0 rows)
 and don't add `MediaMetadataRetriever` work anywhere on this path.
+
+**FIXED:** `DurationCache` gained an in-memory mirror (uri → ms, absent rows remembered as
+`UNKNOWN_MS`): `preload()` batch-reads it off the main thread before a gapped queue is installed
+(called from `playFolder`/`playFile`), `peek` serves from it (a miss falls back to one indexed
+query and is remembered), `store`/`remove` keep it coherent, and `FolderCache.clear`/`clearRoot`
+drop it via `clearMem()`.
 
 ---
 
@@ -214,8 +220,8 @@ book resume seeks are never clamped.
 
 | # | Finding | File(s) | Severity |
 |---|---------|---------|----------|
-| 1 | Live ▶/● book markers follow any queue's `playingDocId`, not just this book's — FIXED | MainActivity.kt | Medium-low |
-| 2 | Gapped queue install: per-track synchronous DB peek on the main thread | PlayerService.kt / DurationCache.kt | Low-medium |
+| 1 | FIXED — Live ▶/● book markers follow any queue's `playingDocId`, not just this book's | MainActivity.kt | Medium-low |
+| 2 | FIXED — Gapped queue install: per-track synchronous DB peek on the main thread | PlayerService.kt / DurationCache.kt | Low-medium |
 | 3 | Gap applies to books and globally locks out Skip silence | PlayerService.kt / MainActivity.kt | Low (design) |
 | 4 | Unknown stored language code crashes Settings (`languages.first {}`) | MainActivity.kt / Settings.kt | Low |
 | 5 | 100 dp dropdown clips ru/ua Theme labels | MainActivity.kt / i18n.json | Low |

@@ -945,7 +945,12 @@ class MainActivity : ComponentActivity() {
             val key = Settings.bookKey(tree.toString(), queuePath.last().documentId)
             val items = try {
                 withContext(Dispatchers.IO) {
-                    MusicScanner.collectAudio(this@MainActivity, tree, queuePath, abook)
+                    MusicScanner.collectAudio(this@MainActivity, tree, queuePath, abook).also {
+                        // A gapped queue peeks a placeholder duration per item at install (on the
+                        // main thread); pre-warm those lookups here, off the main thread.
+                        if (Settings.getTrackGapSeconds(this@MainActivity) > 0)
+                            DurationCache.preload(this@MainActivity, it.map { m -> m.mediaId })
+                    }
                 }
             } catch (e: ScanException) {
                 if (liveController() != null) errorState.value = loc("Cannot read this folder") + ". " + loc("The storage may be unavailable or its permission was revoked")
@@ -1115,6 +1120,9 @@ class MainActivity : ComponentActivity() {
                         if (bookPath != null)
                             MusicScanner.collectAudio(this@MainActivity, tree, bookPath, true)
                         else MusicScanner.mediaItems(tree, path, files, false)
+                    // Same pre-warm as playFolder: keep the gapped install's peeks off the DB.
+                    if (Settings.getTrackGapSeconds(this@MainActivity) > 0)
+                        DurationCache.preload(this@MainActivity, items.map { it.mediaId })
                     files to items
                 }
             } catch (e: ScanException) {

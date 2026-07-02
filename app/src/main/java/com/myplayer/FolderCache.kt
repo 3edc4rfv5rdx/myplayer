@@ -50,6 +50,7 @@ object FolderCache {
                 delete("scanned", null, null)
             }
             AppDb.db(context).delete("durations", null, null)
+            DurationCache.clearMem()
         } finally {
             rw.writeLock().unlock()
         }
@@ -70,6 +71,7 @@ object FolderCache {
                 "durations", "uri LIKE ? ESCAPE '\\'",
                 arrayOf(AppDb.likePrefix(treeUri.toString() + "/document/"))
             )
+            DurationCache.clearMem()
         } finally {
             rw.writeLock().unlock()
         }
