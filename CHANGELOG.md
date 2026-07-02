@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.7.20260702+232
 
 - Removed the fully resolved logic.md analysis; its last open note lives on in nottofix.md.
 - Docs refreshed: README notes the rename trade-off, music-only gap and language default; DOC statuses brought up to date.
