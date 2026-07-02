@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Book ▶/● markers no longer follow a music queue that happens to play files inside the book; they track only the book itself.
+
 ## v0.7.20260630+228
 
 - The resume ▶ marker in book listings is now bigger, outlined in black so it stays visible on the highlight bar, and no longer stretches its row.

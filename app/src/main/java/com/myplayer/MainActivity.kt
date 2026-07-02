@@ -462,6 +462,9 @@ class MainActivity : ComponentActivity() {
                             visitedPathIds = visitedPathIds,
                             rescanTick = rescanTick,
                             bookKey = browsedBookKey,
+                            // The live queue's book key (null while music plays), so the book
+                            // markers can tell "this book is playing" from a foreign queue.
+                            playingBookKey = if (playingAbook) playingFolderKey else null,
                             clearTitleTick = clearTitleTick,
                             shuffleEnabled = shuffle,
                             onShuffleToggle = {
@@ -1243,6 +1246,7 @@ private fun PlayerScreen(
     visitedPathIds: Set<String>,
     rescanTick: Int,
     bookKey: String?,
+    playingBookKey: String?,
     clearTitleTick: Int,
     shuffleEnabled: Boolean,
     onShuffleToggle: (Boolean) -> Unit,
@@ -1308,6 +1312,7 @@ private fun PlayerScreen(
                     ),
                     filesAreBook = abookEnabled,
                     bookKey = bookKey,
+                    playingBookKey = playingBookKey,
                     selectedIndex = selectedIndex,
                     playingDocId = playingDocId,
                     visitedPathIds = visitedPathIds,
@@ -1716,6 +1721,7 @@ private fun FolderBrowser(
     title: String,
     filesAreBook: Boolean,
     bookKey: String?,
+    playingBookKey: String?,
     selectedIndex: Int?,
     playingDocId: String?,
     visitedPathIds: Set<String>,
@@ -1775,14 +1781,18 @@ private fun FolderBrowser(
     // book is the one playing, the live track is the current file so the markers advance with it;
     // otherwise we fall back to the saved resume point (one cheap DB read off-thread).
     var resumeFileIndex by remember(current.documentId) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(contents, bookKey, filesAreBook, playingDocId) {
+    LaunchedEffect(contents, bookKey, filesAreBook, playingDocId, playingBookKey) {
         val files = contents?.second
         if (!filesAreBook || bookKey == null || files == null) {
             resumeFileIndex = null
             return@LaunchedEffect
         }
-        val liveIndex =
+        // Trust the live track only when the playing queue is this very book — a music queue
+        // started from an ancestor folder walks recursively and can play files inside this book
+        // too, and its position must not repaint the book's markers.
+        val liveIndex = if (playingBookKey == bookKey)
             playingDocId?.let { p -> files.indexOfFirst { it.documentId == p }.takeIf { it >= 0 } }
+        else null
         resumeFileIndex = liveIndex ?: run {
             val resumeDocId = withContext(Dispatchers.IO) {
                 Settings.getBookPos(context, bookKey)?.fileUri?.let {
