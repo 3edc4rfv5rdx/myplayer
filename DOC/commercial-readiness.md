@@ -16,9 +16,9 @@ Ordered by priority.
   Vitals provides crash/ANR reporting with no code and no network.
 
 ## 2. User-data durability
-- Audiobook positions and settings live in a single SQLite DB; a reinstall loses everything. For an
-  audiobook-centric app this is the most expensive gap for the user. Add Android Auto Backup or an
-  explicit export/import.
+- DONE — opt-in Android Auto Backup now uploads `app.db` (settings + book state); the rebuildable
+  listing cache (`cache.db`) is excluded. An explicit export/import remains unimplemented and
+  optional.
 
 ## 3. Store / legal
 - Privacy policy and Play Data Safety declaration (even "we collect nothing" must be declared),
@@ -27,7 +27,8 @@ Ordered by priority.
 
 ## 4. Accessibility & localization
 - `contentDescription`/TalkBack support is partial; needs a real pass with TalkBack and large fonts.
-- Currently English-only by design; commercial apps usually ship multiple languages.
+- DONE — UI ships in English/Russian/Ukrainian (runtime `i18n.json`, in-app switching, device
+  language as the first-run default; consistency guarded by `tools/check-i18n.py`).
 
 ## What deliberately stays out (not a gap)
 - No equalizer, no media library, no internet. These are intentional exclusions and are correct.

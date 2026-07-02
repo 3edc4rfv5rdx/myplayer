@@ -1,7 +1,10 @@
-# Code & logic audit #9 — verified non-issues (not to fix)
+# Verified non-issues (not to fix)
 
-Audit of the code added/changed since audit #8 (the sleep timer, opt-in Auto Backup, accent-color
-picker, skip-silence, real-time `AutoLevel`, recent-folder history, and the `cache.db` split):
+June 24 audit pass over the code added/changed since audit #8 (the sleep timer, opt-in Auto Backup,
+accent-color picker, skip-silence, real-time `AutoLevel`, recent-folder history, and the `cache.db`
+split). Note: this pass predates `tofix9.md`, which later took the "#9" number for the markers/home
+audit; newer verified non-issues are recorded at the end of their own audit files (see
+`tofix10.md`). Files:
 `PlayerService.kt`, `AutoLevel.kt`, `MyBackupAgent.kt`, `Settings.kt`, `AppDb.kt`, `CacheDb.kt`,
 `FolderCache.kt`, `DurationCache.kt`, `MainActivity.kt`, the manifest and
 `res/xml/data_extraction_rules.xml`.

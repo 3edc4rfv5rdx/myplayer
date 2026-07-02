@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Docs refreshed: README notes the rename trade-off, music-only gap and language default; DOC statuses brought up to date.
 - Language code aliases (ISO uk to internal ua) moved from code into i18n.json, so adding a language stays a data-only change.
 - First launch now uses the device language for the UI when a translation exists, English otherwise.
 - The progress bar no longer flashes a bogus ~24h duration while a gapped track's real length is still loading; it stays hidden until the length is known.

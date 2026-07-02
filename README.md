@@ -18,10 +18,12 @@ No playlists, no equalizer, no internet, no media library — just folders, shuf
 - **Audiobooks**: per-folder mode that plays sequentially, remembers its position, and keeps its own
   speed — see below.
 - **Volume leveling** (music only): off, ReplayGain tags, or a real-time auto compressor.
-- **Skip silence** and an optional **gap between tracks**.
+- **Skip silence** and an optional **gap between tracks** (the gap is music-only; books keep their
+  natural flow and skip silence).
 - **Sleep timer**: minutes or until end of track; works with the screen off.
-- **Settings**: rescan, theme, follow playing track, seek step, default book speed, auto backup, and
-  UI language (English / Russian / Ukrainian).
+- **Settings**: rescan, theme and accent color, follow playing track, seek step, default book speed,
+  auto backup, and UI language (English / Russian / Ukrainian; first run follows the device
+  language).
 
 ## Audiobooks
 
@@ -44,6 +46,9 @@ Release-only workflow. Requires Android SDK and JDK 17/21.
 
 - **Folder access:** Storage Access Framework with a persistable permission per root; files are
   addressed by `content://` tree URIs via `DocumentsContract`.
+- **Renames:** a folder's identity is its storage path (SAF document id), so renaming or moving a
+  folder on disk resets its audiobook state (flag, position, speed) and drops it from history and
+  favorites. Known trade-off, not a bug.
 - **Storage:** two SQLite databases — `app.db` for settings and per-folder book state (the data worth
   keeping, uploaded by Auto Backup when enabled), `cache.db` for rebuildable folder listings.
 - **Playback:** Media3/ExoPlayer in a `MediaSessionService` for background playback and shade
