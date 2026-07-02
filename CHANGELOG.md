@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- First launch now uses the device language for the UI when a translation exists, English otherwise.
 - The progress bar no longer flashes a bogus ~24h duration while a gapped track's real length is still loading; it stays hidden until the length is known.
 - ReplayGain now detaches its loudness effect on untagged/attenuated tracks instead of leaving it disabled on the audio session (same precaution that fixed the random playback stops).
 - Settings dropdowns widened (and translations trimmed) so Russian/Ukrainian option labels no longer clip.

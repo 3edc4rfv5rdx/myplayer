@@ -282,15 +282,16 @@ object Settings {
     fun setBackupEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_BACKUP, enabled.toString())
 
-    /** Selected UI language code (see [AppLocalizer]); defaults to English. A stored code no
-     *  longer offered by `i18n.json` (edited file, restore from another version) falls back too,
-     *  so a stale value can't reach the UI. Validation is skipped before [AppLocalizer] is loaded —
-     *  in practice it always is (MainActivity.onCreate loads it before the first read). */
+    /** Selected UI language code (see [AppLocalizer]). Nothing stored yet (first run) and a stored
+     *  code no longer offered by `i18n.json` (edited file, restore from another version) both fall
+     *  back to the device language when a translation exists, else English. Validation is skipped
+     *  before [AppLocalizer] is loaded — in practice it always is (MainActivity.onCreate loads it
+     *  before the first read). */
     fun getLanguage(context: Context): String {
-        val stored = get(context, KEY_LANGUAGE) ?: return AppLocalizer.DEFAULT_LANGUAGE
+        val stored = get(context, KEY_LANGUAGE) ?: return AppLocalizer.systemLanguage()
         val options = AppLocalizer.languageOptions()
         return if (options.isEmpty() || options.any { it.code == stored }) stored
-        else AppLocalizer.DEFAULT_LANGUAGE
+        else AppLocalizer.systemLanguage()
     }
     fun setLanguage(context: Context, code: String) = set(context, KEY_LANGUAGE, code)
 

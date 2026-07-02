@@ -17,6 +17,10 @@ object AppLocalizer {
     const val DEFAULT_LANGUAGE = "en"
     private const val LANG_BLOCK = "_lang"
 
+    // Stored language codes are internal and may differ from ISO ones; map the system's ISO code
+    // to ours before matching (Ukrainian is ISO "uk", stored here as "ua").
+    private val ISO_ALIASES = mapOf("uk" to "ua")
+
     private var languages: List<LanguageOption> = emptyList()
     // key -> (languageCode -> translation); the default language is absent (lw falls back to the key).
     private var translations: Map<String, Map<String, String>> = emptyMap()
@@ -48,6 +52,13 @@ object AppLocalizer {
 
     /** The selectable languages, in file order; empty until [ensureLoaded]. */
     fun languageOptions(): List<LanguageOption> = languages
+
+    /** The device language when a translation for it is offered, else [DEFAULT_LANGUAGE]. Used as
+     *  the default before the user picks a language (and for a stale stored code). */
+    fun systemLanguage(): String {
+        val code = java.util.Locale.getDefault().language.let { ISO_ALIASES[it] ?: it }
+        return languages.firstOrNull { it.code == code }?.code ?: DEFAULT_LANGUAGE
+    }
 
     /** Translates [key] (the English text) into [languageCode], falling back to the key itself for the
      *  default language or any missing translation. */
