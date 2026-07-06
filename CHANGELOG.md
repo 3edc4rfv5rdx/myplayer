@@ -3,6 +3,10 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Home and settings top-bar icons are now outlined instead of solid-filled.
+- Nudged the ▶ resume marker up a couple pixels so its bottom no longer clips in the highlighted row.
+
 ## v0.7.20260702+232
 
 - Removed the fully resolved logic.md analysis; its last open note lives on in nottofix.md.

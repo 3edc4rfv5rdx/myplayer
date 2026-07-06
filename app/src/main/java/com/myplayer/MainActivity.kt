@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -164,6 +165,8 @@ private val RESUME_GLYPH_SIZE = 34.sp
 // Total stroke width of the ▶ outline. The orange fill covers the inner half, so ~2 dp of black
 // shows around the triangle — enough to stand out on the orange highlight bar.
 private val RESUME_OUTLINE = 4.dp
+// The glyph overflows the placeholder box downward slightly; nudge it up so its bottom isn't clipped.
+private val RESUME_LIFT = 2.dp
 
 /** Shared container tint for dialogs, dropdown menus, and highlighted rows — one source so the
  *  raised-surface tone changes in a single place (kept distinct from the root window background). */
@@ -1967,7 +1970,9 @@ private fun FolderBrowser(
                             )
                         ) {
                             Box(
-                                Modifier.wrapContentSize(Alignment.CenterStart, unbounded = true)
+                                Modifier
+                                    .offset(y = -RESUME_LIFT)
+                                    .wrapContentSize(Alignment.CenterStart, unbounded = true)
                             ) {
                                 // A black stroke layer under the orange fill gives the triangle a
                                 // contour so it stays visible on the orange highlight bar.
