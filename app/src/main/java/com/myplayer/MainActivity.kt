@@ -1000,12 +1000,7 @@ class MainActivity : ComponentActivity() {
             playingFolderId = queuePath.last().documentId
             // Remember the folder the user launched (the open path, not the book root) so the
             // history dialog can jump the browser straight back to it.
-            Settings.addHistory(
-                this@MainActivity,
-                Settings.HistoryEntry(
-                    tree.toString(), path.map { it.documentId }, path.map { it.name }, abook
-                )
-            )
+            recordHistory(tree, path, abook)
             startQueue(controller, items, start, abook, key, startPos)
         }
     }
@@ -1153,10 +1148,23 @@ class MainActivity : ComponentActivity() {
             } else index
             // Set only on the success path so a failed load leaves playingFolderId untouched.
             playingFolderId = queueRoot.documentId
+            // Record the open folder (not the book root), same as playFolder, so starting playback by
+            // tapping a track also shows up in History and reopens to where the user was browsing.
+            recordHistory(tree, path, bookPath != null)
             startQueue(controller, items, start, bookPath != null, key)
             selectedIndexState.value = null
         }
     }
+
+    /** Records the launched folder ([path], the open browser location — not a book root) in History.
+     *  Shared by playFolder/playFile so the two playback entry points can't drift on what they log. */
+    private fun recordHistory(tree: Uri, path: List<Node>, isBook: Boolean) =
+        Settings.addHistory(
+            this,
+            Settings.HistoryEntry(
+                tree.toString(), path.map { it.documentId }, path.map { it.name }, isBook
+            )
+        )
 
     /** Permanently deletes [folder] and its files from storage, then forgets its book state and
      *  refreshes the parent listing. Stops playback first if the playing track is inside it. */

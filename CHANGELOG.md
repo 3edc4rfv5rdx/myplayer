@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Starting playback by tapping a track now adds its folder to History too, not only the "play folder" button.
 - The folder browser now opens each folder at the top instead of keeping the previous folder's scroll position, and no longer mixes up folders that share an id across different roots.
 - Folder deletion now keeps working after a restart: the root permission is persisted with write access, not read-only.
 - Accent colours now all use black foreground text (Teal and Pink previously used white).
