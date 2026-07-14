@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed a rare race where the duration cache could drop a just-resolved track length, making a gapped queue fall back to a wrong placeholder duration.
 - A corrupt saved playback speed (out of range or NaN/infinity) now falls back to a valid value instead of crashing the speed control or book start.
 - Starting playback by tapping a track now adds its folder to History too, not only the "play folder" button.
 - The folder browser now opens each folder at the top instead of keeping the previous folder's scroll position, and no longer mixes up folders that share an id across different roots.

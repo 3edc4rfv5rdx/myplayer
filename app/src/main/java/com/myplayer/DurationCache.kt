@@ -73,7 +73,18 @@ object DurationCache {
                 chunk.toTypedArray()
             ).use { c -> while (c.moveToNext()) found[c.getString(0)] = c.getLong(1) }
         }
-        synchronized(mem) { for (uri in missing) mem[uri] = found[uri] ?: UNKNOWN_MS }
+        // The DB read above ran with mem unlocked, so store()/peek() may have installed a real value
+        // for one of these uris meanwhile. Merge, don't clobber: fill only an absent key, or upgrade
+        // our own placeholder to a real duration — never overwrite a real value with UNKNOWN_MS.
+        synchronized(mem) {
+            for (uri in missing) {
+                val fresh = found[uri] ?: UNKNOWN_MS
+                val current = mem[uri]
+                if (current == null || (current == UNKNOWN_MS && fresh != UNKNOWN_MS)) {
+                    mem[uri] = fresh
+                }
+            }
+        }
     }
 
     /** Synchronous single-file cache lookup (no MediaMetadataRetriever fill): the cached duration in
