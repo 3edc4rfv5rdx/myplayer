@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Accent colours now all use black foreground text (Teal and Pink previously used white).
 - Home and settings top-bar icons are now outlined instead of solid-filled.
 - Nudged the ▶ resume marker up a couple pixels so its bottom no longer clips in the highlighted row.
 

@@ -23,8 +23,8 @@ enum class ThemeMode {
 enum class AccentColor(val primary: Long, val onPrimary: Long) {
     Default(0L, 0L),
     Yellow(0xFFFFC107, 0xFF000000),
-    Teal(0xFF26A69A, 0xFFFFFFFF),
-    Pink(0xFFEC407A, 0xFFFFFFFF),
+    Teal(0xFF26A69A, 0xFF000000),
+    Pink(0xFFEC407A, 0xFF000000),
     Green(0xFF66BB6A, 0xFF000000),
     Orange(0xFFFFA726, 0xFF000000),
     Blue(0xFF42A5F5, 0xFF000000),
