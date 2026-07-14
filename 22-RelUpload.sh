@@ -103,18 +103,11 @@ echo "--------------------------------------------------"
 # ------------------------------------------------------------
 # Find APK files
 # ------------------------------------------------------------
+# Require the exact artifacts built for this tag. No mtime fallback: picking the "newest"
+# *-arm64-v8a.apk / *-universal.apk would happily upload a stale build (older version/build
+# that was never cleaned) under this tag's asset name, mislabeling the release.
 APK_ARM64="$APK_DIR/${APK_PREFIX}-arm64-v8a.apk"
 APK_UNIVERSAL="$APK_DIR/${APK_PREFIX}-universal.apk"
-
-# Fall back only within the same ABI: never rename a universal/x86_64 APK as the arm64 asset
-# (or vice versa). A missing asset must fail fast below, not get substituted by another ABI.
-if [[ ! -f "$APK_ARM64" ]]; then
-    APK_ARM64=$(ls -t "$APK_DIR"/*-arm64-v8a.apk 2>/dev/null | head -1)
-fi
-
-if [[ ! -f "$APK_UNIVERSAL" ]]; then
-    APK_UNIVERSAL=$(ls -t "$APK_DIR"/*-universal.apk 2>/dev/null | head -1)
-fi
 
 echo "=== Checking APK files ==="
 
