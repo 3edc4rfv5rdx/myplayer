@@ -17,6 +17,7 @@ No playlists, no equalizer, no internet, no media library — just folders, shuf
 - **History & favorites**: jump back to recently played folders, or pin folders for quick access.
 - **Audiobooks**: per-folder mode that plays sequentially, remembers its position, and keeps its own
   speed — see below.
+- **Delete from storage**: remove a folder and its files from the device directly in the browser.
 - **Volume leveling** (music only): off, ReplayGain tags, or a real-time auto compressor.
 - **Skip silence** and an optional **gap between tracks** (the gap is music-only; books keep their
   natural flow and skip silence).
