@@ -43,9 +43,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -1771,16 +1771,21 @@ private fun FolderBrowser(
     var pendingMenu by remember { mutableStateOf<Node?>(null) }
     var showSleepDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val listState = rememberLazyListState()
-    var contents by remember(current.documentId) {
+    // A folder's identity is (tree, documentId), not the documentId alone: document IDs can collide
+    // across providers/roots, so keying state on the bare id could carry another tree's listing here.
+    val folderId = remember(treeUri, current.documentId) { "$treeUri ${current.documentId}" }
+    // Fresh scroll state per folder, so descending into or opening another folder starts at the top
+    // instead of reusing the previous folder's scroll offset; the follow-playing effect re-centers.
+    val listState = remember(folderId) { LazyListState() }
+    var contents by remember(folderId) {
         mutableStateOf<Pair<List<Node>, List<Node>>?>(null)
     }
-    var loadFailed by remember(current.documentId) { mutableStateOf(false) }
-    var retryTick by remember(current.documentId) { mutableStateOf(0) }
+    var loadFailed by remember(folderId) { mutableStateOf(false) }
+    var retryTick by remember(folderId) { mutableStateOf(0) }
     // documentIds of subfolders that are books, resolved off-thread with the listing so the rows
     // don't each run a main-thread Settings.isAbook DB read during composition.
-    var bookIds by remember(current.documentId) { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(current.documentId, rescanTick, retryTick) {
+    var bookIds by remember(folderId) { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(folderId, rescanTick, retryTick) {
         loadFailed = false
         contents = null
         try {
@@ -1803,7 +1808,7 @@ private fun FolderBrowser(
     // books play sequentially so this listing's natural order matches the playback order. While this
     // book is the one playing, the live track is the current file so the markers advance with it;
     // otherwise we fall back to the saved resume point (one cheap DB read off-thread).
-    var resumeFileIndex by remember(current.documentId) { mutableStateOf<Int?>(null) }
+    var resumeFileIndex by remember(folderId) { mutableStateOf<Int?>(null) }
     LaunchedEffect(contents, bookKey, filesAreBook, playingDocId, playingBookKey) {
         val files = contents?.second
         if (!filesAreBook || bookKey == null || files == null) {
@@ -1846,7 +1851,7 @@ private fun FolderBrowser(
     // Duration of the highlighted (playing/selected) file, appended to its scrolling name. Resolved
     // lazily for just that one file via the same cache the book progress uses; cached after. Only the
     // highlighted row marquees, so showing the time only there keeps the rest of the list clean.
-    var rowDurations by remember(current.documentId) { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    var rowDurations by remember(folderId) { mutableStateOf<Map<String, Long>>(emptyMap()) }
     LaunchedEffect(contents, playingDocId, selectedIndex) {
         val files = contents?.second ?: return@LaunchedEffect
         val ids = buildSet {
