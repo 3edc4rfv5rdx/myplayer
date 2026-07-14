@@ -295,11 +295,18 @@ object Settings {
     }
     fun setLanguage(context: Context, code: String) = set(context, KEY_LANGUAGE, code)
 
+    /** A speed is usable only when finite and within [SPEED_MIN]..[SPEED_MAX]; a corrupt, manually
+     *  edited, or foreign restored DB value (NaN, infinity, out of range) would otherwise crash
+     *  formatSpeed's roundToInt, the in-range sliders, or Media3's playback parameters. Returns null
+     *  so callers can fall back to their own default. */
+    private fun validSpeed(raw: Float?): Float? =
+        raw?.takeIf { it.isFinite() && it in SPEED_MIN..SPEED_MAX }
+
     /** Default playback speed applied to folders without a saved speed of their own. */
     fun getDefaultSpeed(context: Context): Float =
-        get(context, KEY_DEFAULT_SPEED)?.toFloatOrNull() ?: SPEED_DEFAULT
+        validSpeed(get(context, KEY_DEFAULT_SPEED)?.toFloatOrNull()) ?: SPEED_DEFAULT
     fun setDefaultSpeed(context: Context, speed: Float) =
-        set(context, KEY_DEFAULT_SPEED, speed.toString())
+        set(context, KEY_DEFAULT_SPEED, (validSpeed(speed) ?: SPEED_DEFAULT).toString())
 
     // ---- Recently played folders (history) -------------------------------------------------------
 
@@ -449,9 +456,10 @@ object Settings {
 
     /** Per-folder playback speed; falls back to the global default when the folder has none set. */
     fun getSpeed(context: Context, folderKey: String): Float =
-        get(context, KEY_SPEED_PREFIX + folderKey)?.toFloatOrNull() ?: getDefaultSpeed(context)
+        validSpeed(get(context, KEY_SPEED_PREFIX + folderKey)?.toFloatOrNull())
+            ?: getDefaultSpeed(context)
     fun setSpeed(context: Context, folderKey: String, speed: Float) =
-        set(context, KEY_SPEED_PREFIX + folderKey, speed.toString())
+        set(context, KEY_SPEED_PREFIX + folderKey, (validSpeed(speed) ?: SPEED_DEFAULT).toString())
 
     /** Forgets all persisted state for a folder (used when deleting a book). */
     fun clearBook(context: Context, folderKey: String) {
