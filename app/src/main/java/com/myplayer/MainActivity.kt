@@ -262,8 +262,12 @@ class MainActivity : ComponentActivity() {
     private val folderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
+                // Take both read and write: deleteBook() deletes folders through this tree, which the
+                // DocumentsProvider only allows with a persisted write grant. Read alone appears to
+                // work during the picker session (transient grant) but breaks delete after a restart.
                 contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
                 rootsState.value = Settings.addRoot(this, uri.toString()).map(Uri::parse)
             }
@@ -868,7 +872,8 @@ class MainActivity : ComponentActivity() {
         if (playingThisRoot) stopAndClearQueue()
         runCatching {
             contentResolver.releasePersistableUriPermission(
-                treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
         }
         if (selectedRootState.value == treeUri) selectedRootState.value = null
