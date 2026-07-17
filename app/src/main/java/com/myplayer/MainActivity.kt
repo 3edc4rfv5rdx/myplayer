@@ -1782,9 +1782,21 @@ private fun FolderBrowser(
     // A folder's identity is (tree, documentId), not the documentId alone: document IDs can collide
     // across providers/roots, so keying state on the bare id could carry another tree's listing here.
     val folderId = remember(treeUri, current.documentId) { "$treeUri ${current.documentId}" }
-    // Fresh scroll state per folder, so descending into or opening another folder starts at the top
-    // instead of reusing the previous folder's scroll offset; the follow-playing effect re-centers.
-    val listState = remember(folderId) { LazyListState() }
+    // Remember each folder's scroll position so returning to a parent restores where we were, while
+    // entering a not-yet-visited folder still starts at the top. The map survives navigation because
+    // FolderBrowser keeps its composition slot across folder changes; onDispose saves the position of
+    // the folder we're leaving before its listState is discarded.
+    val scrollPositions = remember { mutableMapOf<String, Pair<Int, Int>>() }
+    val listState = remember(folderId) {
+        val saved = scrollPositions[folderId]
+        if (saved != null) LazyListState(saved.first, saved.second) else LazyListState()
+    }
+    DisposableEffect(folderId) {
+        onDispose {
+            scrollPositions[folderId] =
+                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }
+    }
     var contents by remember(folderId) {
         mutableStateOf<Pair<List<Node>, List<Node>>?>(null)
     }

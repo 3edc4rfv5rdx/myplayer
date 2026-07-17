@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- The folder browser now restores a parent folder's scroll position when you go back up, instead of jumping to the top.
+
 ## v0.7.20260714+235
 
 - Fixed a rare race where the duration cache could drop a just-resolved track length, making a gapped queue fall back to a wrong placeholder duration.
