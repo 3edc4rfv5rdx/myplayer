@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.7.20260724+248
 
 - New "Hide from other apps" setting (on by default) drops a .nomedia file into each root folder so the system media scanner and other players skip your music and books.
 - History and Favorites entries can now be removed by hand via a close button (with confirmation).
