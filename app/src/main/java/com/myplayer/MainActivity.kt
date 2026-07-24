@@ -75,6 +75,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -1650,28 +1651,48 @@ private fun RootsList(
         }
 
         if (showHistory) {
-            // Read once per open; the dialog leaves the composition when closed, so a later open
-            // re-reads the up-to-date list.
-            val entries = remember { Settings.getHistory(context) }
+            // Read once per open into a live list so a manual close-button removal drops the row at
+            // once; a later open re-reads the up-to-date list.
+            val entries = remember { mutableStateListOf<Settings.HistoryEntry>().apply { addAll(Settings.getHistory(context)) } }
+            // Auto-prune: quietly forget entries whose folder was deleted outside the app (folderPresent
+            // == false is a definite "gone"; a null "couldn't tell" is left alone so a transient
+            // provider outage can't wipe valid history).
+            LaunchedEffect(Unit) {
+                val dead = withContext(Dispatchers.IO) {
+                    entries.filter {
+                        MusicScanner.folderPresent(
+                            context, Uri.parse(it.treeUri), it.ids.last()
+                        ) == false
+                    }
+                }
+                if (dead.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        dead.forEach { Settings.removeHistoryEntry(context, it.key) }
+                    }
+                    entries.removeAll(dead)
+                }
+            }
             FolderEntryDialog(
                 title = lw("History"),
                 emptyText = lw("No history yet"),
                 entries = entries,
                 onPick = { showHistory = false; onOpenHistoryEntry(it) },
-                onDismiss = { showHistory = false }
+                onDismiss = { showHistory = false },
+                onRemoveEntry = { Settings.removeHistoryEntry(context, it.key); entries.remove(it) }
             )
         }
 
         if (showFavorites) {
-            // Read once per open; removal happens elsewhere (top-bar star / folder long-press menu),
-            // so reopening re-reads the current list.
-            val entries = remember { Settings.getFavorites(context) }
+            // Read once per open into a live list so a close-button removal drops the row at once;
+            // reopening re-reads the current list. No auto-prune — favorites are pinned by hand.
+            val entries = remember { mutableStateListOf<Settings.HistoryEntry>().apply { addAll(Settings.getFavorites(context)) } }
             FolderEntryDialog(
                 title = lw("Favorites"),
                 emptyText = lw("No favorites yet"),
                 entries = entries,
                 onPick = { showFavorites = false; onOpenHistoryEntry(it) },
-                onDismiss = { showFavorites = false }
+                onDismiss = { showFavorites = false },
+                onRemoveEntry = { Settings.removeFavorite(context, it.key); entries.remove(it) }
             )
         }
 
@@ -1700,15 +1721,18 @@ private fun RootsList(
 }
 
 /** A tappable list of saved folders, shared by the History and Favorites dialogs. Each row opens the
- *  folder via [onPick]. Removal is handled elsewhere (root removal / the folder long-press menu). */
+ *  folder via [onPick]. When [onRemoveEntry] is given, each row also shows a close button that removes
+ *  it (after a confirm); the caller updates its own [entries] list so the row disappears at once. */
 @Composable
 private fun FolderEntryDialog(
     title: String,
     emptyText: String,
     entries: List<Settings.HistoryEntry>,
     onPick: (Settings.HistoryEntry) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onRemoveEntry: ((Settings.HistoryEntry) -> Unit)? = null
 ) {
+    var pendingRemoval by remember { mutableStateOf<Settings.HistoryEntry?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceTint,
@@ -1722,17 +1746,34 @@ private fun FolderEntryDialog(
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     entries.forEach { entry ->
                         val icon = if (entry.isBook) "📖" else "🎵"
-                        Text(
-                            text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = FONT_LIST,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onPick(entry) }
-                                .padding(vertical = 10.dp, horizontal = 4.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "$icon  ${entry.names.lastOrNull().orEmpty()}",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = FONT_LIST,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onPick(entry) }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp)
+                            )
+                            if (onRemoveEntry != null) {
+                                IconButton(
+                                    onClick = { pendingRemoval = entry },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_close),
+                                        contentDescription = lw("Remove from the list"),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1741,6 +1782,25 @@ private fun FolderEntryDialog(
             Button(onClick = onDismiss) { Text(lw("Cancel")) }
         }
     )
+
+    pendingRemoval?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoval = null },
+            containerColor = SurfaceTint,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
+            title = { Text(lw("Remove from the list")) },
+            text = { Text("[ ${entry.names.lastOrNull().orEmpty()} ]") },
+            confirmButton = {
+                Button(onClick = {
+                    onRemoveEntry?.invoke(entry)
+                    pendingRemoval = null
+                }) { Text(lw("Remove")) }
+            },
+            dismissButton = {
+                Button(onClick = { pendingRemoval = null }) { Text(lw("Cancel")) }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

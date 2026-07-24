@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.DocumentsContract
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import java.io.FileNotFoundException
 
 /** A serializable folder/file entry within a SAF tree (no DocumentFile overhead). */
 data class Node(val documentId: String, val name: String, val isDir: Boolean)
@@ -37,6 +38,32 @@ object MusicScanner {
         val docId = DocumentsContract.getTreeDocumentId(treeUri)
         val name = queryName(context, treeUri, docId) ?: treeUri.lastPathSegment ?: "root"
         return Node(docId, name, true)
+    }
+
+    /** Whether the folder [documentId] still exists under [treeUri]. `true`/`false` are definite
+     *  (the provider answered); `null` means it couldn't tell (permission revoked, provider down) —
+     *  callers must not treat that as "gone", so a transient outage can't wipe valid history. A
+     *  deleted folder makes the provider throw [FileNotFoundException] (or hand back an empty/null
+     *  cursor), all of which are a definite "gone". */
+    fun folderPresent(context: Context, treeUri: Uri, documentId: String): Boolean? {
+        val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+        return try {
+            context.contentResolver.query(
+                uri, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID), null, null, null
+            )?.use { it.moveToFirst() } ?: false
+        } catch (e: FileNotFoundException) {
+            false
+        } catch (e: Exception) {
+            // ExternalStorageProvider.isChildDocument wraps a deleted-doc FileNotFoundException into an
+            // IllegalArgumentException ("Failed to determine if … is child of …: java.io.FileNot…"),
+            // embedding it in the message via string concat — the cause is NOT chained. So match the
+            // type, the (rarely set) cause, and the message text. A hit is a definite "gone"; anything
+            // else = couldn't tell, leave the entry alone.
+            val gone = e is FileNotFoundException ||
+                e.cause is FileNotFoundException ||
+                e.message?.contains("FileNotFoundException") == true
+            if (gone) false else null
+        }
     }
 
     private fun queryName(context: Context, treeUri: Uri, documentId: String): String? {

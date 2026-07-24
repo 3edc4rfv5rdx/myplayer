@@ -333,6 +333,12 @@ object Settings {
         writeEntries(context, KEY_HISTORY, updated)
     }
 
+    /** Drops the single history entry with this [HistoryEntry.key] (manual removal from the dialog,
+     *  or pruning a folder that no longer exists on storage). */
+    fun removeHistoryEntry(context: Context, key: String) = synchronized(historyLock) {
+        writeEntries(context, KEY_HISTORY, getHistory(context).filter { it.key != key })
+    }
+
     /** Drops every history entry under [treeUri] (used when a root is removed). */
     fun removeHistoryForTree(context: Context, treeUri: String) = synchronized(historyLock) {
         writeEntries(context, KEY_HISTORY, getHistory(context).filter { it.treeUri != treeUri })

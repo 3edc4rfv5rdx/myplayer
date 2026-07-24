@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- History and Favorites entries can now be removed by hand via a close button (with confirmation).
+- History now auto-drops entries whose folder was deleted outside the app.
 - The folder browser now restores a parent folder's scroll position when you go back up, instead of jumping to the top.
 
 ## v0.7.20260714+235
