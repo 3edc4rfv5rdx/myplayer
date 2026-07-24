@@ -58,6 +58,7 @@ object Settings {
     private const val KEY_THEME = "theme"
     private const val KEY_ACCENT = "accent"
     private const val KEY_FOLLOW = "follow"
+    private const val KEY_NOMEDIA = "nomedia"
     private const val KEY_REMAINING = "remaining"
     private const val KEY_BACKUP = "backup"
     private const val KEY_DEFAULT_SPEED = "default_speed"
@@ -269,6 +270,12 @@ object Settings {
     fun isFollowEnabled(context: Context): Boolean = get(context, KEY_FOLLOW) != "false"
     fun setFollowEnabled(context: Context, enabled: Boolean) =
         set(context, KEY_FOLLOW, enabled.toString())
+
+    /** Drop a .nomedia file into each root so the system media scanner skips it, keeping books/music
+     *  out of other players and the gallery. Our SAF-based playback is unaffected (default on). */
+    fun isNomediaEnabled(context: Context): Boolean = get(context, KEY_NOMEDIA) != "false"
+    fun setNomediaEnabled(context: Context, enabled: Boolean) =
+        set(context, KEY_NOMEDIA, enabled.toString())
 
     /** Rightmost time readout: remaining (-mm:ss) when on, total when off (default off). */
     fun isRemainingTime(context: Context): Boolean = get(context, KEY_REMAINING) == "true"

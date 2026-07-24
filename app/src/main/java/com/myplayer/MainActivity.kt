@@ -271,6 +271,12 @@ class MainActivity : ComponentActivity() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
                 rootsState.value = Settings.addRoot(this, uri.toString()).map(Uri::parse)
+                // Hide the new root from the system media scanner if the option is on (default).
+                if (Settings.isNomediaEnabled(this)) {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        MusicScanner.ensureNomedia(this@MainActivity, uri)
+                    }
+                }
             }
         }
 
@@ -332,6 +338,7 @@ class MainActivity : ComponentActivity() {
                     var skipSilence by remember { mutableStateOf(Settings.isSkipSilenceEnabled(this)) }
                     var trackGap by remember { mutableStateOf(Settings.getTrackGapSeconds(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
+                    var nomedia by remember { mutableStateOf(Settings.isNomediaEnabled(this)) }
                     var remaining by remember { mutableStateOf(Settings.isRemainingTime(this)) }
                     var backup by remember { mutableStateOf(Settings.isBackupEnabled(this)) }
                     var defaultSpeed by remember { mutableStateOf(Settings.getDefaultSpeed(this)) }
@@ -353,6 +360,7 @@ class MainActivity : ComponentActivity() {
                             skipSilenceEnabled = skipSilence,
                             trackGapSec = trackGap,
                             followEnabled = follow,
+                            nomediaEnabled = nomedia,
                             remainingEnabled = remaining,
                             backupEnabled = backup,
                             defaultSpeed = defaultSpeed,
@@ -390,6 +398,20 @@ class MainActivity : ComponentActivity() {
                                 followEnabled = it
                                 Settings.setFollowEnabled(this, it)
                                 followPlayingTrack(controllerState.value?.currentMediaItem)
+                            },
+                            onNomediaChange = {
+                                nomedia = it
+                                Settings.setNomediaEnabled(this, it)
+                                // On enable, drop .nomedia into every current root; on disable, leave
+                                // the existing files as they are (per the chosen behaviour).
+                                if (it) {
+                                    val roots = rootsState.value
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        roots.forEach { root ->
+                                            MusicScanner.ensureNomedia(this@MainActivity, root)
+                                        }
+                                    }
+                                }
                             },
                             onRemainingChange = {
                                 remaining = it
@@ -2848,6 +2870,7 @@ private fun SettingsScreen(
     skipSilenceEnabled: Boolean,
     trackGapSec: Int,
     followEnabled: Boolean,
+    nomediaEnabled: Boolean,
     remainingEnabled: Boolean,
     backupEnabled: Boolean,
     defaultSpeed: Float,
@@ -2858,6 +2881,7 @@ private fun SettingsScreen(
     onSkipSilenceChange: (Boolean) -> Unit,
     onTrackGapChange: (Int) -> Unit,
     onFollowChange: (Boolean) -> Unit,
+    onNomediaChange: (Boolean) -> Unit,
     onRemainingChange: (Boolean) -> Unit,
     onBackupChange: (Boolean) -> Unit,
     onDefaultSpeedChange: (Float) -> Unit,
@@ -3005,6 +3029,20 @@ private fun SettingsScreen(
             }
             Spacer(Modifier.width(8.dp))
             Switch(checked = followEnabled, onCheckedChange = onFollowChange)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(lw("Hide from other apps"), fontSize = FONT_TITLE)
+                Text(
+                    lw("Put a .nomedia file in root folders"),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = nomediaEnabled, onCheckedChange = onNomediaChange)
         }
 
         Spacer(Modifier.height(10.dp))

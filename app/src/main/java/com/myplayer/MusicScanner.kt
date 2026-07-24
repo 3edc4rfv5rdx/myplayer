@@ -19,6 +19,7 @@ class ScanException(message: String, cause: Throwable? = null) : Exception(messa
 object MusicScanner {
 
     private val AUDIO_EXTENSIONS = setOf("mp3", "flac")
+    private const val NOMEDIA = ".nomedia"
 
     // MediaItem extras carry provider-agnostic navigation data captured at scan time, so the app
     // never has to reparse a SAF documentId as a slash-separated filesystem path (not all providers
@@ -38,6 +39,33 @@ object MusicScanner {
         val docId = DocumentsContract.getTreeDocumentId(treeUri)
         val name = queryName(context, treeUri, docId) ?: treeUri.lastPathSegment ?: "root"
         return Node(docId, name, true)
+    }
+
+    /** Creates a `.nomedia` file in the root of [treeUri] (no-op if one is already there) so the
+     *  system media scanner skips the whole tree. Needs a persisted write grant. Best-effort:
+     *  returns false on any failure. */
+    fun ensureNomedia(context: Context, treeUri: Uri): Boolean {
+        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+        if (hasChildNamed(context, treeUri, rootId, NOMEDIA)) return true
+        val parent = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)
+        return runCatching {
+            DocumentsContract.createDocument(
+                context.contentResolver, parent, "application/octet-stream", NOMEDIA
+            ) != null
+        }.getOrDefault(false)
+    }
+
+    /** Whether [parentId] under [treeUri] already has a direct child named [name]. */
+    private fun hasChildNamed(context: Context, treeUri: Uri, parentId: String, name: String): Boolean {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+        return runCatching {
+            context.contentResolver.query(
+                childrenUri, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null
+            )?.use { c ->
+                while (c.moveToNext()) if (c.getString(0) == name) return@runCatching true
+                false
+            } ?: false
+        }.getOrDefault(false)
     }
 
     /** Whether the folder [documentId] still exists under [treeUri]. `true`/`false` are definite
