@@ -1195,14 +1195,6 @@ class MainActivity : ComponentActivity() {
         val tree = treeUriState.value ?: return
         val parent = pathState.value.lastOrNull() ?: return
         if (deleteJob?.isActive == true) return // ignore a second confirm while a delete is in flight
-        // Capture playback state (main thread) before stopping, so the log shows whether the folder
-        // was playing when the delete was attempted — the floating book failure may correlate with it.
-        val controller = controllerState.value
-        FileLog.log(
-            this,
-            "delete attempt: '${folder.name}' id=${folder.documentId} " +
-                "playing=${controller?.isPlaying == true} items=${controller?.mediaItemCount ?: -1}"
-        )
         // Touches the controller, so it must run on the main thread before the IO hop.
         stopIfPlayingUnder(folder)
         val docUri = DocumentsContract.buildDocumentUriUsingTree(tree, folder.documentId)
@@ -1213,21 +1205,9 @@ class MainActivity : ComponentActivity() {
             // The recursive SAF delete (and the SQLite cache invalidations) can take seconds on a
             // slow provider, so keep them off the main thread to avoid an ANR.
             val ok = withContext(Dispatchers.IO) {
-                val deleted = try {
-                    val d = DocumentsContract.deleteDocument(contentResolver, docUri)
-                    FileLog.log(
-                        this@MainActivity,
-                        "deleteDocument returned $d for '${folder.name}' (${folder.documentId})"
-                    )
-                    d
-                } catch (e: Exception) {
-                    FileLog.log(
-                        this@MainActivity,
-                        "deleteDocument EXC ${e.javaClass.name}: ${e.message} " +
-                            "for '${folder.name}' (${folder.documentId})"
-                    )
-                    false
-                }
+                val deleted = runCatching {
+                    DocumentsContract.deleteDocument(contentResolver, docUri)
+                }.getOrDefault(false)
                 if (deleted) {
                     Settings.clearBook(
                         this@MainActivity, Settings.bookKey(tree.toString(), folder.documentId)

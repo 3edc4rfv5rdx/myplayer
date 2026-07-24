@@ -5,7 +5,6 @@ Newest entries on top.
 ## Unreleased
 
 - New "Hide from other apps" setting (on by default) drops a .nomedia file into each root folder so the system media scanner and other players skip your music and books.
-- Temporary diagnostics: folder deletions are logged to Documents/MyPlayer/myplayer-log.txt to track down a rare book-deletion failure.
 - History and Favorites entries can now be removed by hand via a close button (with confirmation).
 - History now auto-drops entries whose folder was deleted outside the app.
 - The folder browser now restores a parent folder's scroll position when you go back up, instead of jumping to the top.
