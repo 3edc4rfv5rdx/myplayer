@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Temporary diagnostics: folder deletions are logged to Documents/MyPlayer/myplayer-log.txt to track down a rare book-deletion failure.
 - History and Favorites entries can now be removed by hand via a close button (with confirmation).
 - History now auto-drops entries whose folder was deleted outside the app.
 - The folder browser now restores a parent folder's scroll position when you go back up, instead of jumping to the top.
