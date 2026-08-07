@@ -1,5 +1,8 @@
 package com.myplayer
 
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Bundle
 import android.os.Handler
@@ -27,6 +30,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import kotlin.math.roundToInt
 
 /** Holds the ExoPlayer + MediaSession (background playback + shade controls).
  *  ReplayGain is applied without touching the render pipeline: attenuation via player volume,
@@ -69,6 +73,14 @@ class PlayerService : MediaSessionService() {
         // Must stay above Settings.MAX_TRACK_DURATION_MS, which is how the UI recognizes it as a
         // placeholder and shows "unknown" instead of a 24h track.
         private const val GAP_PLACEHOLDER_MS = 24L * 60 * 60 * 1000
+
+        // Soft start: how long playback ramps up from silence, and how often the ramp is stepped.
+        // Not configurable — 3s is short enough to be unobtrusive and long enough to save the ears.
+        private const val FADE_IN_MS = 3_000L
+        private const val FADE_TICK_MS = 50L
+        // The ramp starts here rather than at silence, so playback is audible from the first moment
+        // and the soft start reads as "quiet at first", not as a delayed reaction to the Play button.
+        private const val FADE_START_FACTOR = 0.2f
     }
 
     private var session: MediaSession? = null
@@ -86,6 +98,30 @@ class PlayerService : MediaSessionService() {
     // Loaded from Settings in onCreate, before the player or any listener exists.
     private var normMode = VolumeNorm.Off
 
+    // The player volume is shared by two independent users, so neither writes it directly (see
+    // [applyVolume]): [normVolume] is what the loudness-normalization mode asks for, [fadeFactor]
+    // is the soft-start ramp. The effective volume is their product.
+    private var normVolume = 1f
+    private var fadeFactor = 1f
+    private var fadeStartMs = 0L
+
+    // Whether the next start of playback should cap the system volume and fade in. Set on service
+    // creation and re-armed whenever the audio output changes (a speaker connecting is exactly when
+    // the volume can turn out to be far too high), so an ordinary resume-after-pause starts at once.
+    private var startRampArmed = true
+    private var audioManager: AudioManager? = null
+    // Re-arms the ramp on any output change; the callback also fires once with the current devices
+    // at registration time, which is harmless (the ramp is armed at creation anyway).
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            startRampArmed = true
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            startRampArmed = true
+        }
+    }
+
     // Book key of the active queue, or null for plain music. When set, the current file uri and
     // offset are persisted as the book's resume point (see [saveBookPosition]).
     private var bookFolderKey: String? = null
@@ -97,6 +133,23 @@ class PlayerService : MediaSessionService() {
             if (player?.isPlaying != true) return
             saveBookPosition()
             saveHandler.postDelayed(this, SAVE_INTERVAL_MS)
+        }
+    }
+
+    // Steps the soft-start ramp until it reaches full volume. The ramp is squared rather than
+    // linear: loudness is perceived logarithmically, so a linear amplitude ramp sounds like silence
+    // followed by a sudden arrival, while this one is heard as an even rise.
+    private val fadeTick = object : Runnable {
+        override fun run() {
+            val progress = (SystemClock.elapsedRealtime() - fadeStartMs).toFloat() / FADE_IN_MS
+            if (progress >= 1f) {
+                fadeFactor = 1f
+                applyVolume()
+                return
+            }
+            fadeFactor = FADE_START_FACTOR + (1f - FADE_START_FACTOR) * progress * progress
+            applyVolume()
+            saveHandler.postDelayed(this, FADE_TICK_MS)
         }
     }
 
@@ -148,6 +201,15 @@ class PlayerService : MediaSessionService() {
                 // A real move to another file (auto-advance or skip) makes it the book's new resume
                 // point; the initial setMediaItems (PLAYLIST_CHANGED) must not overwrite the restore.
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) saveBookPosition()
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                // Earliest point at which a play request is visible — the renderers haven't put
+                // anything out yet, so the ramp is in place before the first sample is heard.
+                // Pausing mid-ramp ends it at full volume rather than leaving the player stuck at
+                // whatever partial level it had reached. Deliberately not keyed off isPlaying, which
+                // also drops on a buffering stall — that must not cut a ramp short.
+                if (playWhenReady) startPlaybackRamp() else cancelFadeIn()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -210,6 +272,9 @@ class PlayerService : MediaSessionService() {
 
         this.player = player
         session = MediaSession.Builder(this, player).setCallback(SessionCallback()).build()
+        audioManager = getSystemService(AudioManager::class.java)?.also {
+            it.registerAudioDeviceCallback(audioDeviceCallback, saveHandler)
+        }
         // The periodic save starts when playback begins (onIsPlayingChanged), not here.
     }
 
@@ -354,12 +419,13 @@ class PlayerService : MediaSessionService() {
      *  Leveling is music-only — a book queue ([bookFolderKey] set) always plays raw, since
      *  compressing speech and squashing its pauses hurts more than it helps. */
     private fun applyNorm() {
-        val p = player ?: return
+        if (player == null) return
         val mode = if (bookFolderKey != null) VolumeNorm.Off else normMode
         when (mode) {
             VolumeNorm.AutoLevel -> {
                 // Tag-based path off; the audio-session effect does the work, leaving player volume flat.
-                p.volume = 1f
+                normVolume = 1f
+                applyVolume()
                 releaseEnhancer()
                 ensureLeveler()
                 leveler?.enabled = true
@@ -367,15 +433,78 @@ class PlayerService : MediaSessionService() {
             VolumeNorm.ReplayGain -> {
                 // The compressor isn't used here; detach it so nothing extra sits on the session.
                 releaseLeveler()
-                applyReplayGain(p, currentTrackGainDb)
+                applyReplayGain(currentTrackGainDb)
             }
             VolumeNorm.Off -> {
                 // Attach nothing: a disabled-but-attached effect still perturbs the output.
-                p.volume = 1f
+                normVolume = 1f
+                applyVolume()
                 releaseEnhancer()
                 releaseLeveler()
             }
         }
+    }
+
+    /** The single writer of the player volume: what the normalization mode asks for, scaled by the
+     *  soft-start ramp. Both inputs change independently, so they are combined here instead of
+     *  either one setting the volume behind the other's back. */
+    private fun applyVolume() {
+        player?.volume = normVolume * fadeFactor
+    }
+
+    /** Runs the start-of-playback treatment once per armed play: cap the system volume (opt-in) and
+     *  ramp the player up to full. Disarms itself, so pausing and resuming doesn't ramp again — only
+     *  a new session or an audio-output change re-arms it. */
+    private fun startPlaybackRamp() {
+        if (!startRampArmed) return
+        startRampArmed = false
+        applyStartVolumeCap()
+        startFadeIn()
+    }
+
+    /** Lowers the system media volume to the configured share of its maximum. Only ever lowers:
+     *  a volume already below the cap is left alone, so the setting is a ceiling and not a preset.
+     *  The user's own volume keys keep working normally from there. */
+    private fun applyStartVolumeCap() {
+        val percent = Settings.getStartVolumePercent(this)
+        if (percent <= 0) return
+        val am = audioManager ?: return
+        if (Settings.isStartVolumeBluetoothOnly(this) && !isBluetoothOutput(am)) return
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return
+        // At least one step: rounding a small percentage of a coarse volume scale down to zero would
+        // read as "playback is broken" rather than "playback is quiet".
+        val target = (max * percent / 100f).roundToInt().coerceIn(1, max)
+        if (am.getStreamVolume(AudioManager.STREAM_MUSIC) <= target) return
+        // Throws when a Do Not Disturb policy owns the volume; nothing to do but leave it as is.
+        runCatching { am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0) }
+            .onFailure { Log.w(TAG, "Cannot lower the media volume", it) }
+    }
+
+    /** Whether audio is going out over Bluetooth. Reads the connected output devices rather than the
+     *  active route (no public API for the latter) — accurate in practice, since Android routes media
+     *  to a connected A2DP/LE audio device by default. */
+    private fun isBluetoothOutput(am: AudioManager): Boolean =
+        am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+        }
+
+    private fun startFadeIn() {
+        saveHandler.removeCallbacks(fadeTick)
+        fadeStartMs = SystemClock.elapsedRealtime()
+        fadeFactor = FADE_START_FACTOR
+        applyVolume()
+        saveHandler.postDelayed(fadeTick, FADE_TICK_MS)
+    }
+
+    /** Ends any running ramp at full volume. */
+    private fun cancelFadeIn() {
+        saveHandler.removeCallbacks(fadeTick)
+        if (fadeFactor == 1f) return
+        fadeFactor = 1f
+        applyVolume()
     }
 
     private fun applySkipSilence() {
@@ -419,19 +548,22 @@ class PlayerService : MediaSessionService() {
      *  null (untagged track). Tracks that need no boost *release* the enhancer rather than disable
      *  it — the attach-nothing rule (see [audioSessionId]) applies within a mode too; it is
      *  recreated lazily on the next boosted track. */
-    private fun applyReplayGain(p: ExoPlayer, db: Float?) {
+    private fun applyReplayGain(db: Float?) {
         if (db == null) {
-            p.volume = 1f
+            normVolume = 1f
+            applyVolume()
             releaseEnhancer()
             return
         }
         if (db <= 0f) {
             // Attenuate quietly and precisely via the player volume.
-            p.volume = ReplayGain.attenuationVolume(db)
+            normVolume = ReplayGain.attenuationVolume(db)
+            applyVolume()
             releaseEnhancer()
         } else {
             // Boost via the loudness effect (player volume can't exceed 1.0).
-            p.volume = 1f
+            normVolume = 1f
+            applyVolume()
             ensureEnhancer()
             enhancer?.let {
                 runCatching {
@@ -448,6 +580,9 @@ class PlayerService : MediaSessionService() {
         saveBookPosition()
         saveHandler.removeCallbacks(saveTick)
         saveHandler.removeCallbacks(sleepRunnable)
+        saveHandler.removeCallbacks(fadeTick)
+        audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+        audioManager = null
         Settings.flush() // make sure the final position write reaches disk before the process can die
         enhancer?.release()
         enhancer = null

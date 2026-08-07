@@ -57,6 +57,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -335,6 +336,10 @@ class MainActivity : ComponentActivity() {
                     val sleepDeadline by sleepDeadlineState
                     val playingAbook by playingAbookState
                     var volumeNorm by remember { mutableStateOf(Settings.getVolumeNorm(this)) }
+                    var startVolume by remember { mutableStateOf(Settings.getStartVolumePercent(this)) }
+                    var startVolumeBtOnly by remember {
+                        mutableStateOf(Settings.isStartVolumeBluetoothOnly(this))
+                    }
                     var skipSilence by remember { mutableStateOf(Settings.isSkipSilenceEnabled(this)) }
                     var trackGap by remember { mutableStateOf(Settings.getTrackGapSeconds(this)) }
                     var follow by remember { mutableStateOf(Settings.isFollowEnabled(this)) }
@@ -357,6 +362,8 @@ class MainActivity : ComponentActivity() {
                             themeMode = theme,
                             accentColor = accent,
                             volumeNorm = volumeNorm,
+                            startVolumePercent = startVolume,
+                            startVolumeBtOnly = startVolumeBtOnly,
                             skipSilenceEnabled = skipSilence,
                             trackGapSec = trackGap,
                             followEnabled = follow,
@@ -381,6 +388,15 @@ class MainActivity : ComponentActivity() {
                                 volumeNorm = it
                                 Settings.setVolumeNorm(this, it)
                                 sendVolumeNormChanged()
+                            },
+                            onStartVolumeChange = {
+                                startVolume = it
+                                // PlayerService reads this when playback starts; no live push needed.
+                                Settings.setStartVolumePercent(this, it)
+                            },
+                            onStartVolumeBtOnlyChange = {
+                                startVolumeBtOnly = it
+                                Settings.setStartVolumeBluetoothOnly(this, it)
                             },
                             onSkipSilenceChange = {
                                 skipSilence = it
@@ -2838,6 +2854,15 @@ private fun SteppedSlider(
 /** Snaps a raw slider value to the nearest multiple of [step]. */
 private fun snapStep(raw: Float, step: Float): Float = (raw / step).roundToInt() * step
 
+/** Rule between two groups of settings rows, with the breathing room that sets a group apart from
+ *  the ordinary spacing inside one. */
+@Composable
+private fun SettingsGroupDivider() {
+    Spacer(Modifier.height(16.dp))
+    HorizontalDivider()
+    Spacer(Modifier.height(6.dp))
+}
+
 @Composable
 private fun SettingsScreen(
     version: String,
@@ -2847,6 +2872,8 @@ private fun SettingsScreen(
     themeMode: ThemeMode,
     accentColor: AccentColor,
     volumeNorm: VolumeNorm,
+    startVolumePercent: Int,
+    startVolumeBtOnly: Boolean,
     skipSilenceEnabled: Boolean,
     trackGapSec: Int,
     followEnabled: Boolean,
@@ -2858,6 +2885,8 @@ private fun SettingsScreen(
     onThemeChange: (ThemeMode) -> Unit,
     onAccentChange: (AccentColor) -> Unit,
     onVolumeNormChange: (VolumeNorm) -> Unit,
+    onStartVolumeChange: (Int) -> Unit,
+    onStartVolumeBtOnlyChange: (Boolean) -> Unit,
     onSkipSilenceChange: (Boolean) -> Unit,
     onTrackGapChange: (Int) -> Unit,
     onFollowChange: (Boolean) -> Unit,
@@ -2932,7 +2961,54 @@ private fun SettingsScreen(
             AccentPicker(selected = accentColor, onSelect = onAccentChange)
         }
 
-        Spacer(Modifier.height(20.dp))
+        // Sound settings, starting with the pair that belongs together: "Bluetooth only" scopes the
+        // start volume directly above it rather than standing on its own.
+        SettingsGroupDivider()
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(lw("Start volume"), fontSize = FONT_TITLE)
+                Text(
+                    lw("Turn the volume down when playback starts"),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            SettingDropdown(
+                options = Settings.START_VOLUME_OPTIONS,
+                selected = startVolumePercent,
+                // 0 is the off position, not a volume of zero — label it as such.
+                label = { if (it == 0) lw("Off") else "$it%" },
+                onSelect = onStartVolumeChange
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val startVolumeOn = startVolumePercent > 0
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    lw("Bluetooth devices only"), fontSize = FONT_TITLE,
+                    // Greyed out together with its switch while there is no start volume to scope.
+                    color = if (startVolumeOn) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    lw("Turn the volume down when playing to Bluetooth devices"),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(
+                checked = startVolumeBtOnly,
+                onCheckedChange = onStartVolumeBtOnlyChange,
+                enabled = startVolumeOn
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(lw("Volume leveling"), fontSize = FONT_TITLE)
@@ -2997,6 +3073,8 @@ private fun SettingsScreen(
             )
         }
 
+        // Browser and housekeeping behaviour — nothing to do with how playback sounds.
+        SettingsGroupDivider()
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -3055,6 +3133,8 @@ private fun SettingsScreen(
             Switch(checked = backupEnabled, onCheckedChange = onBackupChange)
         }
 
+        // Playback controls for books and seeking.
+        SettingsGroupDivider()
         Spacer(Modifier.height(10.dp))
         var showSpeedDialog by remember { mutableStateOf(false) }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

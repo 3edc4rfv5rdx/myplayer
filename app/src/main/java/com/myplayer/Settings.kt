@@ -55,6 +55,8 @@ object Settings {
     private const val KEY_SKIP_SILENCE = "skip_silence"
     private const val KEY_TRACK_GAP = "track_gap"
     private const val KEY_SEEK_STEP = "seek_step"
+    private const val KEY_START_VOLUME = "start_volume"
+    private const val KEY_START_VOLUME_BT = "start_volume_bt"
     private const val KEY_THEME = "theme"
     private const val KEY_ACCENT = "accent"
     private const val KEY_FOLLOW = "follow"
@@ -96,6 +98,12 @@ object Settings {
     // would cut the generated silence away); books keep skip-silence regardless.
     val TRACK_GAP_OPTIONS = listOf(0, 1, 2, 3, 4, 5)
     const val TRACK_GAP_DEFAULT = 0
+
+    // Start volume: percentage of the system media volume playback is capped to when it starts,
+    // so a loud Bluetooth speaker can't blast the first seconds; 0 = off (default). Never raises
+    // the volume, only lowers it, and only ever caps once per playback session (see PlayerService).
+    val START_VOLUME_OPTIONS = listOf(0) + (15..50 step 5)
+    const val START_VOLUME_DEFAULT = 0
 
     // Upper bound for a believable track duration. A gapped queue reports PlayerService's 24h
     // placeholder until a track's real length is prepared; the UI treats anything at or above
@@ -259,6 +267,21 @@ object Settings {
             ?: SEEK_STEP_DEFAULT
     fun setSeekStepSeconds(context: Context, seconds: Int) =
         set(context, KEY_SEEK_STEP, seconds.toString())
+
+    /** System media volume (percent) playback is capped to when it starts; 0 = off (default).
+     *  Falls back to the default for an unset or out-of-range stored value. */
+    fun getStartVolumePercent(context: Context): Int =
+        get(context, KEY_START_VOLUME)?.toIntOrNull()?.takeIf { it in START_VOLUME_OPTIONS }
+            ?: START_VOLUME_DEFAULT
+    fun setStartVolumePercent(context: Context, percent: Int) =
+        set(context, KEY_START_VOLUME, percent.toString())
+
+    /** Whether the start-volume cap applies only when audio goes out over Bluetooth (default on) —
+     *  the phone speaker is rarely the problem, a paired speaker is. */
+    fun isStartVolumeBluetoothOnly(context: Context): Boolean =
+        get(context, KEY_START_VOLUME_BT) != "false"
+    fun setStartVolumeBluetoothOnly(context: Context, enabled: Boolean) =
+        set(context, KEY_START_VOLUME_BT, enabled.toString())
 
     fun getThemeMode(context: Context): ThemeMode = ThemeMode.from(get(context, KEY_THEME))
     fun setThemeMode(context: Context, mode: ThemeMode) = set(context, KEY_THEME, mode.name)

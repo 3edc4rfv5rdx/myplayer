@@ -3,6 +3,10 @@
 Newest entries on top.
 
 ## Unreleased
+
+- New "Start volume" setting turns the system volume down (15–50%, off by default) when playback starts, with a "Bluetooth only" switch to limit it to a paired speaker or headphones.
+- Playback now eases in over 3 seconds instead of starting at full volume.
+
 ## v0.7.20260724+248
 
 - New "Hide from other apps" setting (on by default) drops a .nomedia file into each root folder so the system media scanner and other players skip your music and books.
