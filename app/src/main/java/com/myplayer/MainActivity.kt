@@ -1885,6 +1885,9 @@ private fun FolderBrowser(
     // FolderBrowser keeps its composition slot across folder changes; onDispose saves the position of
     // the folder we're leaving before its listState is discarded.
     val scrollPositions = remember { mutableMapOf<String, Pair<Int, Int>>() }
+    // Whether this folder was entered with a remembered position (a walk back up), captured before
+    // anything can overwrite it: a restored position wins over auto-scrolling to the resume file.
+    val hadSavedScroll = remember(folderId) { scrollPositions.containsKey(folderId) }
     val listState = remember(folderId) {
         val saved = scrollPositions[folderId]
         if (saved != null) LazyListState(saved.first, saved.second) else LazyListState()
@@ -1949,10 +1952,16 @@ private fun FolderBrowser(
         }
     }
 
-    // Scroll the playing track into the middle of the list (not flush against an edge).
-    LaunchedEffect(contents, playingDocId) {
+    // Scroll the marked track into the middle of the list (not flush against an edge): the playing
+    // track when it is in this folder, otherwise a book's resume file — the row carrying ▶ and the
+    // highlight bar — so a book opened from History lands on where to continue. Skipped when the
+    // folder came back with a remembered scroll position; that position is the more useful one.
+    LaunchedEffect(contents, playingDocId, resumeFileIndex) {
         val c = contents ?: return@LaunchedEffect
-        val fileIdx = c.second.indexOfFirst { it.documentId == playingDocId }
+        val playingIdx = c.second.indexOfFirst { it.documentId == playingDocId }
+        val fileIdx =
+            if (playingIdx >= 0) playingIdx
+            else resumeFileIndex?.takeIf { !hadSavedScroll && it in c.second.indices } ?: -1
         if (fileIdx < 0) return@LaunchedEffect
         val target = c.first.size + fileIdx
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
@@ -1966,15 +1975,16 @@ private fun FolderBrowser(
         }
     }
 
-    // Duration of the highlighted (playing/selected) file, appended to its scrolling name. Resolved
+    // Duration of the highlighted (playing/selected/resume) file, appended to its scrolling name. Resolved
     // lazily for just that one file via the same cache the book progress uses; cached after. Only the
     // highlighted row marquees, so showing the time only there keeps the rest of the list clean.
     var rowDurations by remember(folderId) { mutableStateOf<Map<String, Long>>(emptyMap()) }
-    LaunchedEffect(contents, playingDocId, selectedIndex) {
+    LaunchedEffect(contents, playingDocId, selectedIndex, resumeFileIndex) {
         val files = contents?.second ?: return@LaunchedEffect
         val ids = buildSet {
             playingDocId?.let { pd -> if (files.any { it.documentId == pd }) add(pd) }
             selectedIndex?.let { if (it in files.indices) add(files[it].documentId) }
+            resumeFileIndex?.let { if (it in files.indices) add(files[it].documentId) }
         }
         if (ids.isEmpty()) return@LaunchedEffect
         val idList = ids.toList()
@@ -2060,7 +2070,13 @@ private fun FolderBrowser(
                     )
                 }
                 itemsIndexed(c.second, key = { _, file -> file.documentId }) { index, file ->
-                    val highlighted = index == selectedIndex || file.documentId == playingDocId
+                    // In a book: ▶ marks the resume file, ● (a filled dot) the already-played files
+                    // before it; plain 📄 for the rest. Music files keep the 🎵 note.
+                    val isCurrent = resumeFileIndex != null && index == resumeFileIndex
+                    // The resume file also gets the highlight bar, so a book opened from History (or
+                    // reopened while stopped) shows where to continue as plainly as a playing track.
+                    val highlighted =
+                        index == selectedIndex || file.documentId == playingDocId || isCurrent
                     val background =
                         if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent
                     val foreground =
@@ -2068,9 +2084,6 @@ private fun FolderBrowser(
                     // The highlighted (scrolling) row appends its track duration after the name.
                     val durationSuffix = rowDurations[file.documentId]
                         ?.takeIf { highlighted }?.let { "  ${formatTime(it)}" } ?: ""
-                    // In a book: ▶ marks the resume file, ● (a filled dot) the already-played files
-                    // before it; plain 📄 for the rest. Music files keep the 🎵 note.
-                    val isCurrent = resumeFileIndex != null && index == resumeFileIndex
                     val glyph = when {
                         isCurrent -> "▶"
                         resumeFileIndex != null && index < resumeFileIndex!! -> "●"

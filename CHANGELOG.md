@@ -5,6 +5,7 @@ Newest entries on top.
 ## Unreleased
 
 - New app icon: a white play triangle with an eighth note cut out of it, on a #013895 blue field; it is now an adaptive icon, so launchers stop wrapping it in a white circle.
+- A book's resume file (▶) now also gets the highlight bar and is scrolled into view, so opening a book from History shows where to continue at a glance.
 - New "Start volume" setting turns the system volume down (15–50%, off by default) when playback starts, with a "Bluetooth only" switch to limit it to a paired speaker or headphones.
 - Playback now eases in over 3 seconds instead of starting at full volume.
 
