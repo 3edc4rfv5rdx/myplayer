@@ -2033,6 +2033,10 @@ private fun FolderBrowser(
         } else if (c != null && c.first.isEmpty() && c.second.isEmpty()) {
             Text(lw("Empty folder"))
         } else if (c != null) {
+            // Only one highlight bar at a time, and playback owns it. A music queue can play a file
+            // inside a book without being that book's queue, and then the resume marker points at
+            // another row — that row keeps its ▶, but the bar stays on what is actually playing.
+            val playingInList = playingDocId != null && c.second.any { it.documentId == playingDocId }
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
                     val isBook = folder.documentId in bookIds
@@ -2074,9 +2078,10 @@ private fun FolderBrowser(
                     // before it; plain 📄 for the rest. Music files keep the 🎵 note.
                     val isCurrent = resumeFileIndex != null && index == resumeFileIndex
                     // The resume file also gets the highlight bar, so a book opened from History (or
-                    // reopened while stopped) shows where to continue as plainly as a playing track.
-                    val highlighted =
-                        index == selectedIndex || file.documentId == playingDocId || isCurrent
+                    // reopened while stopped) shows where to continue as plainly as a playing track —
+                    // but not while something in this listing is playing, which owns the bar instead.
+                    val highlighted = index == selectedIndex || file.documentId == playingDocId ||
+                        (isCurrent && !playingInList)
                     val background =
                         if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent
                     val foreground =

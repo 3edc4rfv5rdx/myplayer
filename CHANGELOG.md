@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A book no longer shows two highlight bars at once: when a music queue plays a file inside the book, the bar stays on the playing row and the resume row keeps only its ▶.
 - Build: dropped `player_icon_432.png` from the repo root — the source of the old launcher icon, unused since the icon was redrawn.
 - New app icon: a white play triangle with an eighth note cut out of it, on a #013895 blue field; it is now an adaptive icon, so launchers stop wrapping it in a white circle.
 - A book's resume file (▶) now also gets the highlight bar and is scrolled into view, so opening a book from History shows where to continue at a glance.
