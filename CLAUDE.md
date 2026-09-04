@@ -19,7 +19,7 @@ Build config and scripts are shared with the sibling `../memlists` project. Use 
 - `10-MakeRelease.sh` — bumps `build_number.txt`, runs `./gradlew assembleRelease`, produces ABI
   splits + universal APK renamed to `myplayer-<version>+<code>-release-*.apk`.
 - `11-EmulRELEASE.sh` — install on emulator (x86_64). `12-SamsRELEASE.sh` — install on device (arm64).
-- `00-DebugWiFiConn.sh` — adb connect over Wi-Fi.
+- `02-DebugWiFiConn.sh` — adb connect over Wi-Fi.
 
 Conventions:
 - Never hand-edit or bump `build_number.txt`; `10-MakeRelease.sh` owns it. Stage it if it shows as

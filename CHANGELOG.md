@@ -3,6 +3,9 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- I: The version line moves by itself when a new feature is waiting in the changelog, as it does in the sibling projects
+- I: An install step with nothing to install on exits 3, the code the whole set uses for "nothing to work on"
+- I: The Wi-Fi debug helper is 02-DebugWiFiConn.sh, so 00 means the same thing in every project
 - E: An emulator install that failed makes the run fail, instead of being hidden by the pause after it
 - E: The release push names the branch, and looks up the pushed tag by its full ref, so a tag whose name is a prefix of another is no longer taken for pushed
 - E: Every step that touches the project's files or its git runs from the project directory, so one started from elsewhere can no longer work on the wrong tree
