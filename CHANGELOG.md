@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Build: every artifact carries one name — myplayer-<version>-<build>-<abi>.apk, with -debug on the end of a debug build — and the tag it goes out under is v<version>-<build>.
 - A book no longer shows two highlight bars at once: when a music queue plays a file inside the book, the bar stays on the playing row and the resume row keeps only its ▶.
 - Build: dropped `player_icon_432.png` from the repo root — the source of the old launcher icon, unused since the icon was redrawn.
 - New app icon: a white play triangle with an eighth note cut out of it, on a #013895 blue field; it is now an adaptive icon, so launchers stop wrapping it in a white circle.

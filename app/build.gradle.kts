@@ -95,12 +95,40 @@ android {
     }
 }
 
-abstract class RenameReleaseApks : DefaultTask() {
+// ---------- APK names the scripts can read ----------
+//
+// Gradle writes app-<abi>-<type>.apk, which says nothing about which build it
+// is. Everything downstream — 19-LinkOut.sh, 22-RelUpload.sh, 18-ToUpdate.sh,
+// the .apkx link — reads the version and the build number out of the file name
+// instead, so the rename happens here, once, right after the assemble.
+//
+// One shape for every artifact of every project here:
+//
+//   <project>-<version>-<build>-<abi>.apk         a release
+//   <project>-<version>-<build>-<abi>-debug.apk   a debug build
+//
+// A release says nothing about its build type: that is what an artifact is
+// unless it says otherwise, and the word in every name only makes the listing
+// harder to read. A debug build does say so, because it is the one that must
+// never be mistaken for the other.
+//
+// The name below must match the one the scripts use.
+
+abstract class RenameApks : DefaultTask() {
+    @get:org.gradle.api.tasks.Input
+    abstract val projectName: Property<String>
+
     @get:org.gradle.api.tasks.Input
     abstract val versionName: Property<String>
 
     @get:org.gradle.api.tasks.Input
     abstract val versionCode: Property<Int>
+
+    @get:org.gradle.api.tasks.Input
+    abstract val buildType: Property<String>
+
+    @get:org.gradle.api.tasks.Input
+    abstract val abis: ListProperty<String>
 
     @get:org.gradle.api.tasks.Internal
     abstract val outputDir: DirectoryProperty
@@ -108,27 +136,45 @@ abstract class RenameReleaseApks : DefaultTask() {
     @org.gradle.api.tasks.TaskAction
     fun rename() {
         val outDir = outputDir.get().asFile
-        val prefix = "myplayer-${versionName.get()}+${versionCode.get()}-release"
-        val mappings = mapOf(
-            "app-universal-release.apk" to "$prefix-universal.apk",
-            "app-arm64-v8a-release.apk" to "$prefix-arm64-v8a.apk",
-            "app-armeabi-v7a-release.apk" to "$prefix-armeabi-v7a.apk",
-            "app-x86_64-release.apk" to "$prefix-x86_64.apk"
-        )
-        mappings.forEach { (srcName, dstName) ->
-            val src = File(outDir, srcName)
-            if (!src.exists()) return@forEach
-            val dst = File(outDir, dstName)
+        val type = buildType.get()
+        val prefix = "${projectName.get()}-${versionName.get()}-${versionCode.get()}"
+        val tail = if (type == "release") "" else "-$type"
+
+        fun move(src: File, dst: File) {
+            if (!src.exists()) return
             if (dst.exists()) dst.delete()
             src.renameTo(dst)
         }
+
+        abis.get().forEach { abi ->
+            move(File(outDir, "app-$abi-$type.apk"), File(outDir, "$prefix-$abi$tail.apk"))
+        }
+        // The unsplit output, for a variant the ABI splits do not apply to.
+        move(File(outDir, "app-$type.apk"), File(outDir, "$prefix$tail.apk"))
     }
 }
 
-val renameReleaseApks by tasks.registering(RenameReleaseApks::class) {
+val renameReleaseApks by tasks.registering(RenameApks::class) {
+    projectName.set("myplayer")
     versionName.set(releaseVersionName)
     versionCode.set(releaseVersionCode)
+    buildType.set("release")
+    abis.set(listOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64"))
     outputDir.set(layout.buildDirectory.dir("outputs/apk/release"))
+}
+
+// Not a finalizer of assembleDebug, the way the release one is: the debug APK is
+// also what an instrumented test run installs, and that install reads the name
+// out of Gradle's own output metadata. The debug build step asks for this task
+// by name instead, so a test run from the IDE still finds app-<abi>-debug.apk.
+val renameDebugApks by tasks.registering(RenameApks::class) {
+    dependsOn("assembleDebug")
+    projectName.set("myplayer")
+    versionName.set(releaseVersionName)
+    versionCode.set(releaseVersionCode)
+    buildType.set("debug")
+    abis.set(listOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64"))
+    outputDir.set(layout.buildDirectory.dir("outputs/apk/debug"))
 }
 
 tasks.configureEach {
@@ -136,6 +182,7 @@ tasks.configureEach {
         finalizedBy(renameReleaseApks)
     }
 }
+
 
 dependencies {
     implementation(libs.androidx.core.ktx)

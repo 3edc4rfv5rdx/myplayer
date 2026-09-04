@@ -31,7 +31,7 @@ if [[ -z "$version" || -z "$build" ]]; then
     exit 1
 fi
 
-TAG="v${version}+${build}"
+TAG="v${version}-${build}"
 CHANGELOG_FILE="CHANGELOG.md"
 
 echo "Version: $version"

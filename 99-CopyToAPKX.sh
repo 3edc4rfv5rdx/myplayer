@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-BUILD_FILE="build_number.txt"
 APK_DIR="app/build/outputs/apk/release"
 
-source "$BUILD_FILE"
-
-if [[ -z "$build" ]]; then
-    echo "ERROR: Failed to read build from $BUILD_FILE"
-    exit 1
-fi
-
+# The name comes from the APK itself — the version and the build number are
+# already in it — so nothing here reads build_number.txt.
 apk=$(ls -t "$APK_DIR"/*arm64-v8a*.apk 2>/dev/null | head -1)
 
 if [[ -z "$apk" || ! -f "$apk" ]]; then
@@ -18,10 +12,12 @@ if [[ -z "$apk" || ! -f "$apk" ]]; then
     exit 1
 fi
 
-dst="myplayer-${build}.apkx"
+dst="$(basename "${apk%.apk}").apkx"
 
-# Drop stale .apkx symlinks whose target APK is gone (e.g. cleaned old builds).
-find . -maxdepth 1 -name '*.apkx' -xtype l -delete
+# Only the current build keeps a link: the earlier ones are stale the moment this
+# one is made, and dead ones point at APKs that were cleaned away. Plain .apkx
+# files are left alone, they are copies someone made on purpose.
+find . -maxdepth 1 -name '*.apkx' -type l ! -name "$dst" -delete
 
 ln -sf "$apk" "$dst" 2>/dev/null || cp "$apk" "$dst"
 
