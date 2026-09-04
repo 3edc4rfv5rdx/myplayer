@@ -1,16 +1,17 @@
-# Changelog
-
-Newest entries on top.
+# CHANGELOG
+> Newest entries on top.
+> N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- I: One CHANGELOG legend across every project here — N/E/F/R/I, newest on top, the type letter always followed by a colon
 
-- Build: every artifact carries one name — myplayer-<version>-<build>-<abi>.apk, with -debug on the end of a debug build — and the tag it goes out under is v<version>-<build>.
-- A book no longer shows two highlight bars at once: when a music queue plays a file inside the book, the bar stays on the playing row and the resume row keeps only its ▶.
-- Build: dropped `player_icon_432.png` from the repo root — the source of the old launcher icon, unused since the icon was redrawn.
-- New app icon: a white play triangle with an eighth note cut out of it, on a #013895 blue field; it is now an adaptive icon, so launchers stop wrapping it in a white circle.
-- A book's resume file (▶) now also gets the highlight bar and is scrolled into view, so opening a book from History shows where to continue at a glance.
-- New "Start volume" setting turns the system volume down (15–50%, off by default) when playback starts, with a "Bluetooth only" switch to limit it to a paired speaker or headphones.
-- Playback now eases in over 3 seconds instead of starting at full volume.
+- I: Every artifact carries one name — myplayer-<version>-<build>-<abi>.apk, with -debug on the end of a debug build — and the tag it goes out under is v<version>-<build>.
+- E: A book no longer shows two highlight bars at once: when a music queue plays a file inside the book, the bar stays on the playing row and the resume row keeps only its ▶.
+- I: Dropped `player_icon_432.png` from the repo root — the source of the old launcher icon, unused since the icon was redrawn.
+- F: New app icon: a white play triangle with an eighth note cut out of it, on a #013895 blue field; it is now an adaptive icon, so launchers stop wrapping it in a white circle.
+- F: A book's resume file (▶) now also gets the highlight bar and is scrolled into view, so opening a book from History shows where to continue at a glance.
+- N: New "Start volume" setting turns the system volume down (15–50%, off by default) when playback starts, with a "Bluetooth only" switch to limit it to a paired speaker or headphones.
+- F: Playback now eases in over 3 seconds instead of starting at full volume.
 
 ## v0.7.20260724+248
 
