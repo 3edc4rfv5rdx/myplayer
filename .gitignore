@@ -18,3 +18,6 @@ key.properties
 *.apkx
 /tmp
 /ADD/music
+
+# 19-LinkOut.sh puts the build here under its own name.
+/OUT

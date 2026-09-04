@@ -1,3 +1,3 @@
-base_version=0.7
-build=258
-version=0.7.20260831
+base_version=0.8
+build=259
+version=0.8.20260904

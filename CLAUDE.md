@@ -21,6 +21,11 @@ Build config and scripts are shared with the sibling `../memlists` project. Use 
   under `Unreleased` and the last tag went out on the current line — so a feature raises it
   once, not on every build after it.
 - `11-EmulRELEASE.sh` — install on emulator (x86_64). `12-SamsRELEASE.sh` — install on device (arm64).
+- `18-ToUpdate.sh` — publishes the arm64 release to the update server, with the manifest
+  the in-app updater reads. Its presence means the updater is wired into the app.
+- `00-MakeAll.sh` — the whole run: release, both installs, the update server, the `OUT/` link.
+- `19-LinkOut.sh` — hard-links the arm64 and universal APKs into `OUT/` under their own names
+  and sweeps the rest of that folder.
 - `02-DebugWiFiConn.sh` — adb connect over Wi-Fi.
 
 Conventions:

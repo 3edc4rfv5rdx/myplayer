@@ -113,6 +113,8 @@ import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
+import dev.updater.Updater
+import dev.updater.UpdaterConfig
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import java.util.Locale
@@ -286,6 +288,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Looks for a newer build on the home server and asks before it downloads
+        // anything. Silent when there is nothing newer or the server is not there.
+        Updater.checkOnStart(
+            this,
+            UpdaterConfig(appKey = "myplayer"),
+        )
         requestNotificationPermission()
         AppLocalizer.ensureLoaded(this)
         languageState.value = Settings.getLanguage(this)
