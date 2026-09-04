@@ -17,7 +17,9 @@ equalizer, no internet, no media library — deliberately primitive.
 
 Build config and scripts are shared with the sibling `../memlists` project. Use the numbered scripts:
 - `10-MakeRelease.sh` — bumps `build_number.txt`, runs `./gradlew assembleRelease`, produces ABI
-  splits + universal APK renamed to `myplayer-<version>+<code>-release-*.apk`.
+  splits + universal APK renamed to `myplayer-<version>-<build>-<abi>.apk`. The `major.minor` line moves by itself when `CHANGELOG.md` has an `N` entry waiting
+  under `Unreleased` and the last tag went out on the current line — so a feature raises it
+  once, not on every build after it.
 - `11-EmulRELEASE.sh` — install on emulator (x86_64). `12-SamsRELEASE.sh` — install on device (arm64).
 - `02-DebugWiFiConn.sh` — adb connect over Wi-Fi.
 
