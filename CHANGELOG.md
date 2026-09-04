@@ -3,6 +3,9 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- E: Every step that touches the project's files or its git runs from the project directory, so one started from elsewhere can no longer work on the wrong tree
+- E: The release notes carry the letter legend again, not the "newest on top" line that now sits above it in the changelog
+- E: 99-CopyToAPKX.sh runs from the project directory, so its sweep of stale .apkx links can no longer delete them in whatever directory it was called from
 - I: One CHANGELOG legend across every project here — N/E/F/R/I, newest on top, the type letter always followed by a colon
 
 - I: Every artifact carries one name — myplayer-<version>-<build>-<abi>.apk, with -debug on the end of a debug build — and the tag it goes out under is v<version>-<build>.

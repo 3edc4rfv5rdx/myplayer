@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+cd "$(dirname "$0")"
 BUILD_FILE="build_number.txt"
 
 if [[ ! -f "$BUILD_FILE" ]]; then

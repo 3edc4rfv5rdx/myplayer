@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -e
+# Everything below is relative to the project, and the sweep further down deletes
+# .apkx links in the current directory: without this it would run against
+# whatever directory the script was called from.
+cd "$(dirname "$0")"
 
 APK_DIR="app/build/outputs/apk/release"
 

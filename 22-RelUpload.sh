@@ -77,7 +77,10 @@ if ! grep -q "^## ${TAG}$" CHANGELOG.md; then
     exit 1
 fi
 
-LEGEND_LINE=$(grep -m 1 '^> ' CHANGELOG.md || true)
+# The letter line, matched by what it says rather than by being the first
+# quote in the file: the header carries "> Newest entries on top." above it.
+# A "#>" from the older spelling is taken too, with the hash dropped.
+LEGEND_LINE=$(grep -m 1 -E '^#?> *N=' CHANGELOG.md | sed 's/^#//' || true)
 
 awk -v cur="## ${TAG}" -v stop="${PREV_TAG:+## ${PREV_TAG}}" '
     $0 == cur { capture=1; next }

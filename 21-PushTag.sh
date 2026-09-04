@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+cd "$(dirname "$0")"
 REMOTE="origin"
 
 # ===== dry-run switch =====

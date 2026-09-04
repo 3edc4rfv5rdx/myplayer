@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+cd "$(dirname "$0")"
 BUILD_FILE="build_number.txt"
 
 echo "=== Checking that the working tree is clean ==="
