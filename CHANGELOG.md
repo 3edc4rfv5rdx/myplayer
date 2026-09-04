@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- E: The version line looks only at release tags, so a tag like "duplex" can no longer answer which line the last release went out on
 - I: The project docs name the artifact the way the scripts really write it
 - I: The version line moves by itself when a new feature is waiting in the changelog, as it does in the sibling projects
 - I: An install step with nothing to install on exits 3, the code the whole set uses for "nothing to work on"
