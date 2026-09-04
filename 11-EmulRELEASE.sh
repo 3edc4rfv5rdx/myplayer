@@ -14,5 +14,9 @@ fi
 
 echo ">>> Installing: $(basename "$apk")"
 adb -s emulator-5554 install -r "$apk"
+# Kept across the pause: the script used to end on sleep and report its exit code, so a
+# failed install still read as success.
+status=$?
 
 sleep 2
+exit $status

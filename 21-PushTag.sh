@@ -43,11 +43,15 @@ if [[ "$LOCAL" == "$REMOTE_HEAD" ]]; then
     echo "Branch $BRANCH is up to date with $REMOTE."
 else
     echo "=== Pushing branch $BRANCH ($DRY) ==="
-    git push $DRY "$REMOTE"
+    # The branch is named rather than left to push.default: a branch without an
+    # upstream yet would otherwise stop the release with "no upstream branch".
+    git push $DRY "$REMOTE" "$BRANCH"
 fi
 
-# Check if tag needs pushing
-if git ls-remote --tags "$REMOTE" "$LAST_TAG" | grep -q "$LAST_TAG"; then
+# Asked for the one ref by its full name, and answered by whether that exact ref
+# came back: a substring test would find v0.6.20260804-17 inside -175 and skip a
+# tag that was never pushed.
+if git ls-remote --tags "$REMOTE" "refs/tags/$LAST_TAG" | grep -q "refs/tags/${LAST_TAG}$"; then
     echo "Tag $LAST_TAG already exists on $REMOTE."
 else
     echo "=== Pushing tag $LAST_TAG ($DRY) ==="
