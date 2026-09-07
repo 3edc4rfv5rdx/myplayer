@@ -3,9 +3,9 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- N: The app checks its own GitHub release for a newer build on start and offers it, the same updater the other projects here use — one manifest names every ABI split, so the phone takes arm64 and an armeabi-v7a box takes v7a, wherever either of them is
+- I: 23-ToUpdate.sh writes that manifest into the release, run by hand after 22-RelUpload.sh
 - I: 00-MakeAll.sh runs the whole build in one go, and 19-LinkOut.sh puts the build into OUT/ under its own name — the steps the sibling projects already had
-- N: The app checks the home server for a newer build on start and offers it, the same updater the other projects here use
-- I: 18-ToUpdate.sh publishes the arm64 release to the update server
 - E: The version line looks only at release tags, so a tag like "duplex" can no longer answer which line the last release went out on
 - I: The project docs name the artifact the way the scripts really write it
 - I: The version line moves by itself when a new feature is waiting in the changelog, as it does in the sibling projects

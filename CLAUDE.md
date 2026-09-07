@@ -21,8 +21,10 @@ Build config and scripts are shared with the sibling `../memlists` project. Use 
   under `Unreleased` and the last tag went out on the current line — so a feature raises it
   once, not on every build after it.
 - `11-EmulRELEASE.sh` — install on emulator (x86_64). `12-SamsRELEASE.sh` — install on device (arm64).
-- `18-ToUpdate.sh` — publishes the arm64 release to the update server, with the manifest
-  the in-app updater reads. Its presence means the updater is wired into the app.
+- `23-ToUpdate.sh` — writes `latest.json` for the newest GitHub release and uploads it as an
+  asset, so the in-app updater can offer it; each device picks its own ABI out of that one
+  manifest. Run by hand after `22-RelUpload.sh`. Its presence means the updater is wired
+  into the app.
 - `00-MakeAll.sh` — the whole run: release, both installs, the update server, the `OUT/` link.
 - `19-LinkOut.sh` — hard-links the arm64 and universal APKs into `OUT/` under their own names
   and sweeps the rest of that folder.

@@ -109,7 +109,7 @@ android {
 // ---------- APK names the scripts can read ----------
 //
 // Gradle writes app-<abi>-<type>.apk, which says nothing about which build it
-// is. Everything downstream — 19-LinkOut.sh, 22-RelUpload.sh, 18-ToUpdate.sh,
+// is. Everything downstream — 19-LinkOut.sh, 22-RelUpload.sh, 23-ToUpdate.sh,
 // the .apkx link — reads the version and the build number out of the file name
 // instead, so the rename happens here, once, right after the assemble.
 //
