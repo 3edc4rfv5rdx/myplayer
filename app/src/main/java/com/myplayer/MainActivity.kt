@@ -13,6 +13,7 @@ import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -182,6 +183,10 @@ private val TOP_BAR_ICON = 30.dp
 // The add (+) action is deliberately larger to stand out as the primary action.
 private val TOP_BAR_ADD_ICON = 38.dp
 
+// One description of this app's release, for the silent check at start-up and
+// the About dialog's button alike.
+val UPDATER_CONFIG = UpdaterConfig(appKey = "myplayer")
+
 class MainActivity : ComponentActivity() {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -291,10 +296,7 @@ class MainActivity : ComponentActivity() {
         // Looks for a newer build in this app's own GitHub release and asks
         // before it downloads anything. Silent when there is nothing newer or
         // GitHub cannot be reached.
-        Updater.checkOnStart(
-            this,
-            UpdaterConfig(appKey = "myplayer"),
-        )
+        Updater.checkOnStart(this, UPDATER_CONFIG)
         requestNotificationPermission()
         AppLocalizer.ensureLoaded(this)
         languageState.value = Settings.getLanguage(this)
@@ -2926,6 +2928,8 @@ private fun SettingsScreen(
     onBack: () -> Unit
 ) {
     var showAbout by remember { mutableStateOf(false) }
+    // The updater draws its own dialogs, so it needs the activity, not a context.
+    val activity = LocalActivity.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3218,9 +3222,32 @@ private fun SettingsScreen(
                     Text("${lw("Build date")} $buildDate")
                 }
             },
+            // Both buttons in the confirm slot: Update belongs at the far left,
+            // away from OK, and Material would otherwise cluster the two on the
+            // right.
             confirmButton = {
-                Button(onClick = { showAbout = false }) {
-                    Text(lw("OK"))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    // The start-up check keeps six hours between two looks at
+                    // the server, which is right for a phone and useless for a
+                    // build published a minute ago. This one ignores the
+                    // interval and answers either way; the dialog closes first,
+                    // or the updater's own would sit on top of it.
+                    if (activity != null) {
+                        Button(onClick = {
+                            showAbout = false
+                            Updater.checkNow(activity, UPDATER_CONFIG)
+                        }) {
+                            Text(lw("Update"))
+                        }
+                    } else {
+                        Spacer(Modifier)
+                    }
+                    Button(onClick = { showAbout = false }) {
+                        Text(lw("OK"))
+                    }
                 }
             }
         )
