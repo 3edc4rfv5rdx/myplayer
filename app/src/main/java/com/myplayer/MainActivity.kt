@@ -114,6 +114,8 @@ import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
+import dev.about.About
+import dev.about.AboutConfig
 import dev.updater.Updater
 import dev.updater.UpdaterConfig
 import com.google.common.util.concurrent.ListenableFuture
@@ -366,8 +368,6 @@ class MainActivity : ComponentActivity() {
 
                     when (screen) {
                         Screen.Settings -> SettingsScreen(
-                            version = appVersionName(),
-                            buildDate = BuildConfig.BUILD_DATE,
                             language = lang,
                             languages = remember { AppLocalizer.languageOptions() },
                             themeMode = theme,
@@ -1303,9 +1303,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Suppress("DEPRECATION")
-    private fun packageInfo() = packageManager.getPackageInfo(packageName, 0)
-    private fun appVersionName(): String = packageInfo().versionName ?: ""
 }
 
 @Composable
@@ -2893,8 +2890,6 @@ private fun SettingsGroupDivider() {
 
 @Composable
 private fun SettingsScreen(
-    version: String,
-    buildDate: String,
     language: String,
     languages: List<LanguageOption>,
     themeMode: ThemeMode,
@@ -2927,8 +2922,8 @@ private fun SettingsScreen(
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
-    var showAbout by remember { mutableStateOf(false) }
-    // The updater draws its own dialogs, so it needs the activity, not a context.
+    // The About dialog is the platform's, drawn by the shared module, so it needs
+    // the activity rather than a context.
     val activity = LocalActivity.current
     Column(
         modifier = Modifier
@@ -2942,7 +2937,20 @@ private fun SettingsScreen(
             title = lw("Settings"),
             onAdd = null,
             onSettings = null,
-            onAbout = { showAbout = true },
+            // The shared About dialog: it reads the name and the version off the
+            // package and the GitHub address out of the updater config, so only
+            // the build date is handed over.
+            onAbout = {
+                activity?.let {
+                    About.show(
+                        it,
+                        AboutConfig(
+                            updater = UPDATER_CONFIG,
+                            buildDate = BuildConfig.BUILD_DATE,
+                        ),
+                    )
+                }
+            },
         )
 
         // The settings list can outgrow the screen; scroll it, keeping the TopBar fixed above.
@@ -3207,51 +3215,6 @@ private fun SettingsScreen(
         }
     }
 
-    if (showAbout) {
-        AlertDialog(
-            onDismissRequest = { showAbout = false },
-            containerColor = SurfaceTint,
-            textContentColor = MaterialTheme.colorScheme.onSurface,
-            title = { Text(lw("About")) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.app_name))
-                    Text("${lw("Version")} $version")
-                    // The build number is the version's last component, so what is
-                    // worth a line of its own is the day it was built.
-                    Text("${lw("Build date")} $buildDate")
-                }
-            },
-            // Both buttons in the confirm slot: Update belongs at the far left,
-            // away from OK, and Material would otherwise cluster the two on the
-            // right.
-            confirmButton = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    // The start-up check keeps six hours between two looks at
-                    // the server, which is right for a phone and useless for a
-                    // build published a minute ago. This one ignores the
-                    // interval and answers either way; the dialog closes first,
-                    // or the updater's own would sit on top of it.
-                    if (activity != null) {
-                        Button(onClick = {
-                            showAbout = false
-                            Updater.checkNow(activity, UPDATER_CONFIG)
-                        }) {
-                            Text(lw("Update"))
-                        }
-                    } else {
-                        Spacer(Modifier)
-                    }
-                    Button(onClick = { showAbout = false }) {
-                        Text(lw("OK"))
-                    }
-                }
-            }
-        )
-    }
 }
 
 /** UI-text localizer for Compose, provided in [MainActivity.onCreate] from the selected language.
