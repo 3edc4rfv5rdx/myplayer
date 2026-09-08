@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- N: The armeabi-v7a APK goes into OUT/ and out with the release, so a 32-bit phone or TV box gets its own build instead of the universal one
 ## v0.8.260 (2026-09-08)
 - E: The release build failed to configure: the BUILD_DATE field needs buildFeatures.buildConfig, which was off
 - N: The About screen shows the build date on a line of its own, where the build number used to be — the version already ends in that number

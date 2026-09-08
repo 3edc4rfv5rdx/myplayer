@@ -4,6 +4,7 @@
 # names, and sweep everything else out of that folder:
 #
 #   OUT/myplayer-<version>-arm64-v8a.apk
+#   OUT/myplayer-<version>-armeabi-v7a.apk
 #   OUT/myplayer-<version>-universal.apk
 #
 # One place to copy a build from, instead of a path deep inside app/build/. The
@@ -47,6 +48,9 @@ link_latest() { # link_latest <candidate files...>
 }
 
 link_latest "$APK_DIR"/*arm64-v8a*.apk
+# The 32-bit split, for the older phones and the Amlogic TV boxes that have no
+# arm64 userspace to run the other one.
+link_latest "$APK_DIR"/*armeabi-v7a*.apk
 link_latest "$APK_DIR"/*universal*.apk
 
 # Everything else goes: the previous build's names, an ABI no longer built, a

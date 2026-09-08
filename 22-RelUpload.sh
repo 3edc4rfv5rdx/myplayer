@@ -113,11 +113,14 @@ echo "--------------------------------------------------"
 # *-arm64-v8a.apk / *-universal.apk would happily upload a stale build (older version/build
 # that was never cleaned) under this tag's asset name, mislabeling the release.
 APK_ARM64="$APK_DIR/${APK_PREFIX}-arm64-v8a.apk"
+# The 32-bit split goes out too: an armeabi-v7a device cannot run the arm64 one,
+# and the universal APK carries both ABIs to a phone that needs one.
+APK_ARM32="$APK_DIR/${APK_PREFIX}-armeabi-v7a.apk"
 APK_UNIVERSAL="$APK_DIR/${APK_PREFIX}-universal.apk"
 
 echo "=== Checking APK files ==="
 
-for f in "$APK_ARM64" "$APK_UNIVERSAL"; do
+for f in "$APK_ARM64" "$APK_ARM32" "$APK_UNIVERSAL"; do
     if [[ -z "$f" || ! -f "$f" ]]; then
         echo "ERROR: APK not found for tag $TAG"
         echo "Expected file: $f"
@@ -133,10 +136,12 @@ done
 # Target file names in GitHub Release
 # ------------------------------------------------------------
 DST_ARM64="${PROJECT}-${VERSION}-arm64-v8a.apk"
+DST_ARM32="${PROJECT}-${VERSION}-armeabi-v7a.apk"
 DST_UNIVERSAL="${PROJECT}-${VERSION}-universal.apk"
 
 FILES=(
     "$APK_ARM64#$DST_ARM64"
+    "$APK_ARM32#$DST_ARM32"
     "$APK_UNIVERSAL#$DST_UNIVERSAL"
 )
 
