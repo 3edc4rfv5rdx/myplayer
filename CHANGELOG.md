@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+## v0.8.260 (2026-09-08)
 - E: The release build failed to configure: the BUILD_DATE field needs buildFeatures.buildConfig, which was off
 - N: The About screen shows the build date on a line of its own, where the build number used to be — the version already ends in that number
 - I: The version is major.minor.build — the date left it — so the tag is v0.8.260 and an artifact myplayer-0.8.260-arm64-v8a.apk, each number written once; 20-MakeTag.sh puts the build date after the tag in the CHANGELOG heading, for the reader
