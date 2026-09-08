@@ -32,7 +32,9 @@ if [[ -z "$version" || -z "$build" ]]; then
     exit 1
 fi
 
-TAG="v${version}-${build}"
+# The version ends in the build number, so a tag has nothing to add to it. The
+# build date goes into the changelog heading below, for the reader alone.
+TAG="v${version}"
 CHANGELOG_FILE="CHANGELOG.md"
 
 echo "Version: $version"
@@ -51,19 +53,19 @@ if [[ ! -f "$CHANGELOG_FILE" ]]; then
     exit 1
 fi
 
-if grep -q "^## ${TAG}$" "$CHANGELOG_FILE"; then
+if grep -qE "^## ${TAG}( |$)" "$CHANGELOG_FILE"; then
     echo "Changelog already has section for $TAG. Skipping update."
 else
     echo "=== Inserting $TAG section right after Unreleased ==="
     updated_changelog="$(mktemp /tmp/myplayer-changelog-updated.XXXXXX.md)"
 
-    awk -v tag="$TAG" '
+    awk -v heading="## $TAG${build_date:+ ($build_date)}" '
         BEGIN { in_unreleased=0 }
 
         /^## Unreleased$/ {
             # Keep Unreleased at the top and add the new release section right after it.
             print $0
-            print "## " tag
+            print heading
             in_unreleased=1
             next
         }
@@ -75,7 +77,7 @@ else
         { print }
     ' "$CHANGELOG_FILE" > "$updated_changelog"
 
-    if ! grep -q "^## ${TAG}$" "$updated_changelog"; then
+    if ! grep -qE "^## ${TAG}( |$)" "$updated_changelog"; then
         echo "ERROR: Failed to insert $TAG into changelog."
         rm -f "$updated_changelog"
         exit 1

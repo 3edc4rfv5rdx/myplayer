@@ -365,7 +365,7 @@ class MainActivity : ComponentActivity() {
                     when (screen) {
                         Screen.Settings -> SettingsScreen(
                             version = appVersionName(),
-                            build = appVersionCode(),
+                            buildDate = BuildConfig.BUILD_DATE,
                             language = lang,
                             languages = remember { AppLocalizer.languageOptions() },
                             themeMode = theme,
@@ -1304,7 +1304,6 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun packageInfo() = packageManager.getPackageInfo(packageName, 0)
     private fun appVersionName(): String = packageInfo().versionName ?: ""
-    private fun appVersionCode(): Long = packageInfo().longVersionCode
 }
 
 @Composable
@@ -2893,7 +2892,7 @@ private fun SettingsGroupDivider() {
 @Composable
 private fun SettingsScreen(
     version: String,
-    build: Long,
+    buildDate: String,
     language: String,
     languages: List<LanguageOption>,
     themeMode: ThemeMode,
@@ -3214,7 +3213,9 @@ private fun SettingsScreen(
                 Column {
                     Text(stringResource(R.string.app_name))
                     Text("${lw("Version")} $version")
-                    Text("${lw("Build")} $build")
+                    // The build number is the version's last component, so what is
+                    // worth a line of its own is the day it was built.
+                    Text("${lw("Build date")} $buildDate")
                 }
             },
             confirmButton = {

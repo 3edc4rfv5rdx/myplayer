@@ -43,26 +43,23 @@ else
 fi
 
 # ------------------------------------------------------------
-# Parse tag: v0.1.20260602-24  ->  VERSION=0.1.20260602  BUILD=24
+# Parse tag: v0.4.190  ->  VERSION=0.4.190
 # ------------------------------------------------------------
 CLEAN_TAG="${TAG#v}"
-if [[ "$CLEAN_TAG" =~ ^([0-9]+\.[0-9]+\.[0-9]{8})-([0-9]+)$ ]]; then
+if [[ "$CLEAN_TAG" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
     VERSION="${BASH_REMATCH[1]}"
-    BUILD="${BASH_REMATCH[2]}"
 else
     VERSION=""
-    BUILD=""
 fi
 
-if [[ -z "$VERSION" || -z "$BUILD" ]]; then
+if [[ -z "$VERSION" ]]; then
     echo "ERROR: Failed to parse tag: $TAG"
     exit 1
 fi
 
 echo "Version: $VERSION"
-echo "Build:   $BUILD"
 
-APK_PREFIX="${PROJECT}-${VERSION}-${BUILD}"
+APK_PREFIX="${PROJECT}-${VERSION}"
 
 # ------------------------------------------------------------
 # Build changelog from CHANGELOG.md
@@ -72,7 +69,8 @@ APK_PREFIX="${PROJECT}-${VERSION}-${BUILD}"
 # ------------------------------------------------------------
 echo "=== Building changelog from CHANGELOG.md ==="
 
-if ! grep -q "^## ${TAG}$" CHANGELOG.md; then
+# The heading is the tag, and 20-MakeTag.sh also puts the build date after it.
+if ! grep -qE "^## ${TAG}( |$)" CHANGELOG.md; then
     echo "ERROR: Changelog does not contain section for $TAG."
     exit 1
 fi
@@ -83,8 +81,8 @@ fi
 LEGEND_LINE=$(grep -m 1 -E '^#?> *N=' CHANGELOG.md | sed 's/^#//' || true)
 
 awk -v cur="## ${TAG}" -v stop="${PREV_TAG:+## ${PREV_TAG}}" '
-    $0 == cur { capture=1; next }
-    capture && stop != "" && $0 == stop { exit }
+    $0 == cur || index($0, cur " ") == 1 { capture=1; next }
+    capture && stop != "" && ($0 == stop || index($0, stop " ") == 1) { exit }
     capture && stop == "" && /^## / { exit }
     capture { print }
 ' CHANGELOG.md > "$CHANGELOG_FILE"
@@ -134,8 +132,8 @@ done
 # ------------------------------------------------------------
 # Target file names in GitHub Release
 # ------------------------------------------------------------
-DST_ARM64="${PROJECT}-${VERSION}-${BUILD}-arm64-v8a.apk"
-DST_UNIVERSAL="${PROJECT}-${VERSION}-${BUILD}-universal.apk"
+DST_ARM64="${PROJECT}-${VERSION}-arm64-v8a.apk"
+DST_UNIVERSAL="${PROJECT}-${VERSION}-universal.apk"
 
 FILES=(
     "$APK_ARM64#$DST_ARM64"

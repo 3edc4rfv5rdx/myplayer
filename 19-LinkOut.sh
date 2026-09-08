@@ -3,8 +3,8 @@
 # Put the APKs of the newest release build into OUT/ as links under their own
 # names, and sweep everything else out of that folder:
 #
-#   OUT/myplayer-<version>-<build>-arm64-v8a.apk
-#   OUT/myplayer-<version>-<build>-universal.apk
+#   OUT/myplayer-<version>-arm64-v8a.apk
+#   OUT/myplayer-<version>-universal.apk
 #
 # One place to copy a build from, instead of a path deep inside app/build/. The
 # x86_64 split is left where it is: it only ever goes to the emulator, which is
@@ -12,9 +12,9 @@
 #
 # The links are hard ones: the entry here is the file itself, so copying it
 # elsewhere copies a build and not a dangling path, and a gradle clean leaves it
-# whole. The name carries the version and the build number, so the listing says
-# which build it is. Nothing is built here: 00-MakeAll.sh runs this after a
-# build, and on its own it picks up a build that already exists.
+# whole. The version ends in the build number, so the listing says which build
+# it is. Nothing is built here: 00-MakeAll.sh runs this after a build, and on
+# its own it picks up a build that already exists.
 #
 cd "$(dirname "$0")"
 

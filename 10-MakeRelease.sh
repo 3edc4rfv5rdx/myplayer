@@ -37,12 +37,15 @@ released_line() {
 if [[ ! -f "$BUILD_FILE" ]]; then
     echo "base_version=0.1" > "$BUILD_FILE"
     echo "build=0" >> "$BUILD_FILE"
-    echo "version=0.1.00000000" >> "$BUILD_FILE"
+    echo "version=0.1.0" >> "$BUILD_FILE"
 fi
 
 source "$BUILD_FILE"
 NEW_BUILD=$((build + 1))
-TODAY=$(date +%Y%m%d)
+# The day of the build. It is not part of the version any more — the version
+# ends in the build number — and is kept for the About screen alone, which reads
+# it through BuildConfig.
+BUILD_DATE=$(date +%F)
 
 # The line moves by itself when the changelog says a feature is waiting and the
 # last release went out on this same line. Nothing to pass and nothing to
@@ -54,15 +57,17 @@ if [[ "$(released_line)" == "$base_version" ]] && unreleased_has_feature; then
     echo ">>> A feature is waiting in the changelog: ${base_version} -> ${NEW_BASE_VERSION}"
 fi
 
-NEW_VERSION="${NEW_BASE_VERSION}.${TODAY}"
+NEW_VERSION="${NEW_BASE_VERSION}.${NEW_BUILD}"
 
 cat > "$BUILD_FILE" <<EOF
 base_version=${NEW_BASE_VERSION}
 build=${NEW_BUILD}
 version=${NEW_VERSION}
+build_date=${BUILD_DATE}
 EOF
 
 echo "Version: $NEW_VERSION"
+echo "Date:    $BUILD_DATE"
 echo ">>> Build: $NEW_BUILD <<<"
 
 ./gradlew assembleRelease

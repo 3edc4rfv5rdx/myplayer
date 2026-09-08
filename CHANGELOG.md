@@ -3,6 +3,8 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- N: The About screen shows the build date on a line of its own, where the build number used to be — the version already ends in that number
+- I: The version is major.minor.build — the date left it — so the tag is v0.8.260 and an artifact myplayer-0.8.260-arm64-v8a.apk, each number written once; 20-MakeTag.sh puts the build date after the tag in the CHANGELOG heading, for the reader
 - N: The app checks its own GitHub release for a newer build on start and offers it, the same updater the other projects here use — one manifest names every ABI split, so the phone takes arm64 and an armeabi-v7a box takes v7a, wherever either of them is
 - I: 23-ToUpdate.sh writes that manifest into the release, run by hand after 22-RelUpload.sh
 - I: 00-MakeAll.sh runs the whole build in one go, and 19-LinkOut.sh puts the build into OUT/ under its own name — the steps the sibling projects already had

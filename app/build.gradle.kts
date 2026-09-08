@@ -13,6 +13,9 @@ if (buildNumberFile.exists()) {
 
 val releaseVersionName = buildProps.getProperty("version") ?: "0.1.20260602"
 val releaseVersionCode = buildProps.getProperty("build")?.trim()?.toIntOrNull() ?: 1
+// The day of the build, which the version stopped carrying when its last
+// component became the build number. Shown on the About screen and nowhere else.
+val releaseBuildDate = buildProps.getProperty("build_date")?.trim().orEmpty()
 
 val keyProperties = Properties()
 val keyPropertiesFile = sequenceOf(
@@ -41,6 +44,7 @@ android {
         targetSdk = 36
         versionCode = releaseVersionCode
         versionName = releaseVersionName
+        buildConfigField("String", "BUILD_DATE", "\"$releaseBuildDate\"")
     }
 
     sourceSets {
@@ -133,9 +137,6 @@ abstract class RenameApks : DefaultTask() {
     abstract val versionName: Property<String>
 
     @get:org.gradle.api.tasks.Input
-    abstract val versionCode: Property<Int>
-
-    @get:org.gradle.api.tasks.Input
     abstract val buildType: Property<String>
 
     @get:org.gradle.api.tasks.Input
@@ -148,7 +149,7 @@ abstract class RenameApks : DefaultTask() {
     fun rename() {
         val outDir = outputDir.get().asFile
         val type = buildType.get()
-        val prefix = "${projectName.get()}-${versionName.get()}-${versionCode.get()}"
+        val prefix = "${projectName.get()}-${versionName.get()}"
         val tail = if (type == "release") "" else "-$type"
 
         fun move(src: File, dst: File) {
@@ -168,7 +169,6 @@ abstract class RenameApks : DefaultTask() {
 val renameReleaseApks by tasks.registering(RenameApks::class) {
     projectName.set("myplayer")
     versionName.set(releaseVersionName)
-    versionCode.set(releaseVersionCode)
     buildType.set("release")
     abis.set(listOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64"))
     outputDir.set(layout.buildDirectory.dir("outputs/apk/release"))
@@ -182,7 +182,6 @@ val renameDebugApks by tasks.registering(RenameApks::class) {
     dependsOn("assembleDebug")
     projectName.set("myplayer")
     versionName.set(releaseVersionName)
-    versionCode.set(releaseVersionCode)
     buildType.set("debug")
     abis.set(listOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64"))
     outputDir.set(layout.buildDirectory.dir("outputs/apk/debug"))
