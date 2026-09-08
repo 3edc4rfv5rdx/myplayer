@@ -101,6 +101,9 @@ android {
 
     buildFeatures {
         compose = true
+        // BUILD_DATE below is a BuildConfig field, and AGP generates none
+        // without this.
+        buildConfig = true
     }
 
     packaging {
