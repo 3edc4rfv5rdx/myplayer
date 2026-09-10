@@ -2925,6 +2925,8 @@ private fun SettingsScreen(
     // The About dialog is the platform's, drawn by the shared module, so it needs
     // the activity rather than a context.
     val activity = LocalActivity.current
+    val context = LocalContext.current
+    var updateCheck by remember { mutableStateOf(Updater.isEnabled(context)) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3169,6 +3171,26 @@ private fun SettingsScreen(
             }
             Spacer(Modifier.width(8.dp))
             Switch(checked = backupEnabled, onCheckedChange = onBackupChange)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(lw("Check for updates"), fontSize = FONT_TITLE)
+                Text(
+                    lw("At launch, from the GitHub release"),
+                    fontSize = FONT_CAPTION,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            // ../updater keeps this flag in its own preferences file, so it is read here rather
+            // than hoisted through Settings like the rows above. Off stops the check at launch;
+            // the About dialog's own button still answers.
+            Switch(checked = updateCheck, onCheckedChange = {
+                updateCheck = it
+                Updater.setEnabled(context, it)
+            })
         }
 
         // Playback controls for books and seeking.

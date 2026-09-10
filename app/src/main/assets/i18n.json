@@ -85,6 +85,8 @@
   "Total time": { "ru": "Общее время", "ua": "Загальний час" },
   "Auto backup": { "ru": "Автобэкап", "ua": "Автобекап" },
   "To your Google account": { "ru": "В аккаунт Google", "ua": "В акаунт Google" },
+  "Check for updates": { "ru": "Проверять обновления", "ua": "Перевіряти оновлення" },
+  "At launch, from the GitHub release": { "ru": "При старте, из релиза на GitHub", "ua": "При старті, з релізу на GitHub" },
   "Theme": { "ru": "Тема", "ua": "Тема" },
   "System": { "ru": "Система", "ua": "Система" },
   "Light": { "ru": "Светлая", "ua": "Світла" },
