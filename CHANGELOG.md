@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+## v0.9.265 (2026-09-16)
 ## v0.9.264 (2026-09-16)
 - N: The app installs on Android 9 and up, not 12 and up — an old TV box takes the armeabi-v7a build now, and nothing in the code needed the newer platform anyway
 - I: The README catches up with the app: the About dialog and the update check, the settings added since it was written, the two shared modules compiled in from beside it, and every build step the repository has
