@@ -43,7 +43,7 @@ No playlists, no equalizer, no internet, no media library — just folders, shuf
 
 The **i** button on the home screen's top bar opens About: the version, the build date, the GitHub
 page, the mailbox, and a button that asks for a newer build there and then. Beyond that the app
-asks GitHub for the newest release of this repository at launch, at most every six hours, and
+asks GitHub for the newest release of this repository once per launched process, and
 offers the split built for the device's own ABI — arm64 for a phone, armeabi-v7a for a 32-bit box
 — out of the `latest.json` that `23-ToUpdate.sh` uploads beside the APKs. That is the only thing
 the app sends over the network, and the Settings switch turns the launch check off; the About
