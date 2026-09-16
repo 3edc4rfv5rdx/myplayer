@@ -40,7 +40,7 @@ android {
 
     defaultConfig {
         applicationId = "com.myplayer"
-        minSdk = 31
+        minSdk = 28
         targetSdk = 36
         versionCode = releaseVersionCode
         versionName = releaseVersionName

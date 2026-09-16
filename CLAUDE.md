@@ -36,7 +36,7 @@ Conventions:
   status before every commit and stage it if modified, so it never drifts out of sync.
 - Do not auto-build or auto-install; the user runs the scripts.
 - Toolchain: AGP 9.1.1 (built-in Kotlin, no separate kotlin-android plugin), Kotlin 2.3.0,
-  Gradle 9.3.1, JDK 17/21, compileSdk 36, minSdk 31. Versions live in `gradle/libs.versions.toml`.
+  Gradle 9.3.1, JDK 17/21, compileSdk 36, minSdk 28. Versions live in `gradle/libs.versions.toml`.
 - Release signing reads `/home/e/.my-safe/key.properties` (falls back to repo `key.properties`);
   both the keystore and `key.properties` are git-ignored. Unsigned if absent.
 
