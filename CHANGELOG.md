@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- F: Fix updater/about
 ## v0.9.266 (2026-09-16)
 - E: The start-up update check is no longer silenced for six hours by the About screen's own check button
 - F: The About button names the version it found and installs it on one tap, instead of asking the same question again in a dialog
