@@ -3,7 +3,11 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- E: The start-up update check is no longer silenced for six hours by the About screen's own check button
+- F: The About button names the version it found and installs it on one tap, instead of asking the same question again in a dialog
+- E: The download dialog keeps its width instead of stepping wider as the percentage grows a digit
 ## v0.9.265 (2026-09-16)
+- F: Fix updater/about
 ## v0.9.264 (2026-09-16)
 - N: The app installs on Android 9 and up, not 12 and up — an old TV box takes the armeabi-v7a build now, and nothing in the code needed the newer platform anyway
 - I: The README catches up with the app: the About dialog and the update check, the settings added since it was written, the two shared modules compiled in from beside it, and every build step the repository has
