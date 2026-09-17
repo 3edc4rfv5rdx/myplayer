@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- N: The app turns with the screen instead of staying portrait, without restarting on rotation
 ## v0.9.269 (2026-09-16)
 - E: A build published just after the app last looked is offered on the next launch instead of up to six hours later
 ## v0.9.267 (2026-09-16)
