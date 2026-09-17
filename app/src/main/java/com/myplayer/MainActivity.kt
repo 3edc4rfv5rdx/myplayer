@@ -88,6 +88,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.painter.Painter
@@ -1354,74 +1355,109 @@ private fun PlayerScreen(
     speedLive: Boolean,
     onSpeedChange: (Float) -> Unit
 ) {
-    Column(
+    // Portrait stacks the browser over the controls; landscape puts them side by side, since the
+    // controls would otherwise leave the browser a single row. One custom layout with both children
+    // always in the same order, so rotating keeps their state (scroll positions, open dialogs).
+    Layout(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = 16.dp, top = 40.dp, end = 16.dp, bottom = 16.dp)
-    ) {
-        val current = path.lastOrNull()
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (current == null || treeUri == null) {
-                RootsList(
-                    roots = roots,
-                    selectedRoot = selectedRoot,
-                    onEnterRoot = onEnterRoot,
-                    onOpenHistoryEntry = onOpenHistoryEntry,
-                    onAddRoot = onAddRoot,
-                    onRemoveRoot = onRemoveRoot,
-                    onExit = onExit,
-                    onOpenSettings = onOpenSettings,
-                    modifier = Modifier.fillMaxSize()
+            .padding(start = 16.dp, top = 40.dp, end = 16.dp, bottom = 16.dp),
+        content = {
+            val current = path.lastOrNull()
+            Box {
+                if (current == null || treeUri == null) {
+                    RootsList(
+                        roots = roots,
+                        selectedRoot = selectedRoot,
+                        onEnterRoot = onEnterRoot,
+                        onOpenHistoryEntry = onOpenHistoryEntry,
+                        onAddRoot = onAddRoot,
+                        onRemoveRoot = onRemoveRoot,
+                        onExit = onExit,
+                        onOpenSettings = onOpenSettings,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    FolderBrowser(
+                        controller = controller,
+                        treeUri = treeUri,
+                        current = current,
+                        title = lw(
+                            if (abookEnabled) "Book" else "Music"
+                        ),
+                        filesAreBook = abookEnabled,
+                        bookKey = bookKey,
+                        playingBookKey = playingBookKey,
+                        selectedIndex = selectedIndex,
+                        playingDocId = playingDocId,
+                        visitedPathIds = visitedPathIds,
+                        rescanTick = rescanTick,
+                        favorite = favorite,
+                        onToggleFavorite = onToggleFavorite,
+                        isChildFavorite = isChildFavorite,
+                        onToggleChildFavorite = onToggleChildFavorite,
+                        onUp = onUp,
+                        onHome = onHome,
+                        onDescend = onDescend,
+                        onDeleteBook = onDeleteBook,
+                        onSelectFile = onSelectFile,
+                        onOpenSettings = onOpenSettings,
+                        sleepMode = sleepMode,
+                        sleepDeadline = sleepDeadline,
+                        onSleepMinutes = onSleepMinutes,
+                        onSleepChapter = onSleepChapter,
+                        onSleepStop = onSleepStop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // On the home screen the controls are secondary (usually nothing is playing): dim the
+            // whole block, but keep it interactive so background playback can still be paused from
+            // here. Scrollable only as a fallback for a landscape screen too low to fit it.
+            Column(
+                modifier = Modifier
+                    .alpha(if (treeUri == null) 0.45f else 1f)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                NowPlaying(
+                    controller, clearTitleTick, treeUri == null,
+                    shuffleEnabled, onShuffleToggle,
+                    abookEnabled, abookVisible, abookLocked, onAbookToggle,
+                    playingAbook, remainingTime, onPlayPause,
+                    seekStepSec,
+                    speed, speedEnabled, speedLive, onSpeedChange
                 )
-            } else {
-                FolderBrowser(
-                    controller = controller,
-                    treeUri = treeUri,
-                    current = current,
-                    title = lw(
-                        if (abookEnabled) "Book" else "Music"
-                    ),
-                    filesAreBook = abookEnabled,
-                    bookKey = bookKey,
-                    playingBookKey = playingBookKey,
-                    selectedIndex = selectedIndex,
-                    playingDocId = playingDocId,
-                    visitedPathIds = visitedPathIds,
-                    rescanTick = rescanTick,
-                    favorite = favorite,
-                    onToggleFavorite = onToggleFavorite,
-                    isChildFavorite = isChildFavorite,
-                    onToggleChildFavorite = onToggleChildFavorite,
-                    onUp = onUp,
-                    onHome = onHome,
-                    onDescend = onDescend,
-                    onDeleteBook = onDeleteBook,
-                    onSelectFile = onSelectFile,
-                    onOpenSettings = onOpenSettings,
-                    sleepMode = sleepMode,
-                    sleepDeadline = sleepDeadline,
-                    onSleepMinutes = onSleepMinutes,
-                    onSleepChapter = onSleepChapter,
-                    onSleepStop = onSleepStop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                Spacer(Modifier.height(16.dp))
             }
         }
-
-        Spacer(Modifier.height(12.dp))
-        // On the home screen the controls are secondary (usually nothing is playing): dim the whole
-        // block, but keep it interactive so background playback can still be paused from here.
-        Column(modifier = Modifier.alpha(if (treeUri == null) 0.45f else 1f)) {
-            NowPlaying(
-                controller, clearTitleTick, treeUri == null,
-                shuffleEnabled, onShuffleToggle,
-                abookEnabled, abookVisible, abookLocked, onAbookToggle,
-                playingAbook, remainingTime, onPlayPause,
-                seekStepSec,
-                speed, speedEnabled, speedLive, onSpeedChange
+    ) { (browserM, controlsM), constraints ->
+        val w = constraints.maxWidth
+        val h = constraints.maxHeight
+        if (w > h) {
+            // Controls on the right half, sitting at the bottom as in portrait.
+            val gap = 16.dp.roundToPx()
+            val half = (w - gap) / 2
+            val browserP =
+                browserM.measure(constraints.copy(minWidth = half, maxWidth = half, minHeight = h))
+            val controlsP =
+                controlsM.measure(constraints.copy(minWidth = half, maxWidth = half, minHeight = 0))
+            layout(w, h) {
+                browserP.place(0, 0)
+                controlsP.place(w - half, h - controlsP.height)
+            }
+        } else {
+            val gap = 12.dp.roundToPx()
+            val controlsP = controlsM.measure(constraints.copy(minWidth = w, minHeight = 0))
+            val browserH = (h - controlsP.height - gap).coerceAtLeast(0)
+            val browserP = browserM.measure(
+                constraints.copy(minWidth = w, minHeight = browserH, maxHeight = browserH)
             )
+            layout(w, h) {
+                browserP.place(0, 0)
+                controlsP.place(0, h - controlsP.height)
+            }
         }
-        Spacer(Modifier.height(16.dp))
     }
 }
 
