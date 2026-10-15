@@ -55,8 +55,8 @@ Two folders beside this one are compiled into the app from source rather than pu
 or AARs — one copy of each serves every project here (the `sourceSets` block in
 `app/build.gradle.kts` wires them):
 
-- `../updater` — the update check, its configuration and its dialogs
-- `../about` — the About dialog, drawn in code so the resource shrinker cannot drop its strings
+- `../shared/updater` — the update check, its configuration and its dialogs
+- `../shared/about` — the About dialog, drawn in code so the resource shrinker cannot drop its strings
 
 ## Build
 
