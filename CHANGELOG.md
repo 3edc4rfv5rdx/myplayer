@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- R: Session connection uses the non-deprecated Media3 result builder, so untrusted apps get only the read-only player commands
 - E: A paused player stays in the shade and on the lock screen for 10 minutes instead of vanishing within a minute or two (Media3 1.5.1 → 1.11.1)
 ## v0.10.271 (2026-09-17)
 - F: In landscape the folder browser and the controls sit side by side instead of leaving the browser a single row

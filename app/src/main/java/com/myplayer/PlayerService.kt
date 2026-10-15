@@ -362,7 +362,7 @@ class PlayerService : MediaSessionService() {
                 .add(SessionCommand(CMD_BOOK_MODE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SLEEP_TIMER, Bundle.EMPTY))
                 .build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands)
                 .build()
         }
