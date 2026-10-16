@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- E: The player screen keeps clear of the system navigation buttons, following the bar's live size
 - I: The shared modules are compiled from ../shared, the one repository that holds updater, about and backups
 - R: Session connection uses the non-deprecated Media3 result builder, so untrusted apps get only the read-only player commands
 - E: A paused player stays in the shade and on the lock screen for 10 minutes instead of vanishing within a minute or two (Media3 1.5.1 → 1.11.1)

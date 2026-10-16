@@ -1358,9 +1358,12 @@ private fun PlayerScreen(
     // Portrait stacks the browser over the controls; landscape puts them side by side, since the
     // controls would otherwise leave the browser a single row. One custom layout with both children
     // always in the same order, so rotating keeps their state (scroll positions, open dialogs).
+    // navigationBarsPadding follows the live insets: it clears a 3-button bar (bottom in portrait,
+    // a side in landscape) and shrinks to the thin gesture handle, updating as the mode changes.
     Layout(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .padding(start = 16.dp, top = 40.dp, end = 16.dp, bottom = 16.dp),
         content = {
             val current = path.lastOrNull()
