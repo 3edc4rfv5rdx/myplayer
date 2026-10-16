@@ -489,7 +489,7 @@ class MainActivity : ComponentActivity() {
                                 val p = pathState.value
                                 val bookPath =
                                     if (t != null && p.isNotEmpty()) bookRootPath(t, p) else null
-                                // Inherited = the outermost flagged folder is a strict ancestor.
+                                // Inherited = the innermost flagged folder is a strict ancestor.
                                 abookInheritedState.value =
                                     bookPath != null && bookPath.size < p.size
                                 val bookKey = bookPath?.let {
@@ -974,11 +974,13 @@ class MainActivity : ComponentActivity() {
         finishAndRemoveTask()
     }
 
-    /** The path prefix ending at the outermost folder flagged abook, or null when nothing on
+    /** The path prefix ending at the innermost folder flagged abook, or null when nothing on
      *  [path] is flagged. Book mode is inherited by the whole subtree: any play action inside a
-     *  book plays that book, so its queue, resume key, and speed stay the book's own. */
+     *  book plays that book, so its queue, resume key, and speed stay the book's own. Innermost,
+     *  so a flagged book inside a flagged parent (e.g. a whole library) stays its own book instead
+     *  of dissolving into the parent's queue. */
     private fun bookRootPath(tree: Uri, path: List<Node>): List<Node>? {
-        for (i in path.indices) {
+        for (i in path.indices.reversed()) {
             if (Settings.isAbook(this, Settings.bookKey(tree.toString(), path[i].documentId))) {
                 return path.subList(0, i + 1)
             }
