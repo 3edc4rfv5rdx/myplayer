@@ -2391,14 +2391,28 @@ private fun SleepTimerDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = mode != 0, onClick = { onStop(); onDismiss() }) {
-                    Text(lw("Stop"))
-                }
-                Button(onClick = onDismiss) { Text(lw("Cancel")) }
+            // Equal-width buttons with slim side padding, so all three labels fit on one line.
+            val pad = PaddingValues(horizontal = 8.dp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Button(
-                    onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() }
-                ) { Text(lw("Start")) }
+                    enabled = mode != 0,
+                    onClick = { onStop(); onDismiss() },
+                    contentPadding = pad,
+                    modifier = Modifier.weight(1f)
+                ) { Text(lw("Stop"), maxLines = 1, softWrap = false) }
+                Button(
+                    onClick = onDismiss,
+                    contentPadding = pad,
+                    modifier = Modifier.weight(1f)
+                ) { Text(lw("Cancel"), maxLines = 1, softWrap = false) }
+                Button(
+                    onClick = { onStartMinutes(minutes.roundToInt()); onDismiss() },
+                    contentPadding = pad,
+                    modifier = Modifier.weight(1f)
+                ) { Text(lw("Start"), maxLines = 1, softWrap = false) }
             }
         }
     )
