@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+## v0.10.276 (2026-10-16)
 - E: A book flagged inside a flagged parent folder plays as its own book instead of as part of the parent's whole queue
 - F: The sleep timer's Stop, Cancel and Start buttons share one line instead of wrapping Start
 - E: The player screen keeps clear of the system navigation buttons, following the bar's live size
