@@ -1,4 +1,4 @@
 base_version=0.10
-build=276
-version=0.10.276
-build_date=2026-10-16
+build=277
+version=0.10.277
+build_date=2026-11-02

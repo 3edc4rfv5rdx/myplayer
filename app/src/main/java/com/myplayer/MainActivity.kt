@@ -47,9 +47,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -1423,7 +1422,7 @@ private fun PlayerScreen(
             Column(
                 modifier = Modifier
                     .alpha(if (treeUri == null) 0.45f else 1f)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScrollByAny()
             ) {
                 NowPlaying(
                     controller, clearTitleTick, treeUri == null,
@@ -1666,7 +1665,8 @@ private fun RootsList(
                     modifier = Modifier.align(Alignment.Center).padding(16.dp)
                 )
             } else {
-                LazyColumn(Modifier.fillMaxSize().padding(8.dp)) {
+                val rootsState = rememberLazyListState()
+                LazyColumn(Modifier.fillMaxSize().mouseDragScroll(rootsState).padding(8.dp), state = rootsState) {
                     items(labeled, key = { it.first.toString() }) { (uri, name) ->
                         val selected = uri == selectedRoot
                         val foreground =
@@ -1829,7 +1829,7 @@ private fun FolderEntryDialog(
                 Text(emptyText)
             } else {
                 // Scrolls so a full favorites list (up to FAVORITES_MAX) stays reachable.
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Column(modifier = Modifier.verticalScrollByAny()) {
                     entries.forEach { entry ->
                         val icon = if (entry.isBook) "📖" else "🎵"
                         Row(
@@ -2085,7 +2085,7 @@ private fun FolderBrowser(
             // inside a book without being that book's queue, and then the resume marker points at
             // another row — that row keeps its ▶, but the bar stays on what is actually playing.
             val playingInList = playingDocId != null && c.second.any { it.documentId == playingDocId }
-            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().mouseDragScroll(listState).padding(horizontal = 8.dp)) {
                 items(c.first, key = { it.documentId }) { folder ->
                     val isBook = folder.documentId in bookIds
                     // The visited path (last entered folder or the playing track's ancestors) is
@@ -3015,7 +3015,7 @@ private fun SettingsScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScrollByAny()
                 .navigationBarsPadding()
         ) {
         Spacer(Modifier.height(24.dp))
