@@ -63,6 +63,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -222,6 +223,10 @@ class MainActivity : ComponentActivity() {
     // Random playback order, on by default; intentionally not persisted (resets each launch).
     private val shuffleState = mutableStateOf(true)
 
+    // The service's live play mode, mirrored from its session extras (it also resets the mode by
+    // itself, on pause or a skip). Not persisted.
+    private val playModeState = mutableStateOf(PlayMode.Normal)
+
     // Sleep-timer state mirrored from the service (the timer itself lives there): mode (0 off,
     // 1 fixed minutes, 2 end of chapter) and, for mode 1, the elapsedRealtime deadline to count
     // down to. Refreshed by querying the service; not persisted.
@@ -345,6 +350,7 @@ class MainActivity : ComponentActivity() {
                     val rescanTick by rescanTickState
                     val clearTitleTick by clearTitleTickState
                     val shuffle by shuffleState
+                    val playMode by playModeState
                     val sleepMode by sleepModeState
                     val sleepDeadline by sleepDeadlineState
                     val playingAbook by playingAbookState
@@ -583,6 +589,8 @@ class MainActivity : ComponentActivity() {
                             onSleepMinutes = { sendSleepCommand("minutes", it) },
                             onSleepChapter = { sendSleepCommand("chapter") },
                             onSleepStop = { sendSleepCommand("off") },
+                            playMode = playMode,
+                            onPlayModeChange = { sendPlayMode(it, currentFolderKey) },
                             speed = browsedBookSpeed,
                             speedEnabled = browsedBookKey != null,
                             speedLive = browsedBookKey != null &&
@@ -632,7 +640,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         val token = SessionToken(this, ComponentName(this, PlayerService::class.java))
-        val future = MediaController.Builder(this, token).buildAsync()
+        val future = MediaController.Builder(this, token)
+            .setListener(object : MediaController.Listener {
+                override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
+                    playModeState.value = PlayMode.fromExtras(extras)
+                }
+            })
+            .buildAsync()
         future.addListener({
             try {
                 val c = future.get()
@@ -655,7 +669,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        // Queue reached its end (repeat is always off; see Settings.REPEAT_ALL): clear
+                        // Queue reached its end (the queue never repeats; see Settings.REPEAT_ALL): clear
                         // the now-playing labels, bar, and book progress so a 100%-done book doesn't
                         // linger on screen. Deliberately no mediaItemCount guard: the service clears
                         // the finished queue itself and controller events coalesce, so the clear can
@@ -689,8 +703,12 @@ class MainActivity : ComponentActivity() {
                 // book's value back or the next music would silently un-shuffle. With no live queue
                 // the fresh player defaults to shuffle off, so push the UI's value to keep the
                 // switch and engine in agreement.
+                // Intro holds the player's shuffle off without touching the toggle, so its value is
+                // not the user's then either.
+                playModeState.value = PlayMode.fromExtras(c.sessionExtras)
                 if (c.mediaItemCount > 0) {
-                    if (!liveIsBook) shuffleState.value = c.shuffleModeEnabled
+                    if (!liveIsBook && playModeState.value != PlayMode.Intro)
+                        shuffleState.value = c.shuffleModeEnabled
                 } else c.shuffleModeEnabled = shuffleState.value
                 // Lock shuffle / show book progress only for a genuinely live book; the STATE_ENDED
                 // guard keeps a finished-but-still-loaded book from re-locking it.
@@ -699,9 +717,7 @@ class MainActivity : ComponentActivity() {
                 // Recover which folder the live queue plays from (abook-checkbox lock and live
                 // speed-apply both key off it). The speed *value* shown is the browsed book's
                 // saved one, so nothing needs mirroring from the player here.
-                playingFolderKeyState.value = playFolderTreeUriOf(c.currentMediaItem)?.let { t ->
-                    playFolderIdOf(c.currentMediaItem)?.let { Settings.bookKey(t, it) }
-                }
+                playingFolderKeyState.value = MusicScanner.playFolderKeyOf(c.currentMediaItem)
                 // Recover the sleep-timer state (the timer keeps running in the service while the
                 // activity is gone).
                 querySleepState()
@@ -1036,7 +1052,8 @@ class MainActivity : ComponentActivity() {
             val start = when {
                 jumpIdx >= 0 -> jumpIdx
                 abook -> savedIdx.coerceAtLeast(0)
-                shuffleState.value -> items.indices.random()
+                // Intro samples in folder order, so it starts at the top like an unshuffled queue.
+                shuffleState.value && playModeState.value != PlayMode.Intro -> items.indices.random()
                 else -> 0
             }
             // Rewind for context only after a real break; the rewound position is re-saved on the
@@ -1066,7 +1083,7 @@ class MainActivity : ComponentActivity() {
 
     /** Installs and starts [items] at [startIndex]. In abook mode the queue plays sequentially and
      *  the service tracks its position under [bookFolderKey]; otherwise it follows the live shuffle
-     *  setting and position tracking is off. Nothing ever loops (repeat is always off). */
+     *  setting and position tracking is off. Repeat belongs to the service (see PlayMode). */
     private fun startQueue(
         controller: MediaController,
         items: List<MediaItem>,
@@ -1083,8 +1100,6 @@ class MainActivity : ComponentActivity() {
         // queue, so no stray save can write one queue's uri under another book's resume point.
         sendBookMode(controller, null)
         controller.shuffleModeEnabled = !abook && shuffleState.value
-        controller.repeatMode =
-            if (!abook && Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
         controller.setMediaItems(items, startIndex, startPositionMs)
         sendBookMode(controller, if (abook) bookFolderKey else null)
         controller.prepare()
@@ -1129,6 +1144,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun querySleepState() = sendSleepCommand("query")
+
+    /** Asks the service for [mode], picked while browsing [folderKey] (null on the home screen); the
+     *  mode it settles on comes back through the session extras. */
+    private fun sendPlayMode(mode: PlayMode, folderKey: String?) {
+        val controller = controllerState.value ?: return
+        val command = SessionCommand(PlayerService.CMD_PLAY_MODE, Bundle.EMPTY)
+        if (controller.isSessionCommandAvailable(command)) {
+            controller.sendCustomCommand(command, PlayMode.toExtras(mode, folderKey))
+        }
+    }
 
     /** Tells the service to re-apply the volume-normalization mode immediately (no track wait). */
     private fun sendVolumeNormChanged() {
@@ -1351,6 +1376,8 @@ private fun PlayerScreen(
     onSleepMinutes: (Int) -> Unit,
     onSleepChapter: () -> Unit,
     onSleepStop: () -> Unit,
+    playMode: PlayMode,
+    onPlayModeChange: (PlayMode) -> Unit,
     speed: Float,
     speedEnabled: Boolean,
     speedLive: Boolean,
@@ -1430,6 +1457,7 @@ private fun PlayerScreen(
                     abookEnabled, abookVisible, abookLocked, onAbookToggle,
                     playingAbook, remainingTime, onPlayPause,
                     seekStepSec,
+                    playMode, onPlayModeChange,
                     speed, speedEnabled, speedLive, onSpeedChange
                 )
                 Spacer(Modifier.height(16.dp))
@@ -2435,6 +2463,8 @@ private fun NowPlaying(
     remainingTime: Boolean,
     onPlayPause: () -> Unit,
     seekStepSec: Int,
+    playMode: PlayMode,
+    onPlayModeChange: (PlayMode) -> Unit,
     speed: Float,
     speedEnabled: Boolean,
     speedLive: Boolean,
@@ -2454,6 +2484,9 @@ private fun NowPlaying(
     // position so the bar/time follow the finger and don't jump back until the seek lands.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    var showPlayModeDialog by remember { mutableStateOf(false) }
+    // Intro holds shuffle off for folder order, so the switch is locked like for a book.
+    val shuffleLocked = playingAbook || playMode == PlayMode.Intro
     // Per-file durations of the live book queue (DurationCache), for the time-based book progress;
     // null until resolved. queueTick bumps on timeline changes so a new or edited queue (e.g. a
     // subfolder deleted mid-book) re-resolves against the current items.
@@ -2750,15 +2783,15 @@ private fun NowPlaying(
                     Switch(
                         checked = shuffleEnabled,
                         onCheckedChange = onShuffleToggle,
-                        enabled = !playingAbook
+                        enabled = !shuffleLocked
                     )
                     Spacer(Modifier.width(4.dp))
                     Icon(
                         painter = painterResource(R.drawable.ic_shuffle),
                         contentDescription = lw("Shuffle"),
-                        // Dimmed like the disabled switch while a book locks shuffle off.
+                        // Dimmed like the disabled switch while it is locked.
                         tint = when {
-                            playingAbook -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            shuffleLocked -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                             shuffleEnabled -> MaterialTheme.colorScheme.primary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
@@ -2772,14 +2805,24 @@ private fun NowPlaying(
             verticalArrangement = Arrangement.spacedBy(CONTROL_GAP)
         ) {
             // Speed is an audiobook feature: in a book it edits that book's saved speed (applied live
-            // only when it is the live queue); in music it shows x1.0 disabled, since music plays at 1.0.
+            // only when it is the live queue). Music plays at 1.0, so in its place sits the play
+            // mode — locked while a book is the live queue, which only ever plays Normal.
             Box(modifier = Modifier.height(CONTROL_BTN_HEIGHT), contentAlignment = Alignment.Center) {
-                SpeedButton(
-                    label = formatSpeed(if (speedEnabled) speed else Settings.SPEED_DEFAULT),
-                    enabled = speedEnabled,
-                    width = CONTROL_BTN_WIDTH,
-                    onClick = { showSpeedDialog = true }
-                )
+                if (speedEnabled) {
+                    SpeedButton(
+                        label = formatSpeed(speed),
+                        enabled = true,
+                        width = CONTROL_BTN_WIDTH,
+                        onClick = { showSpeedDialog = true }
+                    )
+                } else {
+                    SpeedButton(
+                        label = playModeShortLabel(playMode),
+                        enabled = controller != null && !playingAbook,
+                        width = CONTROL_BTN_WIDTH,
+                        onClick = { showPlayModeDialog = true }
+                    )
+                }
             }
             Button(
                 onClick = { controller?.seekToNext() },
@@ -2824,6 +2867,68 @@ private fun NowPlaying(
             onDismiss = { showSpeedDialog = false }
         )
     }
+    if (showPlayModeDialog) {
+        PlayModeDialog(
+            current = playMode,
+            onPick = onPlayModeChange,
+            onDismiss = { showPlayModeDialog = false }
+        )
+    }
+}
+
+/** [mode]'s name as it fits the control button. */
+@Composable
+private fun playModeShortLabel(mode: PlayMode): String = when (mode) {
+    PlayMode.Normal -> lw("Normal")
+    PlayMode.RepeatOne -> lw("Repeat") + "1"
+    PlayMode.RepeatAll -> lw("Repeat")
+    PlayMode.Intro -> lw("Intro")
+}
+
+/** [mode]'s name in full, as the mode dialog lists it. */
+@Composable
+private fun playModeLabel(mode: PlayMode): String = when (mode) {
+    PlayMode.Normal -> lw("Normal")
+    PlayMode.RepeatOne -> lw("Repeat song")
+    PlayMode.RepeatAll -> lw("Repeat folder")
+    PlayMode.Intro -> lw("Intro")
+}
+
+/** Picks the play mode: one tap on a row applies it and closes the dialog. */
+@Composable
+private fun PlayModeDialog(
+    current: PlayMode,
+    onPick: (PlayMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceTint,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
+        title = { Text(lw("Playback mode")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                PlayMode.entries.forEach { mode ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onPick(mode); onDismiss() }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        // The whole row picks; the button stays non-interactive to avoid a double event.
+                        RadioButton(selected = mode == current, onClick = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(playModeLabel(mode), fontSize = FONT_LIST)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text(lw("Cancel")) }
+        }
+    )
 }
 
 /** Compact speed button shared by the player and settings: filled so its enabled (colored) vs

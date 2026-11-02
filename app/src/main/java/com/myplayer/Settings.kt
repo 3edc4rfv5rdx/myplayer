@@ -74,7 +74,8 @@ object Settings {
 
     // Global repeat-all: deliberately hardwired off — playback never loops, a finished queue ends.
     // Books must stay off regardless (resume tracking relies on reaching STATE_ENDED); this flag
-    // only exists so the music behavior could be flipped back in one place.
+    // only exists so the music behavior could be flipped back in one place. A track or the folder can
+    // still loop on request (PlayMode), a mode the service itself resets.
     const val REPEAT_ALL = false
 
     // Resume rewind: how far a resumed book steps back for context, and the minimum break length

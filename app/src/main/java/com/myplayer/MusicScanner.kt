@@ -238,6 +238,14 @@ object MusicScanner {
         }
     }
 
+    /** The folder key ([Settings.bookKey]) [item]'s queue was started from, or null. */
+    fun playFolderKeyOf(item: MediaItem?): String? {
+        val extras = item?.mediaMetadata?.extras ?: return null
+        val tree = extras.getString(EXTRA_TREE_URI) ?: return null
+        val folder = extras.getString(EXTRA_PLAY_FOLDER_ID) ?: return null
+        return Settings.bookKey(tree, folder)
+    }
+
     private fun mediaItem(treeUri: Uri, file: Node, ctx: PathContext): MediaItem {
         val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, file.documentId)
         val title = file.name.substringBeforeLast('.')

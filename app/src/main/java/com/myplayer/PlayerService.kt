@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Metadata
 import androidx.media3.common.Player
@@ -65,6 +66,10 @@ class PlayerService : MediaSessionService() {
         const val KEY_SLEEP_MODE = "sleep_mode"        // 0 = off, 1 = minutes, 2 = end of chapter
         const val KEY_SLEEP_DEADLINE = "sleep_deadline" // elapsedRealtime ms for mode 1, else -1
 
+        /** Custom session command: switch the [PlayMode]; the arg is [PlayMode.KEY]. The live mode
+         *  is published in the session extras, since the service also changes it by itself. */
+        const val CMD_PLAY_MODE = "com.myplayer.PLAY_MODE"
+
         // How often the playing book's position is persisted, so a process kill loses at most this.
         private const val SAVE_INTERVAL_MS = 10_000L
         private const val US_PER_SECOND = 1_000_000L
@@ -81,6 +86,9 @@ class PlayerService : MediaSessionService() {
         // The ramp starts here rather than at silence, so playback is audible from the first moment
         // and the soft start reads as "quiet at first", not as a delayed reaction to the Play button.
         private const val FADE_START_FACTOR = 0.2f
+
+        // How often an intro sample is checked for its start and end.
+        private const val INTRO_TICK_MS = 200L
     }
 
     private var session: MediaSession? = null
@@ -160,6 +168,24 @@ class PlayerService : MediaSessionService() {
     private var sleepEndOfChapter = false
     private val sleepRunnable = Runnable { fireSleep() }
 
+    // The live play mode (see [setPlayMode], its only writer). While it is Intro, shuffle is held
+    // off and [shuffleBeforeIntro] keeps what to give back; [introIndex] is the item whose sample
+    // is under way (-1 = none yet) and [introEndMs] where that sample ends. [modeFolderKey] is the
+    // folder the mode was picked for (null = the next queue to start); [queueFolderKey] the folder
+    // of the live queue as last seen, so a reshuffle of the same queue is not taken for a new one.
+    private var playMode = PlayMode.Normal
+    private var modeFolderKey: String? = null
+    private var queueFolderKey: String? = null
+    private var shuffleBeforeIntro = false
+    private var introIndex = -1
+    private var introEndMs = 0L
+    private val introTick = object : Runnable {
+        override fun run() {
+            stepIntro()
+            if (playMode == PlayMode.Intro) saveHandler.postDelayed(this, INTRO_TICK_MS)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         normMode = Settings.getVolumeNorm(this)
@@ -176,8 +202,7 @@ class PlayerService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        player.repeatMode =
-            if (Settings.REPEAT_ALL) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        player.repeatMode = repeatModeFor(PlayMode.Normal)
         player.skipSilenceEnabled = effectiveSkipSilenceEnabled()
 
         player.addListener(object : Player.Listener {
@@ -190,6 +215,7 @@ class PlayerService : MediaSessionService() {
                 applyNorm()
             }
 
+            @UnstableApi
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 currentTrackGainDb = null
                 applyNorm()
@@ -201,6 +227,12 @@ class PlayerService : MediaSessionService() {
                 // A real move to another file (auto-advance or skip) makes it the book's new resume
                 // point; the initial setMediaItems (PLAYLIST_CHANGED) must not overwrite the restore.
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) saveBookPosition()
+                // A skip to another track ends a repeat; a new queue (PLAYLIST_CHANGED) is what a
+                // repeat picked while stopped is waiting for, so it stays. Intro moves on by seeks
+                // of its own, and a user's skip just carries the sampling on from there.
+                if (playMode == PlayMode.RepeatOne &&
+                    reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) setPlayMode(PlayMode.Normal)
+                if (playMode == PlayMode.RepeatAll) reshuffleBeforeWrap()
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -210,6 +242,9 @@ class PlayerService : MediaSessionService() {
                 // whatever partial level it had reached. Deliberately not keyed off isPlaying, which
                 // also drops on a buffering stall — that must not cut a ramp short.
                 if (playWhenReady) startPlaybackRamp() else cancelFadeIn()
+                // Any stop — pause, a fired sleep timer, headphones pulled — ends the mode; a folder
+                // on repeat stays on it, as a paused round is still the same listening.
+                if (!playWhenReady && playMode != PlayMode.RepeatAll) setPlayMode(PlayMode.Normal)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -226,12 +261,13 @@ class PlayerService : MediaSessionService() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                // Book genuinely finished (repeat is always off): forget the resume point so it
+                // Book genuinely finished (the queue never repeats): forget the resume point so it
                 // starts over. Guard on a non-empty queue so clearing items on exit — which also
                 // reports STATE_ENDED — doesn't wipe the saved position.
                 if (playbackState == Player.STATE_ENDED && player.mediaItemCount > 0) {
                     // The queue is over; a pending sleep timer has nothing left to pause.
                     cancelSleep()
+                    setPlayMode(PlayMode.Normal)
                     bookFolderKey?.let {
                         Settings.clearBookPos(this@PlayerService, it)
                         // The finished book's cached durations go with the resume point; a
@@ -253,12 +289,21 @@ class PlayerService : MediaSessionService() {
 
             @UnstableApi
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                // Intro keeps folder order: a shuffle switched on meanwhile (a new queue installs
+                // the UI's toggle) is what to give back afterwards, not what to play now.
+                if (shuffleModeEnabled && playMode == PlayMode.Intro) {
+                    shuffleBeforeIntro = true
+                    player.shuffleModeEnabled = false
+                    return
+                }
                 if (shuffleModeEnabled) reseedShuffleOrder()
             }
 
             @UnstableApi
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) reseedShuffleOrder()
+                if (reason != Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) return
+                followQueueFolder()
+                reseedShuffleOrder()
             }
 
             @UnstableApi
@@ -271,7 +316,7 @@ class PlayerService : MediaSessionService() {
         })
 
         this.player = player
-        session = MediaSession.Builder(this, player).setCallback(SessionCallback()).build()
+        session = MediaSession.Builder(this, SessionPlayer(player)).setCallback(SessionCallback()).build()
         audioManager = getSystemService(AudioManager::class.java)?.also {
             it.registerAudioDeviceCallback(audioDeviceCallback, saveHandler)
         }
@@ -292,9 +337,104 @@ class PlayerService : MediaSessionService() {
         // setShuffleOrder itself emits onTimelineChanged(PLAYLIST_CHANGED), which lands back here
         // and would otherwise reseed (and re-emit) forever, freezing the main thread.
         if (p.currentTimeline.getFirstWindowIndex(/* shuffleModeEnabled = */ true) == current) return
+        // A repeated folder's last track of the round, set last on purpose (see reshuffleBeforeWrap).
+        if (playMode == PlayMode.RepeatAll &&
+            p.currentTimeline.getLastWindowIndex(/* shuffleModeEnabled = */ true) == current) return
         val rest = (0 until p.mediaItemCount).filter { it != current }.shuffled()
         val order = (listOf(current) + rest).toIntArray()
         p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order, System.currentTimeMillis()))
+    }
+
+    /** On a repeated, shuffled folder's last track of the round: a fresh random order with this
+     *  track last, so the round after wraps to a new start and a new order, not the old one again. */
+    @UnstableApi
+    private fun reshuffleBeforeWrap() {
+        val p = player ?: return
+        if (!p.shuffleModeEnabled || p.mediaItemCount < 2) return
+        val current = p.currentMediaItemIndex
+        if (p.currentTimeline.getLastWindowIndex(/* shuffleModeEnabled = */ true) != current) return
+        val order = ((0 until p.mediaItemCount).filter { it != current }.shuffled() + current).toIntArray()
+        p.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(order, System.currentTimeMillis()))
+    }
+
+    /** Keeps the mode to the folder it was picked for: a cleared queue or one from another folder
+     *  ends it; the first queue after a pick with nothing loaded becomes its folder. */
+    private fun followQueueFolder() {
+        val p = player ?: return
+        val folder = if (p.mediaItemCount == 0) null else MusicScanner.playFolderKeyOf(p.currentMediaItem)
+        // The same queue reordered (a reshuffle emits PLAYLIST_CHANGED too), or the same folder restarted.
+        if (folder == queueFolderKey) return
+        queueFolderKey = folder
+        when {
+            playMode == PlayMode.Normal -> {}
+            folder == null -> setPlayMode(PlayMode.Normal)
+            modeFolderKey == null -> modeFolderKey = folder
+            folder != modeFolderKey -> setPlayMode(PlayMode.Normal)
+        }
+    }
+
+    /** The repeat mode [mode] plays with. Only a mode the user picked loops (see Settings.REPEAT_ALL). */
+    private fun repeatModeFor(mode: PlayMode): Int = when {
+        mode == PlayMode.RepeatOne -> Player.REPEAT_MODE_ONE
+        mode == PlayMode.RepeatAll -> Player.REPEAT_MODE_ALL
+        bookFolderKey == null && Settings.REPEAT_ALL -> Player.REPEAT_MODE_ALL
+        else -> Player.REPEAT_MODE_OFF
+    }
+
+    /** Switches the play mode and everything it drives: repeat, the shuffle hold and the intro
+     *  ticker; then publishes it to the controllers. [folderKey] is the folder it is picked for,
+     *  null for the live queue's. A book queue only ever plays Normal. */
+    private fun setPlayMode(requested: PlayMode, folderKey: String? = null) {
+        val p = player ?: return
+        val mode = if (bookFolderKey != null) PlayMode.Normal else requested
+        if (mode != PlayMode.Normal) {
+            modeFolderKey = folderKey
+                ?: if (p.mediaItemCount == 0) null else MusicScanner.playFolderKeyOf(p.currentMediaItem)
+        }
+        if (mode == playMode) return
+        val leavingIntro = playMode == PlayMode.Intro
+        playMode = mode
+        p.repeatMode = repeatModeFor(mode)
+        if (mode == PlayMode.Intro) {
+            shuffleBeforeIntro = p.shuffleModeEnabled
+            p.shuffleModeEnabled = false
+            introIndex = -1
+            saveHandler.removeCallbacks(introTick)
+            saveHandler.post(introTick)
+        } else if (leavingIntro) {
+            saveHandler.removeCallbacks(introTick)
+            p.shuffleModeEnabled = shuffleBeforeIntro
+        }
+        session?.setSessionExtras(PlayMode.toExtras(mode))
+    }
+
+    /** One intro step: a track not sampled yet jumps to its sample's start once its length is known;
+     *  a sample played out moves to the next track in folder order, or ends the queue after the last. */
+    private fun stepIntro() {
+        val p = player ?: return
+        if (p.mediaItemCount == 0 || !p.playWhenReady) return
+        val index = p.currentMediaItemIndex
+        if (index != introIndex) {
+            val track = trackLengthMs(p) ?: return
+            val (start, end) = introWindow(track)
+            introIndex = index
+            introEndMs = end
+            p.seekTo(start)
+            return
+        }
+        if (p.currentPosition < introEndMs) return
+        if (index + 1 < p.mediaItemCount) p.seekTo(index + 1, 0L)
+        // Seeking to the very end lets the queue finish the way it always does (STATE_ENDED).
+        else p.seekTo(p.duration)
+    }
+
+    /** The current track's own length — without the generated gap a music item carries — or null
+     *  while it is unknown (unset, or still the gap source's placeholder). */
+    private fun trackLengthMs(p: Player): Long? {
+        val d = p.duration
+        if (d == C.TIME_UNSET || d > Settings.MAX_TRACK_DURATION_MS) return null
+        val gapMs = Settings.getTrackGapSeconds(this) * 1000L
+        return (d - gapMs).coerceAtLeast(0L)
     }
 
     /** Persists the playing book's current file uri and offset as its resume point. No-op for plain
@@ -348,6 +488,19 @@ class PlayerService : MediaSessionService() {
         }
     }
 
+    /** The player as controllers (the app, the shade, a headset) drive it. Previous in Intro steps
+     *  to the track before: the stock one, past its first 3 s, would only rewind the sample's
+     *  track to 0 — and a sample always is past them. */
+    @UnstableApi
+    private inner class SessionPlayer(player: ExoPlayer) : ForwardingPlayer(player) {
+        override fun seekToPrevious() {
+            if (playMode != PlayMode.Intro) return super.seekToPrevious()
+            // The first track has none before it: sample it again from its start.
+            introIndex = -1
+            seekTo((currentMediaItemIndex - 1).coerceAtLeast(0), 0L)
+        }
+    }
+
     /** Grants the ReplayGain command to controllers and applies the toggle live on request. */
     private inner class SessionCallback : MediaSession.Callback {
         @UnstableApi
@@ -361,6 +514,7 @@ class PlayerService : MediaSessionService() {
                 .add(SessionCommand(CMD_TRACK_GAP, Bundle.EMPTY))
                 .add(SessionCommand(CMD_BOOK_MODE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SLEEP_TIMER, Bundle.EMPTY))
+                .add(SessionCommand(CMD_PLAY_MODE, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands)
@@ -393,10 +547,17 @@ class PlayerService : MediaSessionService() {
                 // item still belongs to the old book here. No-op when no book was tracked.
                 if (newKey != bookFolderKey) saveBookPosition()
                 bookFolderKey = newKey
+                // A book plays straight through; its repeat follows the queue type too.
+                if (newKey != null) setPlayMode(PlayMode.Normal)
+                player?.repeatMode = repeatModeFor(playMode)
                 // Switching between a music and a book queue flips whether leveling applies —
                 // and whether skip-silence does (books keep it even while a music gap is set).
                 applyNorm()
                 applySkipSilence()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == CMD_PLAY_MODE) {
+                setPlayMode(PlayMode.fromExtras(args), args.getString(PlayMode.KEY_FOLDER))
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             if (customCommand.customAction == CMD_SLEEP_TIMER) {
@@ -581,6 +742,7 @@ class PlayerService : MediaSessionService() {
         saveHandler.removeCallbacks(saveTick)
         saveHandler.removeCallbacks(sleepRunnable)
         saveHandler.removeCallbacks(fadeTick)
+        saveHandler.removeCallbacks(introTick)
         audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
         audioManager = null
         Settings.flush() // make sure the final position write reaches disk before the process can die
