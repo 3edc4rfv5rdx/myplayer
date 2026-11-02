@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+## v0.11.279 (2026-11-02)
 - N: A mode button in place of the music speed repeats the song or the folder, or plays 15 s from 0:45 of each song in folder order
 - E: An air mouse scrolls the folder lists, dialogs, settings and controls by dragging with its button held
 ## v0.10.276 (2026-10-16)
